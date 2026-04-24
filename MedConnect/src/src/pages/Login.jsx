@@ -35,6 +35,7 @@ export default function Login() {
     return (
         <div className="app-container" style={{ background: 'white' }}>
             <div className="page" style={{ paddingBottom: 'var(--space-6)' }}>
+              <div style={{ maxWidth: '400px', margin: '0 auto' }}>
                 {/* Back button */}
                 <button className="btn btn-ghost btn-icon" onClick={() => navigate('/')} style={{ marginBottom: 'var(--space-4)' }}>
                     <ArrowLeft size={20} />
@@ -176,6 +177,7 @@ export default function Login() {
                         Criar conta
                     </button>
                 </p>
+              </div>
             </div>
         </div>
     );

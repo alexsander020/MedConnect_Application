@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Pill, ArrowLeft, User, Mail, Lock, Phone, MapPin, Building2, FileText, CheckCircle2 } from 'lucide-react';
-import { ehEmailValido, ehSenhaForte } from '../utils/validacoes';
+import { ehEmailValido, ehSenhaForte } from '../../utils/validacoes';
 
 export default function Register() {
     const navigate = useNavigate();
@@ -77,6 +77,7 @@ export default function Register() {
     return (
         <div className="app-container" style={{ background: 'white' }}>
             <div className="page" style={{ paddingBottom: 'var(--space-6)' }}>
+              <div style={{ maxWidth: '400px', margin: '0 auto' }}>
                 {/* Back */}
                 <button className="btn btn-ghost btn-icon" onClick={() => step === 1 ? navigate(-1) : setStep(1)}>
                     <ArrowLeft size={20} />
@@ -240,6 +241,7 @@ export default function Register() {
                         Entrar
                     </button>
                 </p>
+              </div>
             </div>
         </div>
     );
