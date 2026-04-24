@@ -766,6 +766,14 @@ ul, ol { list-style: none; }
 .stagger > *:nth-child(7) { animation-delay: 360ms; }
 .stagger > *:nth-child(8) { animation-delay: 420ms; }
 
+@media (min-width: 768px) {
+  .stagger[style*="flex-direction: column"] {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: var(--space-4) !important;
+  }
+}
+
 /* ============================
    UTILITIES
    ============================ */

@@ -10,15 +10,25 @@ export default function Login() {
     const [type, setType] = useState(location.state?.type || 'user');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [showPassword, setShowPassword] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
 
-    const handleLogin = (e) => {
+    const handleLogin = async (e) => {
         e.preventDefault();
-        login(type);
-        if (type === 'user') {
-            navigate('/dashboard', { replace: true });
-        } else {
-            navigate('/pharmacy', { replace: true });
+        setError('');
+        setLoading(true);
+        try {
+            await login(email, password);
+            if (type === 'user') {
+                navigate('/dashboard', { replace: true });
+            } else {
+                navigate('/pharmacy', { replace: true });
+            }
+        } catch (err) {
+            console.error(err);
+            setError(err.message || 'Falha ao fazer login. Verifique suas credenciais.');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -113,14 +123,20 @@ export default function Login() {
                         </div>
                     </div>
 
+                    {error && (
+                        <div className="form-error" style={{ marginBottom: 'var(--space-4)', textAlign: 'center' }}>
+                            {error}
+                        </div>
+                    )}
+
                     <div style={{ textAlign: 'right', marginBottom: 'var(--space-6)' }}>
                         <button type="button" className="text-sm text-primary font-semibold" style={{ background: 'none', border: 'none' }}>
                             Esqueceu a senha?
                         </button>
                     </div>
 
-                    <button type="submit" className="btn btn-primary btn-lg btn-block">
-                        Entrar
+                    <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={loading}>
+                        {loading ? 'Entrando...' : 'Entrar'}
                     </button>
                 </form>
 
