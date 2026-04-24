@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Pill, ArrowLeft, User, Mail, Lock, Phone, MapPin, Building2, FileText, CheckCircle2 } from 'lucide-react';
-import { ehEmailValido, ehSenhaForte } from '../../utils/validacoes';
+import { ehEmailValido, ehSenhaForte } from '../utils/validacoes';
 
 export default function Register() {
     const navigate = useNavigate();
