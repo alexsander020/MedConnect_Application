@@ -1,32 +1,83 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Pill, ArrowLeft, User, Mail, Lock, Phone, MapPin, Building2, FileText } from 'lucide-react';
+import { Pill, ArrowLeft, User, Mail, Lock, Phone, MapPin, Building2, FileText, CheckCircle2 } from 'lucide-react';
+import { ehEmailValido, ehSenhaForte } from '../../utils/validacoes';
 
 export default function Register() {
     const navigate = useNavigate();
     const location = useLocation();
-    const { login } = useAuth();
+    const { register } = useAuth();
+    
     const [type, setType] = useState(location.state?.type || 'user');
     const [step, setStep] = useState(1);
+    
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [name, setName] = useState('');
+    
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [successMessage, setSuccessMessage] = useState('');
 
-    const handleRegister = (e) => {
+    const handleNextStep = (e) => {
         e.preventDefault();
-        if (step === 1) {
-            setStep(2);
+        setError('');
+        
+        if (!ehEmailValido(email)) {
+            setError('Por favor, informe um e-mail válido.');
             return;
         }
-        login(type);
-        if (type === 'user') {
-            navigate('/dashboard', { replace: true });
-        } else {
-            navigate('/pharmacy', { replace: true });
+        if (!ehSenhaForte(password)) {
+            setError('A senha deve ter pelo menos 8 caracteres, uma letra maiúscula, um número e um caractere especial.');
+            return;
+        }
+        if (!name.trim()) {
+            setError('Por favor, informe seu nome.');
+            return;
+        }
+        
+        setStep(2);
+    };
+
+    const handleRegister = async (e) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+        
+        try {
+            await register(email, password, type);
+            setSuccessMessage('Conta criada com sucesso! Verifique sua caixa de e-mail para confirmar seu cadastro antes de fazer login.');
+            setStep(3); // Tela de sucesso
+        } catch (err) {
+            console.error(err);
+            setError(err.message || 'Ocorreu um erro ao criar a conta.');
+        } finally {
+            setLoading(false);
         }
     };
+
+    if (step === 3) {
+        return (
+            <div className="app-container" style={{ background: 'white' }}>
+                <div className="page" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '80vh' }}>
+                    <CheckCircle2 size={64} color="var(--success)" style={{ marginBottom: 'var(--space-4)' }} />
+                    <h2 style={{ fontSize: 'var(--font-xl)', fontWeight: 800, textAlign: 'center', marginBottom: 'var(--space-2)' }}>Cadastro Realizado!</h2>
+                    <p style={{ textAlign: 'center', color: 'var(--gray-600)', marginBottom: 'var(--space-6)' }}>
+                        {successMessage}
+                    </p>
+                    <button className="btn btn-primary btn-block" onClick={() => navigate('/login')}>
+                        Ir para o Login
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="app-container" style={{ background: 'white' }}>
             <div className="page" style={{ paddingBottom: 'var(--space-6)' }}>
+              <div style={{ maxWidth: '400px', margin: '0 auto' }}>
                 {/* Back */}
                 <button className="btn btn-ghost btn-icon" onClick={() => step === 1 ? navigate(-1) : setStep(1)}>
                     <ArrowLeft size={20} />
@@ -73,7 +124,13 @@ export default function Register() {
                     </div>
                 )}
 
-                <form onSubmit={handleRegister}>
+                {error && (
+                    <div className="form-error" style={{ marginBottom: 'var(--space-4)', textAlign: 'center', padding: 'var(--space-3)', background: 'var(--error-light)', borderRadius: 'var(--radius-md)' }}>
+                        {error}
+                    </div>
+                )}
+
+                <form onSubmit={step === 1 ? handleNextStep : handleRegister}>
                     {step === 1 ? (
                         <div className="animate-slide-up stagger">
                             <div className="form-group">
@@ -84,7 +141,13 @@ export default function Register() {
                                     ) : (
                                         <User size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)' }} />
                                     )}
-                                    <input className="form-input" placeholder={type === 'pharmacy' ? 'FarmaMix Manipulação' : 'Seu nome completo'} style={{ paddingLeft: '42px' }} />
+                                    <input 
+                                        className="form-input" 
+                                        placeholder={type === 'pharmacy' ? 'FarmaMix Manipulação' : 'Seu nome completo'} 
+                                        style={{ paddingLeft: '42px' }} 
+                                        value={name}
+                                        onChange={(e) => setName(e.target.value)}
+                                    />
                                 </div>
                             </div>
 
@@ -92,7 +155,14 @@ export default function Register() {
                                 <label className="form-label">E-mail</label>
                                 <div style={{ position: 'relative' }}>
                                     <Mail size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)' }} />
-                                    <input type="email" className="form-input" placeholder="seu@email.com" style={{ paddingLeft: '42px' }} />
+                                    <input 
+                                        type="email" 
+                                        className="form-input" 
+                                        placeholder="seu@email.com" 
+                                        style={{ paddingLeft: '42px' }} 
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                    />
                                 </div>
                             </div>
 
@@ -100,8 +170,16 @@ export default function Register() {
                                 <label className="form-label">Senha</label>
                                 <div style={{ position: 'relative' }}>
                                     <Lock size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)' }} />
-                                    <input type="password" className="form-input" placeholder="••••••••" style={{ paddingLeft: '42px' }} />
+                                    <input 
+                                        type="password" 
+                                        className="form-input" 
+                                        placeholder="••••••••" 
+                                        style={{ paddingLeft: '42px' }} 
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                    />
                                 </div>
+                                <span className="text-xs text-gray mt-1" style={{ display: 'block' }}>Mínimo 8 caracteres, 1 maiúscula, 1 número, 1 especial.</span>
                             </div>
 
                             <button type="submit" className="btn btn-primary btn-lg btn-block mt-4">
@@ -150,8 +228,8 @@ export default function Register() {
                                 </div>
                             )}
 
-                            <button type="submit" className="btn btn-primary btn-lg btn-block mt-4">
-                                Criar Conta
+                            <button type="submit" className="btn btn-primary btn-lg btn-block mt-4" disabled={loading}>
+                                {loading ? 'Criando...' : 'Criar Conta'}
                             </button>
                         </div>
                     )}
@@ -163,6 +241,7 @@ export default function Register() {
                         Entrar
                     </button>
                 </p>
+              </div>
             </div>
         </div>
     );
