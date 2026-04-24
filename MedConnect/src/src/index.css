@@ -145,6 +145,7 @@ ul, ol { list-style: none; }
    LAYOUT
    ============================ */
 .app-container {
+  width: 100%;
   max-width: 430px;
   margin: 0 auto;
   min-height: 100vh;
@@ -152,12 +153,26 @@ ul, ol { list-style: none; }
   position: relative;
   background: white;
   box-shadow: 0 0 60px rgba(0,0,0,0.08);
+  transition: max-width 0.3s ease;
+}
+
+@media (min-width: 768px) {
+  .app-container {
+    max-width: 1200px;
+    padding-top: 60px; /* Espaço para a barra de topo */
+  }
 }
 
 .page {
   padding: var(--space-4);
   padding-bottom: calc(80px + var(--space-4));
   animation: fadeIn 0.3s ease-out;
+}
+
+@media (min-width: 768px) {
+  .page {
+    padding-bottom: var(--space-4); /* No desktop o menu sobe pro topo */
+  }
 }
 
 .page-header {
@@ -591,6 +606,20 @@ ul, ol { list-style: none; }
   padding: var(--space-2) 0;
   padding-bottom: max(var(--space-2), env(safe-area-inset-bottom));
   z-index: 100;
+  transition: all 0.3s ease;
+}
+
+@media (min-width: 768px) {
+  .bottom-nav {
+    top: 0;
+    bottom: auto;
+    max-width: 1200px;
+    border-top: none;
+    border-bottom: 1px solid var(--gray-200);
+    padding: var(--space-2) var(--space-8);
+    justify-content: center;
+    gap: var(--space-12);
+  }
 }
 
 .bottom-nav-item {
