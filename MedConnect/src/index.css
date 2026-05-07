@@ -146,20 +146,16 @@ ul, ol { list-style: none; }
    ============================ */
 .app-container {
   width: 100%;
-  max-width: 430px;
   margin: 0 auto;
   min-height: 100vh;
   min-height: 100dvh;
   position: relative;
   background: white;
-  box-shadow: 0 0 60px rgba(0,0,0,0.08);
-  transition: max-width 0.3s ease;
 }
 
 @media (min-width: 768px) {
   .app-container {
-    max-width: 1200px;
-    padding-top: 60px; /* Espaço para a barra de topo */
+    padding-top: 0;
   }
 }
 
