@@ -1,5 +1,4 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
 import { mockUser, mockPharmacy } from '../data/mockData';
 
 const AuthContext = createContext(null);
@@ -10,58 +9,61 @@ export function AuthProvider({ children }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Check active sessions and sets the user
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            if (session?.user) {
-                // For simplicity, we are defaulting to 'user'. In a real app, you'd fetch this from a profiles table.
-                const type = session.user.user_metadata?.user_type || 'user';
-                setUserType(type);
-                setCurrentUser({ ...mockUser, email: session.user.email, id: session.user.id });
+        // Mock session check
+        const storedSession = localStorage.getItem('@MedConnect:session');
+        if (storedSession) {
+            try {
+                const session = JSON.parse(storedSession);
+                setCurrentUser(session.user);
+                setUserType(session.type);
+            } catch (e) {
+                console.error('Failed to parse session', e);
             }
-            setLoading(false);
-        });
-
-        // Listen for changes on auth state (sign in, sign out, etc.)
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            if (session?.user) {
-                const type = session.user.user_metadata?.user_type || 'user';
-                setUserType(type);
-                setCurrentUser({ ...mockUser, email: session.user.email, id: session.user.id });
-            } else {
-                setCurrentUser(null);
-                setUserType(null);
-            }
-            setLoading(false);
-        });
-
-        return () => subscription.unsubscribe();
+        }
+        setLoading(false);
     }, []);
 
     const register = async (email, password, type) => {
-        const { data, error } = await supabase.auth.signUp({
-            email,
-            password,
-            options: {
-                data: {
-                    user_type: type
-                }
-            }
-        });
-        if (error) throw error;
-        return data;
+        // Simula delay de rede
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        const mockNewUser = type === 'pharmacy' ? mockPharmacy : mockUser;
+        const sessionData = {
+            user: { ...mockNewUser, email, id: Math.random().toString(36).substr(2, 9) },
+            type: type
+        };
+        
+        // Simula o registro, mas não loga automaticamente (como no fluxo original)
+        return sessionData;
     };
 
     const login = async (email, password) => {
-        const { data, error } = await supabase.auth.signInWithPassword({
-            email,
-            password
-        });
-        if (error) throw error;
-        return data;
+        // Simula delay de rede
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // Define o tipo baseado em uma string no email ou fallback
+        let type = 'user';
+        if (email.includes('farma') || email.includes('farmacia')) {
+            type = 'pharmacy';
+        }
+
+        const mockLoggedUser = type === 'pharmacy' ? mockPharmacy : mockUser;
+        const sessionData = {
+            user: { ...mockLoggedUser, email, id: Math.random().toString(36).substr(2, 9) },
+            type: type
+        };
+
+        localStorage.setItem('@MedConnect:session', JSON.stringify(sessionData));
+        setCurrentUser(sessionData.user);
+        setUserType(sessionData.type);
+
+        return sessionData;
     };
 
     const logout = async () => {
-        await supabase.auth.signOut();
+        localStorage.removeItem('@MedConnect:session');
+        setCurrentUser(null);
+        setUserType(null);
     };
 
     const isAuthenticated = !!currentUser;
