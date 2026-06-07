@@ -39,39 +39,39 @@ function AppRoutes() {
 
       {/* User routes */}
       <Route path="/dashboard" element={
-        <ProtectedRoute requiredType="user"><UserDashboard /></ProtectedRoute>
+        <ProtectedRoute requiredType="PATIENT"><UserDashboard /></ProtectedRoute>
       } />
       <Route path="/new-quote" element={
-        <ProtectedRoute requiredType="user"><NewQuote /></ProtectedRoute>
+        <ProtectedRoute requiredType="PATIENT"><NewQuote /></ProtectedRoute>
       } />
       <Route path="/quote-offers" element={
-        <ProtectedRoute requiredType="user"><QuoteOffers /></ProtectedRoute>
+        <ProtectedRoute requiredType="PATIENT"><QuoteOffers /></ProtectedRoute>
       } />
       <Route path="/order/:id" element={
-        <ProtectedRoute requiredType="user"><OrderTracking /></ProtectedRoute>
+        <ProtectedRoute requiredType="PATIENT"><OrderTracking /></ProtectedRoute>
       } />
       <Route path="/orders" element={
-        <ProtectedRoute requiredType="user"><Orders /></ProtectedRoute>
+        <ProtectedRoute requiredType="PATIENT"><Orders /></ProtectedRoute>
       } />
       <Route path="/review/:id" element={
-        <ProtectedRoute requiredType="user"><Review /></ProtectedRoute>
+        <ProtectedRoute requiredType="PATIENT"><Review /></ProtectedRoute>
       } />
 
       {/* Pharmacy routes */}
       <Route path="/pharmacy" element={
-        <ProtectedRoute requiredType="pharmacy"><PharmacyDashboard /></ProtectedRoute>
+        <ProtectedRoute requiredType="PHARMACY"><PharmacyDashboard /></ProtectedRoute>
       } />
       <Route path="/pharmacy/requests" element={
-        <ProtectedRoute requiredType="pharmacy"><Requests /></ProtectedRoute>
+        <ProtectedRoute requiredType="PHARMACY"><Requests /></ProtectedRoute>
       } />
       <Route path="/pharmacy/send-quote/:id" element={
-        <ProtectedRoute requiredType="pharmacy"><SendQuote /></ProtectedRoute>
+        <ProtectedRoute requiredType="PHARMACY"><SendQuote /></ProtectedRoute>
       } />
       <Route path="/pharmacy/orders" element={
-        <ProtectedRoute requiredType="pharmacy"><OrderManagement /></ProtectedRoute>
+        <ProtectedRoute requiredType="PHARMACY"><OrderManagement /></ProtectedRoute>
       } />
       <Route path="/pharmacy/reviews" element={
-        <ProtectedRoute requiredType="pharmacy"><Reviews /></ProtectedRoute>
+        <ProtectedRoute requiredType="PHARMACY"><Reviews /></ProtectedRoute>
       } />
 
       {/* Shared */}

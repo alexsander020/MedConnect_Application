@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  PATIENT
+  PHARMACY
+  ADMIN
+}
+
+enum Status {
+  PENDING
+  REVIEWING
+  QUOTED
+  ACCEPTED
+  PRODUCTION
+  DELIVERED
+  CANCELLED
+}
+
+model User {
+  id            String         @id @default(uuid())
+  name          String
+  email         String         @unique
+  password      String
+  role          Role           @default(PATIENT)
+  phone         String?
+  address       String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  prescriptions Prescription[]
+}
+
+model Pharmacy {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  password     String
+  cnpj         String   @unique
+  phone        String?
+  address      String?
+  deliveryArea String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  quotes       Quote[]
+}
+
+model Prescription {
+  id        String   @id @default(uuid())
+  patientId String
+  fileUrl   String
+  status    Status   @default(PENDING)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  patient   User     @relation(fields: [patientId], references: [id])
+  quotes    Quote[]
+}
+
+model Quote {
+  id             String       @id @default(uuid())
+  prescriptionId String
+  pharmacyId     String
+  price          Float
+  deliveryDays   Int?
+  notes          String?
+  status         Status       @default(PENDING)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  prescription   Prescription @relation(fields: [prescriptionId], references: [id])
+  pharmacy       Pharmacy     @relation(fields: [pharmacyId], references: [id])
+  orders         Order[]
+}
+
+model Order {
+  id        String   @id @default(uuid())
+  quoteId   String
+  status    Status   @default(PRODUCTION)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  quote     Quote    @relation(fields: [quoteId], references: [id])
+}

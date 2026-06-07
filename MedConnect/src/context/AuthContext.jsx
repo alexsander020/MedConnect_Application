@@ -1,69 +1,85 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { mockUser, mockPharmacy } from '../data/mockData';
+import { api, getSocket } from '../services/api';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
     const [currentUser, setCurrentUser] = useState(null);
-    const [userType, setUserType] = useState(null); // 'user' or 'pharmacy'
+    const [userType, setUserType] = useState(null); // 'PATIENT' or 'PHARMACY'
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Mock session check
-        const storedSession = localStorage.getItem('@MedConnect:session');
-        if (storedSession) {
+        const token = localStorage.getItem('@MedConnect:token');
+        const user = localStorage.getItem('@MedConnect:user');
+        
+        if (token && user) {
             try {
-                const session = JSON.parse(storedSession);
-                setCurrentUser(session.user);
-                setUserType(session.type);
+                const parsedUser = JSON.parse(user);
+                setCurrentUser(parsedUser);
+                setUserType(parsedUser.role);
+                
+                // Conecta o socket e entra na sala com o ID do usuario (para receber notificacoes de cotação)
+                const socket = getSocket();
+                socket.connect();
+                socket.emit('join_room', parsedUser.id);
+                
+                socket.on('new_quote', (data) => {
+                    // Temporário: Usar alert ou toast no futuro
+                    alert(`Notificação em Tempo Real! ${data.message} Preço: R$${data.quote.price}`);
+                });
             } catch (e) {
                 console.error('Failed to parse session', e);
             }
         }
         setLoading(false);
+
+        return () => {
+            const socket = getSocket();
+            socket.off('new_quote');
+            socket.disconnect();
+        }
     }, []);
 
-    const register = async (email, password, type) => {
-        // Simula delay de rede
-        await new Promise(resolve => setTimeout(resolve, 1000));
+    const register = async (userData, type) => {
+        const endpoint = type === 'pharmacy' ? '/pharmacies' : '/users';
+        const payload = { ...userData, role: type === 'pharmacy' ? 'PHARMACY' : 'PATIENT' };
         
-        const mockNewUser = type === 'pharmacy' ? mockPharmacy : mockUser;
-        const sessionData = {
-            user: { ...mockNewUser, email, id: Math.random().toString(36).substr(2, 9) },
-            type: type
-        };
-        
-        // Simula o registro, mas não loga automaticamente (como no fluxo original)
-        return sessionData;
+        const response = await api.post(endpoint, payload);
+        return response.data;
     };
 
-    const login = async (email, password) => {
-        // Simula delay de rede
-        await new Promise(resolve => setTimeout(resolve, 1000));
+    const login = async (email, password, type = 'user') => {
+        try {
+            const response = await api.post('/auth/login', { email, password, type });
+            const { token, user } = response.data;
 
-        // Define o tipo baseado em uma string no email ou fallback
-        let type = 'user';
-        if (email.includes('farma') || email.includes('farmacia')) {
-            type = 'pharmacy';
+            localStorage.setItem('@MedConnect:token', token);
+            localStorage.setItem('@MedConnect:user', JSON.stringify(user));
+
+            setCurrentUser(user);
+            setUserType(user.role);
+            
+            // Conecta o WebSocket no login também
+            const socket = getSocket();
+            socket.connect();
+            socket.emit('join_room', user.id);
+            socket.on('new_quote', (data) => {
+                alert(`Notificação em Tempo Real! ${data.message} Preço: R$${data.quote.price}`);
+            });
+
+            return { user, token };
+        } catch (error) {
+            console.error('Login error', error);
+            throw error;
         }
-
-        const mockLoggedUser = type === 'pharmacy' ? mockPharmacy : mockUser;
-        const sessionData = {
-            user: { ...mockLoggedUser, email, id: Math.random().toString(36).substr(2, 9) },
-            type: type
-        };
-
-        localStorage.setItem('@MedConnect:session', JSON.stringify(sessionData));
-        setCurrentUser(sessionData.user);
-        setUserType(sessionData.type);
-
-        return sessionData;
     };
 
     const logout = async () => {
-        localStorage.removeItem('@MedConnect:session');
+        localStorage.removeItem('@MedConnect:token');
+        localStorage.removeItem('@MedConnect:user');
         setCurrentUser(null);
         setUserType(null);
+        getSocket().disconnect();
     };
 
     const isAuthenticated = !!currentUser;

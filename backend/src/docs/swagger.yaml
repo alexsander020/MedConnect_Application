@@ -1,0 +1,43 @@
+openapi: 3.0.0
+info:
+  title: MedConnect API
+  version: 1.0.0
+  description: API Documentation for MedConnect Application
+
+servers:
+  - url: http://localhost:3000
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+paths:
+  /api/health:
+    get:
+      summary: Health check endpoint
+      responses:
+        '200':
+          description: OK
+  /api/auth/login:
+    post:
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+                type:
+                  type: string
+                  enum: [user, pharmacy]
+      responses:
+        '200':
+          description: Logged in successfully

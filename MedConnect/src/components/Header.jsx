@@ -1,14 +1,18 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Bell, ArrowLeft } from 'lucide-react';
+import { Bell, ArrowLeft, LogOut } from 'lucide-react';
 
 export default function Header({ title, showBack, showNotification = true }) {
-    const { currentUser } = useAuth();
+    const { currentUser, userType, logout } = useAuth();
     const navigate = useNavigate();
 
-    const initials = currentUser?.name
-        ? currentUser.name.split(' ').map(n => n[0]).join('').slice(0, 2)
-        : '?';
+    const displayName = currentUser?.name || currentUser?.email?.split('@')[0] || 'Usuário';
+    const initials = displayName
+        .split(' ')
+        .map(n => n[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase();
 
     return (
         <header className="page-header animate-slide-down">
@@ -24,7 +28,7 @@ export default function Header({ title, showBack, showNotification = true }) {
                     <div>
                         <p className="text-sm text-gray">Olá, 👋</p>
                         <h1 style={{ fontSize: 'var(--font-xl)', fontWeight: 700 }}>
-                            {currentUser?.name?.split(' ')[0]}
+                            {displayName.split(' ')[0]}
                         </h1>
                     </div>
                 )}
@@ -36,7 +40,15 @@ export default function Header({ title, showBack, showNotification = true }) {
                         <span className="notification-dot"></span>
                     </button>
                 )}
-                <div className="avatar" style={{ width: 36, height: 36, fontSize: 'var(--font-xs)' }}>
+                <div
+                    className="avatar"
+                    title="Sair"
+                    style={{ width: 36, height: 36, fontSize: 'var(--font-xs)', cursor: 'pointer' }}
+                    onClick={() => {
+                        logout();
+                        navigate('/');
+                    }}
+                >
                     {initials}
                 </div>
             </div>

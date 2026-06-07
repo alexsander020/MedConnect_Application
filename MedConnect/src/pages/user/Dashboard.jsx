@@ -1,13 +1,23 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/Header';
 import BottomNav from '../../components/BottomNav';
 import StarRating from '../../components/StarRating';
-import { mockOrders, mockPharmacies, orderStatuses } from '../../data/mockData';
+import { mockOrders, orderStatuses } from '../../data/mockData';
 import { Plus, ArrowRight, MapPin, Clock, TrendingUp } from 'lucide-react';
+import { api } from '../../services/api';
 
 export default function Dashboard() {
     const navigate = useNavigate();
     const activeOrders = mockOrders.filter(o => o.status !== 'DELIVERED');
+    
+    const [pharmacies, setPharmacies] = useState([]);
+
+    useEffect(() => {
+        api.get('/pharmacies').then(res => {
+            setPharmacies(res.data);
+        }).catch(console.error);
+    }, []);
 
     return (
         <div className="app-container">
@@ -102,12 +112,12 @@ export default function Dashboard() {
                         <h2 className="section-title">Farmácias Próximas</h2>
                     </div>
                     <div className="stagger" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                        {mockPharmacies.slice(0, 3).map((pharmacy) => (
+                        {pharmacies.slice(0, 3).map((pharmacy) => (
                             <div key={pharmacy.id} className="pharmacy-card animate-slide-up">
                                 <div className="avatar avatar-lg" style={{
                                     background: 'var(--gradient-secondary)',
                                 }}>
-                                    {pharmacy.initials}
+                                    {pharmacy.name ? pharmacy.name.substring(0, 2).toUpperCase() : 'FM'}
                                 </div>
                                 <div style={{ flex: 1 }}>
                                     <h4 className="font-semibold" style={{ fontSize: 'var(--font-sm)' }}>

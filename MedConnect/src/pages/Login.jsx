@@ -19,15 +19,16 @@ export default function Login() {
         setError('');
         setLoading(true);
         try {
-            await login(email, password);
-            if (type === 'user') {
-                navigate('/dashboard', { replace: true });
-            } else {
+            const { user } = await login(email, password, type);
+            // Usar a role retornada pela API para redirecionar
+            if (user.role === 'PHARMACY') {
                 navigate('/pharmacy', { replace: true });
+            } else {
+                navigate('/dashboard', { replace: true });
             }
         } catch (err) {
             console.error(err);
-            setError(err.message || 'Falha ao fazer login. Verifique suas credenciais.');
+            setError(err.response?.data?.error || err.message || 'Falha ao fazer login. Verifique suas credenciais.');
         } finally {
             setLoading(false);
         }

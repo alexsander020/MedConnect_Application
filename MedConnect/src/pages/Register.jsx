@@ -15,6 +15,10 @@ export default function Register() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [name, setName] = useState('');
+    const [phone, setPhone] = useState('');
+    const [cnpj, setCnpj] = useState('');
+    const [address, setAddress] = useState('');
+    const [deliveryArea, setDeliveryArea] = useState('');
     
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -46,8 +50,9 @@ export default function Register() {
         setLoading(true);
         
         try {
-            await register(email, password, type);
-            setSuccessMessage('Conta criada com sucesso! Verifique sua caixa de e-mail para confirmar seu cadastro antes de fazer login.');
+            const userData = { email, password, name, phone, cnpj, address, deliveryArea };
+            await register(userData, type);
+            setSuccessMessage('Conta criada com sucesso! Faça o login na plataforma.');
             setStep(3); // Tela de sucesso
         } catch (err) {
             console.error(err);
@@ -234,7 +239,7 @@ export default function Register() {
                                     <label className="form-label">Telefone</label>
                                     <div style={{ position: 'relative' }}>
                                         <Phone size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)' }} />
-                                        <input className="form-input" placeholder="(11) 99999-9999" style={{ paddingLeft: '42px' }} />
+                                        <input className="form-input" placeholder="(11) 99999-9999" style={{ paddingLeft: '42px' }} value={phone} onChange={(e) => setPhone(e.target.value)} />
                                     </div>
                                 </div>
 
@@ -243,7 +248,7 @@ export default function Register() {
                                         <label className="form-label">CNPJ</label>
                                         <div style={{ position: 'relative' }}>
                                             <FileText size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)' }} />
-                                            <input className="form-input" placeholder="00.000.000/0001-00" style={{ paddingLeft: '42px' }} />
+                                            <input className="form-input" placeholder="00.000.000/0001-00" style={{ paddingLeft: '42px' }} value={cnpj} onChange={(e) => setCnpj(e.target.value)} />
                                         </div>
                                     </div>
                                 )}
@@ -252,14 +257,14 @@ export default function Register() {
                                     <label className="form-label">Endereço</label>
                                     <div style={{ position: 'relative' }}>
                                         <MapPin size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)' }} />
-                                        <input className="form-input" placeholder="Rua, número - Bairro, Cidade" style={{ paddingLeft: '42px' }} />
+                                        <input className="form-input" placeholder="Rua, número - Bairro, Cidade" style={{ paddingLeft: '42px' }} value={address} onChange={(e) => setAddress(e.target.value)} />
                                     </div>
                                 </div>
 
                                 {type === 'pharmacy' && (
                                     <div className="form-group">
                                         <label className="form-label">Raio de Atendimento</label>
-                                        <select className="form-input form-select">
+                                        <select className="form-input form-select" value={deliveryArea} onChange={(e) => setDeliveryArea(e.target.value)}>
                                             <option value="">Selecione</option>
                                             <option value="5">5 km</option>
                                             <option value="10">10 km</option>

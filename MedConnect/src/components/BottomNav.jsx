@@ -1,52 +1,57 @@
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Home, ClipboardList, User, LayoutDashboard, FileText, Package, Star } from 'lucide-react';
+import { Home, ClipboardList, User, LayoutDashboard, FileText, Package, Star, PlusCircle } from 'lucide-react';
 
 export default function BottomNav() {
     const { userType } = useAuth();
-    const location = useLocation();
 
-    if (userType === 'pharmacy') {
+    if (userType === 'PHARMACY') {
         return (
             <nav className="bottom-nav">
                 <NavLink to="/pharmacy" end className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
-                    <LayoutDashboard />
+                    <LayoutDashboard size={22} />
                     <span>Início</span>
                 </NavLink>
                 <NavLink to="/pharmacy/requests" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
-                    <FileText />
+                    <FileText size={22} />
                     <span>Solicitações</span>
                 </NavLink>
                 <NavLink to="/pharmacy/orders" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
-                    <Package />
+                    <Package size={22} />
                     <span>Pedidos</span>
                 </NavLink>
                 <NavLink to="/pharmacy/reviews" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
-                    <Star />
+                    <Star size={22} />
                     <span>Avaliações</span>
                 </NavLink>
                 <NavLink to="/profile" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
-                    <User />
+                    <User size={22} />
                     <span>Perfil</span>
                 </NavLink>
             </nav>
         );
     }
 
+    // Menu do Paciente
     return (
         <nav className="bottom-nav">
             <NavLink to="/dashboard" end className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
-                <Home />
+                <Home size={22} />
                 <span>Início</span>
             </NavLink>
+            <NavLink to="/new-quote" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
+                <PlusCircle size={22} />
+                <span>Nova Cotação</span>
+            </NavLink>
             <NavLink to="/orders" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
-                <ClipboardList />
+                <ClipboardList size={22} />
                 <span>Pedidos</span>
             </NavLink>
             <NavLink to="/profile" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
-                <User />
+                <User size={22} />
                 <span>Perfil</span>
             </NavLink>
         </nav>
     );
 }
+
