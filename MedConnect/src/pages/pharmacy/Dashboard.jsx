@@ -1,151 +1,173 @@
 import { useNavigate } from 'react-router-dom';
-import Header from '../../components/Header';
-import BottomNav from '../../components/BottomNav';
-import StarRating from '../../components/StarRating';
-import { mockPharmacyRequests, mockPharmacyOrders, mockReviews } from '../../data/mockData';
-import { FileText, Package, Star, TrendingUp, ArrowRight, Clock, Users } from 'lucide-react';
+import { mockPharmacyRequests, mockPharmacyOrders } from '../../data/mockData';
+
+const productionQueue = [
+    { id: '#8921', room: 'Lab Room 02', stage: 'Weighing', color: '#FFAB00', bg: '#FFAB00', progress: 25 },
+    { id: '#8918', room: 'Lab Room 01', stage: 'Mixing', color: '#0052CC', bg: '#0052CC', progress: 60 },
+    { id: '#8915', room: 'QC Station A', stage: 'Quality Control', color: '#36B37E', bg: '#36B37E', progress: 85 },
+    { id: '#8910', room: 'Outbound Bay', stage: 'Ready for Delivery', color: '#36B37E', bg: '#36B37E', progress: 100 },
+];
 
 export default function PharmacyDashboard() {
     const navigate = useNavigate();
-    const pendingRequests = mockPharmacyRequests.filter(r => r.status === 'pending').length;
+
+    const pendingRequests = mockPharmacyRequests.filter(r => r.status === 'pending');
+    const inProductionOrders = mockPharmacyOrders.filter(o => o.status !== 'DELIVERED');
 
     return (
-        <div className="app-container">
-            <Header />
-
-            <div className="page">
-                {/* Welcome card */}
-                <div className="card-gradient animate-scale-in" style={{ marginBottom: 'var(--space-5)' }}>
-                    <div style={{ position: 'relative', zIndex: 1 }}>
-                        <h3 style={{ fontSize: 'var(--font-lg)', fontWeight: 700, marginBottom: 'var(--space-1)' }}>
-                            Painel da Farmácia
-                        </h3>
-                        <p style={{ fontSize: 'var(--font-sm)', opacity: 0.85 }}>
-                            Gerencie solicitações e pedidos
-                        </p>
+        <div className="max-w-container-max mx-auto space-y-lg pb-24 md:pb-0">
+            {/* 1. Summary Section (KPIs) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-lg">
+                {/* KPI Card: Pending Quotes */}
+                <div className="bg-surface p-lg rounded-xl border border-outline-variant soft-shadow flex flex-col gap-base hover-shadow transition-shadow cursor-pointer" onClick={() => navigate('/pharmacy/requests')}>
+                    <div className="flex justify-between items-start">
+                        <span className="text-label-md text-on-surface-variant">Pending Quotes</span>
+                        <div className="p-2 bg-primary/10 rounded-lg">
+                            <span className="material-symbols-outlined text-primary">pending_actions</span>
+                        </div>
+                    </div>
+                    <div className="text-headline-lg font-headline-lg text-on-surface">{pendingRequests.length}</div>
+                    <div className="flex items-center gap-1 text-label-sm text-secondary font-bold">
+                        <span className="material-symbols-outlined text-sm">trending_up</span>
+                        12% vs last week
                     </div>
                 </div>
 
-                {/* Metrics */}
-                <div style={{
-                    display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)',
-                    marginBottom: 'var(--space-6)',
-                }} className="stagger">
-                    <div className="metric-card animate-slide-up" style={{ cursor: 'pointer' }}
-                        onClick={() => navigate('/pharmacy/requests')}>
-                        <div style={{
-                            width: '40px', height: '40px', borderRadius: 'var(--radius-lg)',
-                            background: 'var(--warning-light)', display: 'flex',
-                            alignItems: 'center', justifyContent: 'center', margin: '0 auto var(--space-2)',
-                        }}>
-                            <FileText size={20} color="var(--warning)" />
+                {/* KPI Card: In Production */}
+                <div className="bg-surface p-lg rounded-xl border border-outline-variant soft-shadow flex flex-col gap-base hover-shadow transition-shadow cursor-pointer" onClick={() => navigate('/pharmacy/orders')}>
+                    <div className="flex justify-between items-start">
+                        <span className="text-label-md text-on-surface-variant">In Production</span>
+                        <div className="p-2 bg-secondary/10 rounded-lg">
+                            <span className="material-symbols-outlined text-secondary">precision_manufacturing</span>
                         </div>
-                        <div className="metric-value" style={{ color: 'var(--warning)' }}>{pendingRequests}</div>
-                        <div className="metric-label">Novas Solicitações</div>
                     </div>
+                    <div className="text-headline-lg font-headline-lg text-on-surface">{inProductionOrders.length}</div>
+                    <div className="text-label-sm text-on-surface-variant">8 orders nearing QC</div>
+                </div>
 
-                    <div className="metric-card animate-slide-up" style={{ cursor: 'pointer' }}
-                        onClick={() => navigate('/pharmacy/orders')}>
-                        <div style={{
-                            width: '40px', height: '40px', borderRadius: 'var(--radius-lg)',
-                            background: 'var(--info-light)', display: 'flex',
-                            alignItems: 'center', justifyContent: 'center', margin: '0 auto var(--space-2)',
-                        }}>
-                            <Package size={20} color="var(--info)" />
+                {/* KPI Card: Monthly Revenue */}
+                <div className="bg-surface p-lg rounded-xl border border-outline-variant soft-shadow flex flex-col gap-base">
+                    <div className="flex justify-between items-start">
+                        <span className="text-label-md text-on-surface-variant">Monthly Revenue</span>
+                        <div className="p-2 bg-tertiary/10 rounded-lg">
+                            <span className="material-symbols-outlined text-tertiary">payments</span>
                         </div>
-                        <div className="metric-value" style={{ color: 'var(--info)' }}>
-                            {mockPharmacyOrders.filter(o => o.status !== 'DELIVERED').length}
-                        </div>
-                        <div className="metric-label">Em Andamento</div>
                     </div>
-
-                    <div className="metric-card animate-slide-up">
-                        <div style={{
-                            width: '40px', height: '40px', borderRadius: 'var(--radius-lg)',
-                            background: 'var(--success-light)', display: 'flex',
-                            alignItems: 'center', justifyContent: 'center', margin: '0 auto var(--space-2)',
-                        }}>
-                            <TrendingUp size={20} color="var(--success)" />
-                        </div>
-                        <div className="metric-value" style={{ color: 'var(--success)' }}>R$ 264</div>
-                        <div className="metric-label">Faturamento</div>
-                    </div>
-
-                    <div className="metric-card animate-slide-up" style={{ cursor: 'pointer' }}
-                        onClick={() => navigate('/pharmacy/reviews')}>
-                        <div style={{
-                            width: '40px', height: '40px', borderRadius: 'var(--radius-lg)',
-                            background: '#fef3c7', display: 'flex',
-                            alignItems: 'center', justifyContent: 'center', margin: '0 auto var(--space-2)',
-                        }}>
-                            <Star size={20} color="#f59e0b" />
-                        </div>
-                        <div className="metric-value" style={{ color: '#f59e0b' }}>4.8</div>
-                        <div className="metric-label">Avaliação</div>
+                    <div className="text-headline-lg font-headline-lg text-on-surface">R$ 42.8k</div>
+                    <div className="flex items-center gap-1 text-label-sm text-secondary font-bold">
+                        <span className="material-symbols-outlined text-sm">trending_up</span>
+                        5.2% grow
                     </div>
                 </div>
 
-                {/* Recent requests */}
-                <div style={{ marginBottom: 'var(--space-6)' }}>
-                    <div className="section-header">
-                        <h2 className="section-title">Solicitações Recentes</h2>
-                        <button className="section-link" onClick={() => navigate('/pharmacy/requests')}>
-                            Ver todas <ArrowRight size={14} style={{ display: 'inline' }} />
-                        </button>
+                {/* KPI Card: Average Rating */}
+                <div className="bg-surface p-lg rounded-xl border border-outline-variant soft-shadow flex flex-col gap-base hover-shadow transition-shadow cursor-pointer" onClick={() => navigate('/pharmacy/reviews')}>
+                    <div className="flex justify-between items-start">
+                        <span className="text-label-md text-on-surface-variant">Average Rating</span>
+                        <div className="p-2 bg-yellow-100 rounded-lg">
+                            <span className="material-symbols-outlined text-yellow-600" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                        </div>
                     </div>
-                    <div className="stagger" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                        {mockPharmacyRequests.filter(r => r.status === 'pending').slice(0, 2).map((req) => (
-                            <div key={req.id} className="card animate-slide-up" style={{ cursor: 'pointer' }}
-                                onClick={() => navigate('/pharmacy/requests')}>
-                                <div className="flex items-center gap-3" style={{ marginBottom: 'var(--space-2)' }}>
-                                    <div className="avatar" style={{ background: 'var(--gradient-secondary)', width: '36px', height: '36px', fontSize: '12px' }}>
-                                        {req.user.initials}
-                                    </div>
-                                    <div style={{ flex: 1 }}>
-                                        <h4 className="font-semibold text-sm">{req.user.name}</h4>
-                                        <p className="text-xs text-gray">{req.location}</p>
-                                    </div>
-                                    <span className="badge badge-warning">Nova</span>
-                                </div>
-                                <p className="text-sm text-gray">{req.medications.join(', ')}</p>
-                                <div className="flex items-center gap-1 mt-2">
-                                    <Clock size={12} color="var(--gray-400)" />
-                                    <span className="text-xs text-gray">{req.createdAt}</span>
-                                </div>
-                            </div>
-                        ))}
+                    <div className="text-headline-lg font-headline-lg text-on-surface">4.9/5.0</div>
+                    <div className="text-label-sm text-on-surface-variant">98% customer satisfaction</div>
+                </div>
+            </div>
+
+            {/* Layout: Recent Quotes and Production Queue */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-lg">
+                {/* 2. Recent Quote Requests */}
+                <div className="xl:col-span-2 bg-surface rounded-xl border border-outline-variant soft-shadow overflow-hidden flex flex-col">
+                    <div className="p-lg border-b border-outline-variant flex justify-between items-center bg-white/50 backdrop-blur-md">
+                        <h3 className="font-headline-md text-headline-md text-on-surface">Recent Quote Requests</h3>
+                        <button onClick={() => navigate('/pharmacy/requests')} className="text-primary font-label-md hover:underline">Ver todos</button>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-surface-container-low text-label-md text-on-surface-variant">
+                                    <th className="px-lg py-md font-semibold">Paciente</th>
+                                    <th className="px-lg py-md font-semibold">Medicação/Tipo</th>
+                                    <th className="px-lg py-md font-semibold text-center">Data</th>
+                                    <th className="px-lg py-md font-semibold text-right">Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody className="font-body-sm text-body-sm divide-y divide-outline-variant">
+                                {pendingRequests.slice(0, 4).map((req, i) => {
+                                    const colors = ['primary', 'secondary', 'tertiary', 'error'];
+                                    const colorClass = colors[i % colors.length];
+                                    return (
+                                        <tr key={req.id} className="hover:bg-surface-container-lowest transition-colors">
+                                            <td className="px-lg py-md">
+                                                <div className="flex items-center gap-md">
+                                                    <div className={`w-8 h-8 rounded-full bg-${colorClass}/10 flex items-center justify-center text-${colorClass} font-bold`}>
+                                                        {req.user.initials}
+                                                    </div>
+                                                    <span className="font-medium text-on-surface">{req.user.name}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-lg py-md text-on-surface-variant truncate max-w-[200px]">{req.medications.join(', ')}</td>
+                                            <td className="px-lg py-md text-center text-on-surface-variant whitespace-nowrap">{req.createdAt}</td>
+                                            <td className="px-lg py-md text-right">
+                                                <button 
+                                                    onClick={() => navigate('/pharmacy/requests')}
+                                                    className="bg-primary-container text-on-primary py-xs px-md rounded-lg font-label-md transition-all active:scale-95 whitespace-nowrap"
+                                                >
+                                                    View & Quote
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    )
+                                })}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
-                {/* Recent reviews */}
-                <div>
-                    <div className="section-header">
-                        <h2 className="section-title">Últimas Avaliações</h2>
-                        <button className="section-link" onClick={() => navigate('/pharmacy/reviews')}>
-                            Ver todas <ArrowRight size={14} style={{ display: 'inline' }} />
-                        </button>
+                {/* 3. Production Queue */}
+                <div className="bg-surface rounded-xl border border-outline-variant soft-shadow flex flex-col h-full">
+                    <div className="p-lg border-b border-outline-variant flex justify-between items-center">
+                        <h3 className="font-headline-md text-headline-md text-on-surface">Production Queue</h3>
+                        <button onClick={() => navigate('/pharmacy/orders')}><span className="material-symbols-outlined text-on-surface-variant">more_vert</span></button>
                     </div>
-                    <div className="stagger" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                        {mockReviews.slice(0, 2).map((review) => (
-                            <div key={review.id} className="card animate-slide-up">
-                                <div className="flex items-center gap-3" style={{ marginBottom: 'var(--space-2)' }}>
-                                    <div className="avatar" style={{ width: '32px', height: '32px', fontSize: '11px' }}>
-                                        {review.user.initials}
+                    <div className="p-lg space-y-md overflow-y-auto no-scrollbar">
+                        {productionQueue.map((item) => (
+                            <div key={item.id} className="p-md rounded-lg border border-outline-variant bg-white flex flex-col gap-sm hover-shadow transition-shadow">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <p className="font-bold text-on-surface">Ord {item.id}</p>
+                                        <p className="text-label-sm text-on-surface-variant">{item.room}</p>
                                     </div>
-                                    <div style={{ flex: 1 }}>
-                                        <h4 className="font-semibold text-sm">{review.user.name}</h4>
-                                        <StarRating rating={review.rating} size={12} />
+                                    <div 
+                                        className="px-2 py-1 rounded text-label-sm font-bold uppercase tracking-wider"
+                                        style={{ backgroundColor: `${item.color}1A`, color: item.color }}
+                                    >
+                                        {item.stage}
                                     </div>
-                                    <span className="text-xs text-gray">{review.date}</span>
                                 </div>
-                                <p className="text-sm text-gray">{review.comment}</p>
+                                <div className="w-full bg-surface-container-low h-1.5 rounded-full overflow-hidden">
+                                    <div className="h-full transition-all duration-1000" style={{ backgroundColor: item.bg, width: `${item.progress}%` }}></div>
+                                </div>
                             </div>
                         ))}
                     </div>
                 </div>
             </div>
 
-            <BottomNav />
+            {/* Asymmetric / Glassmorphism Extra: Inventory Alerts */}
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary to-primary-container p-xl text-on-primary">
+                <div className="absolute -top-24 -right-24 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
+                <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-lg">
+                    <div className="space-y-sm text-center md:text-left">
+                        <h4 className="font-headline-md text-headline-md font-bold">Inventário Crítico</h4>
+                        <p className="text-body-md opacity-90 max-w-lg">
+                            3 substâncias (Metformina, Lisinopril, Loratadina) atingiram o estoque de segurança. Reabasteça para evitar interrupções na produção.
+                        </p>
+                    </div>
+                    <button className="bg-white text-primary font-bold py-md px-xl rounded-xl shadow-lg hover:bg-surface transition-all active:scale-95 whitespace-nowrap">
+                        Gerenciar Estoque
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }

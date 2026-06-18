@@ -16,6 +16,7 @@ import Orders from './pages/user/Orders';
 import Review from './pages/user/Review';
 
 // Pharmacy pages
+import PharmacyLayout from './components/PharmacyLayout';
 import PharmacyDashboard from './pages/pharmacy/Dashboard';
 import Requests from './pages/pharmacy/Requests';
 import SendQuote from './pages/pharmacy/SendQuote';
@@ -59,20 +60,14 @@ function AppRoutes() {
 
       {/* Pharmacy routes */}
       <Route path="/pharmacy" element={
-        <ProtectedRoute requiredType="PHARMACY"><PharmacyDashboard /></ProtectedRoute>
-      } />
-      <Route path="/pharmacy/requests" element={
-        <ProtectedRoute requiredType="PHARMACY"><Requests /></ProtectedRoute>
-      } />
-      <Route path="/pharmacy/send-quote/:id" element={
-        <ProtectedRoute requiredType="PHARMACY"><SendQuote /></ProtectedRoute>
-      } />
-      <Route path="/pharmacy/orders" element={
-        <ProtectedRoute requiredType="PHARMACY"><OrderManagement /></ProtectedRoute>
-      } />
-      <Route path="/pharmacy/reviews" element={
-        <ProtectedRoute requiredType="PHARMACY"><Reviews /></ProtectedRoute>
-      } />
+        <ProtectedRoute requiredType="PHARMACY"><PharmacyLayout /></ProtectedRoute>
+      }>
+        <Route index element={<PharmacyDashboard />} />
+        <Route path="requests" element={<Requests />} />
+        <Route path="send-quote/:id" element={<SendQuote />} />
+        <Route path="orders" element={<OrderManagement />} />
+        <Route path="reviews" element={<Reviews />} />
+      </Route>
 
       {/* Shared */}
       <Route path="/profile" element={

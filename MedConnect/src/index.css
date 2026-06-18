@@ -1,5 +1,21 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .soft-shadow { box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); }
+  .hover-shadow:hover { box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1); }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+}
+
+@layer base {
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  }
+}
 /* ============================
    CSS VARIABLES / DESIGN TOKENS
    ============================ */
@@ -727,6 +743,10 @@ ul, ol { list-style: none; }
   to { opacity: 1; transform: scale(1); }
 }
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 @keyframes float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-10px); }
@@ -1095,3 +1115,49 @@ ul, ol { list-style: none; }
   border-radius: var(--radius-xl);
   padding: var(--space-4);
 }
+
+/* ============================
+   PHARMACY DASHBOARD
+   ============================ */
+
+/* Sidebar: oculta no mobile */
+.pharmacy-sidebar {
+  display: none !important;
+}
+
+@media (min-width: 768px) {
+  .pharmacy-sidebar {
+    display: flex !important;
+  }
+  .pharmacy-main {
+    padding-bottom: var(--space-6) !important;
+  }
+}
+
+/* Grid 2 colunas no desktop */
+@media (min-width: 900px) {
+  .pharmacy-grid {
+    grid-template-columns: 1fr 380px !important;
+  }
+}
+
+/* Search visível no desktop */
+@media (min-width: 768px) {
+  .search-desktop {
+    display: block !important;
+  }
+}
+
+/* Alert banner flex row no desktop */
+@media (min-width: 640px) {
+  .alert-inner {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+  .alert-inner button {
+    align-self: auto !important;
+    flex-shrink: 0 !important;
+  }
+}
+
