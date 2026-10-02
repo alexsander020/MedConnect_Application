@@ -10,4 +10,7 @@ const prescriptionController = new PrescriptionController();
 router.post('/', authMiddleware, roleMiddleware(['PATIENT']), upload.single('file'), prescriptionController.create);
 router.get('/my', authMiddleware, roleMiddleware(['PATIENT']), prescriptionController.getMyPrescriptions);
 
+// Farmácias podem consultar receitas aguardando cotação
+router.get('/pharmacy', authMiddleware, roleMiddleware(['PHARMACY']), prescriptionController.getAvailableForPharmacy);
+
 export default router;

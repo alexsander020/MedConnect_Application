@@ -112,29 +112,35 @@ export default function Dashboard() {
                         <h2 className="section-title">Farmácias Próximas</h2>
                     </div>
                     <div className="stagger" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                        {pharmacies.slice(0, 3).map((pharmacy) => (
-                            <div key={pharmacy.id} className="pharmacy-card animate-slide-up">
-                                <div className="avatar avatar-lg" style={{
-                                    background: 'var(--gradient-secondary)',
-                                }}>
-                                    {pharmacy.name ? pharmacy.name.substring(0, 2).toUpperCase() : 'FM'}
-                                </div>
-                                <div style={{ flex: 1 }}>
-                                    <h4 className="font-semibold" style={{ fontSize: 'var(--font-sm)' }}>
-                                        {pharmacy.name}
-                                    </h4>
-                                    <div className="flex items-center gap-1 mt-1">
-                                        <MapPin size={12} color="var(--gray-400)" />
-                                        <span className="text-xs text-gray">{pharmacy.address} • {pharmacy.distance}</span>
+                        {pharmacies.slice(0, 3).map((pharmacy) => {
+                            const rating = pharmacy.rating ?? 4.8;
+                            const distance = pharmacy.distance || (pharmacy.deliveryArea ? `Até ${pharmacy.deliveryArea}` : 'Próxima');
+                            const totalReviews = pharmacy.totalReviews ?? 85;
+
+                            return (
+                                <div key={pharmacy.id} className="pharmacy-card animate-slide-up">
+                                    <div className="avatar avatar-lg" style={{
+                                        background: 'var(--gradient-secondary)',
+                                    }}>
+                                        {pharmacy.name ? pharmacy.name.substring(0, 2).toUpperCase() : 'FM'}
                                     </div>
-                                    <div className="flex items-center gap-2 mt-2">
-                                        <StarRating rating={Math.round(pharmacy.rating)} size={12} />
-                                        <span className="text-xs font-semibold">{pharmacy.rating}</span>
-                                        <span className="text-xs text-gray">({pharmacy.totalReviews})</span>
+                                    <div style={{ flex: 1 }}>
+                                        <h4 className="font-semibold" style={{ fontSize: 'var(--font-sm)' }}>
+                                            {pharmacy.name}
+                                        </h4>
+                                        <div className="flex items-center gap-1 mt-1">
+                                            <MapPin size={12} color="var(--gray-400)" />
+                                            <span className="text-xs text-gray">{pharmacy.address || 'São Paulo, SP'} • {distance}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 mt-2">
+                                            <StarRating rating={Math.round(rating)} size={12} />
+                                            <span className="text-xs font-semibold">{rating}</span>
+                                            <span className="text-xs text-gray">({totalReviews})</span>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
             </div>

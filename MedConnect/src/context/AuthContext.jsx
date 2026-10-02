@@ -17,28 +17,32 @@ export function AuthProvider({ children }) {
                 const parsedUser = JSON.parse(user);
                 setCurrentUser(parsedUser);
                 setUserType(parsedUser.role);
-                
-                // Conecta o socket e entra na sala com o ID do usuario (para receber notificacoes de cotação)
-                const socket = getSocket();
-                socket.connect();
-                socket.emit('join_room', parsedUser.id);
-                
-                socket.on('new_quote', (data) => {
-                    // Temporário: Usar alert ou toast no futuro
-                    alert(`Notificação em Tempo Real! ${data.message} Preço: R$${data.quote.price}`);
-                });
             } catch (e) {
                 console.error('Failed to parse session', e);
             }
         }
         setLoading(false);
+    }, []);
+
+    // Gerencia o ciclo de vida do WebSocket com base no usuário logado
+    useEffect(() => {
+        if (!currentUser) return;
+
+        const socket = getSocket();
+        socket.connect();
+        socket.emit('join_room', currentUser.id);
+
+        const handleNewQuote = (data) => {
+            alert(`Notificação em Tempo Real! ${data.message} Preço: R$${data.quote.price}`);
+        };
+
+        socket.on('new_quote', handleNewQuote);
 
         return () => {
-            const socket = getSocket();
-            socket.off('new_quote');
+            socket.off('new_quote', handleNewQuote);
             socket.disconnect();
-        }
-    }, []);
+        };
+    }, [currentUser]);
 
     const register = async (userData, type) => {
         const endpoint = type === 'pharmacy' ? '/pharmacies' : '/users';
@@ -58,14 +62,6 @@ export function AuthProvider({ children }) {
 
             setCurrentUser(user);
             setUserType(user.role);
-            
-            // Conecta o WebSocket no login também
-            const socket = getSocket();
-            socket.connect();
-            socket.emit('join_room', user.id);
-            socket.on('new_quote', (data) => {
-                alert(`Notificação em Tempo Real! ${data.message} Preço: R$${data.quote.price}`);
-            });
 
             return { user, token };
         } catch (error) {

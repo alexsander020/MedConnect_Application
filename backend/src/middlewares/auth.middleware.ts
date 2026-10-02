@@ -1,7 +1,8 @@
+import 'dotenv/config';
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'secret';
+const JWT_SECRET = process.env.JWT_SECRET || 'medconnect_super_secret_key';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -19,7 +20,13 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
     return;
   }
 
-  const [, token] = authHeader.split(' ');
+  const parts = authHeader.split(' ');
+  if (parts.length !== 2 || parts[0] !== 'Bearer') {
+    res.status(401).json({ error: 'Formato de token inválido' });
+    return;
+  }
+
+  const token = parts[1];
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as any;

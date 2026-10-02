@@ -45,6 +45,36 @@ export class PrescriptionController {
       });
       res.json(prescriptions);
     } catch (error) {
+      console.error('Erro ao buscar receitas do paciente:', error);
+      res.status(500).json({ error: 'Erro ao buscar receitas' });
+    }
+  }
+
+  async getAvailableForPharmacy(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'Não autorizado' });
+        return;
+      }
+
+      const prescriptions = await prisma.prescription.findMany({
+        where: {
+          status: { in: ['PENDING', 'REVIEWING', 'QUOTED'] }
+        },
+        include: {
+          patient: {
+            select: { id: true, name: true, phone: true, address: true }
+          },
+          quotes: {
+            where: { pharmacyId: req.user.id }
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      res.json(prescriptions);
+    } catch (error) {
+      console.error('Erro ao buscar receitas para farmácia:', error);
       res.status(500).json({ error: 'Erro ao buscar receitas' });
     }
   }

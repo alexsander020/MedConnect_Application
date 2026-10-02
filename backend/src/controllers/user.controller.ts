@@ -5,15 +5,21 @@ import bcrypt from 'bcrypt';
 export class UserController {
   async create(req: Request, res: Response) {
     try {
-      const { name, email, password, role, phone, address } = req.body;
+      const { name, email, password, phone, address } = req.body;
+
+      if (!name || !email || !password) {
+        res.status(400).json({ error: 'Nome, e-mail e senha são obrigatórios' });
+        return;
+      }
+
       const hashedPassword = await bcrypt.hash(password, 10);
       
       const user = await prisma.user.create({
         data: {
-          name,
-          email,
+          name: name.trim(),
+          email: email.trim().toLowerCase(),
           password: hashedPassword,
-          role,
+          role: 'PATIENT',
           phone,
           address
         }
@@ -21,9 +27,13 @@ export class UserController {
       
       const { password: _, ...userWithoutPassword } = user;
       res.status(201).json(userWithoutPassword);
-    } catch (error) {
-      console.error('Erro no create user:', error);
-      res.status(400).json({ error: 'Erro ao criar usuário', details: error });
+    } catch (error: any) {
+      console.error('Erro no create user:', error?.message || error);
+      if (error?.code === 'P2002') {
+        res.status(400).json({ error: 'E-mail já está cadastrado.' });
+        return;
+      }
+      res.status(400).json({ error: 'Erro ao criar usuário. Verifique os dados.' });
     }
   }
 

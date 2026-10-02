@@ -6,21 +6,11 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - DATABASE_URL=postgresql://postgres:password@postgres:5432/medconnect?schema=public
+      - DATABASE_URL=file:./dev.db
       - JWT_SECRET=medconnect_super_secret_key
-    depends_on:
-      - postgres
-
-  postgres:
-    image: postgres:15
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: medconnect
-    ports:
-      - "5432:5432"
+      - PORT=3000
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - sqlite_data:/app/prisma
 
 volumes:
-  pgdata:
+  sqlite_data:

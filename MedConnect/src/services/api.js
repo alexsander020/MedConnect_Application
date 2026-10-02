@@ -17,10 +17,14 @@ api.interceptors.request.use((config) => {
 
 let socket;
 export const getSocket = () => {
+    const token = localStorage.getItem('@MedConnect:token');
     if (!socket) {
         socket = io(baseURL.replace('/api', ''), {
-            autoConnect: false
+            autoConnect: false,
+            auth: { token }
         });
+    } else {
+        socket.auth = { token };
     }
     return socket;
 };
