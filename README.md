@@ -1,122 +1,213 @@
 # 💊 MedConnect Application
 
-> Plataforma web que conecta pacientes a farmácias de manipulação — desenvolvida com **TDD**, **CI/CD** e boas práticas de engenharia de software.
+> Plataforma completa e moderna para cotação, manipulação e acompanhamento de medicamentos entre pacientes e farmácias — desenvolvida com **Monorepo**, **TDD**, **OpenAPI/Swagger**, **CI/CD** e padrões de segurança de alto nível.
 
-![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
+![React](https://img.shields.io/badge/React_19-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white)
+![Express](https://img.shields.io/badge/Express-000000?style=for-the-badge&logo=express&logoColor=white)
+![Prisma](https://img.shields.io/badge/Prisma-2D3748?style=for-the-badge&logo=prisma&logoColor=white)
 ![Jest](https://img.shields.io/badge/Jest-C21325?style=for-the-badge&logo=jest&logoColor=white)
 ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=for-the-badge&logo=github-actions&logoColor=white)
-![CSS3](https://img.shields.io/badge/CSS3-1572B6?style=for-the-badge&logo=css3&logoColor=white)
-![HTML5](https://img.shields.io/badge/HTML5-E34F26?style=for-the-badge&logo=html5&logoColor=white)
+![OpenAPI](https://img.shields.io/badge/OpenAPI_3.0-6BA539?style=for-the-badge&logo=swagger&logoColor=white)
 
 ---
 
-## 🚀 Demo ao vivo
+## 🚀 Destaques da Solução
 
-🔗 **[Acesse o MedConnect aqui](https://alexsander020.github.io/MedConnect_Application/app-cotacao)**
-
----
-
-## 🛠️ Práticas de Engenharia Aplicadas
-
-Este projeto foi desenvolvido aplicando metodologias usadas em times de tecnologia de alto nível:
-
-| Prática | Descrição |
-|---|---|
-| **TDD — Test-Driven Development** | Testes escritos antes do código (Red → Green → Refactor) usando Jest |
-| **CI/CD com GitHub Actions** | Pipeline que roda testes a cada commit e faz deploy automático no GitHub Pages |
-| **Refatoração Segura** | Código legado refatorado com cobertura de testes como rede de proteção |
-| **Pair Programming** | Interface desenvolvida com programação em par (simulado com IA) |
-| **Código Modular** | Lógica de validação reutilizada entre módulos diferentes |
+- **Monorepo com NPM Workspaces**: Orquestração unificada de frontend SPA, API backend e pacote de validação compartilhado.
+- **Validação Matemática Rigorosa (TDD)**: Pacote `@medconnect/validation` com cálculo oficial de dígitos verificadores para **CPF** e **CNPJ**, validação de e-mail e regras de força de senha.
+- **Transações Atômicas**: Garantia de integridade relacional via `prisma.$transaction` ao aprovar orçamentos e gerar pedidos de produção.
+- **Segurança Reforçada**: Autenticação JWT, autorização granular por papéis (`PATIENT`, `PHARMACY`, `ADMIN`), mitigação de vulnerabilidades IDOR, Rate Limiting e Helmet HTTP headers.
+- **Notificações em Tempo Real**: WebSocket via Socket.IO para alertas imediatos ao paciente sobre novas cotações.
+- **Documentação Viva (OpenAPI 3.0)**: Swagger UI interativo disponível em `/api-docs`.
 
 ---
 
-## 💡 Sobre o Produto
+## 🏛️ Arquitetura do Sistema
 
-Pacientes que precisam de medicamentos manipulados enfrentam um processo lento e burocrático: precisam ir presencialmente a várias farmácias, comparar preços manualmente e enviar receitas em papel.
+```mermaid
+graph TD
+    subgraph Clientes ["Clientes (Dispositivos)"]
+        P[👤 Paciente]
+        F[🏢 Farmácia de Manipulação]
+    end
 
-O **MedConnect** resolve isso digitalizando toda a jornada:
+    subgraph Frontend ["Frontend SPA (React 19 + Vite)"]
+        UI[Interface Responsiva & Glassmorphism]
+        State[Gerenciamento de Estado & Context]
+        Service[Axios API Client]
+        SocketClient[Socket.IO Client]
+    end
 
-**Para o paciente:**
-- Envio de receita médica (imagem ou PDF)
-- Solicitação e comparação de cotações de múltiplas farmácias
-- Acompanhamento do status do pedido em tempo real
+    subgraph Shared ["Pacote Compartilhado"]
+        Val["@medconnect/validation\n(CPF, CNPJ, Email, Senha)"]
+    end
 
-**Para a farmácia:**
-- Perfil empresarial digital
-- Recebimento e gestão de solicitações de orçamento
-- Atualização de status e recebimento de avaliações
+    subgraph Backend ["Backend API (Node.js + Express + TypeScript)"]
+        MW[Segurança: Helmet, RateLimit, JWT, RBAC]
+        Controllers[Controllers: Auth, User, Pharmacy, Prescription, Quote, Order]
+        Swagger[Swagger UI / OpenAPI 3.0]
+        SocketServer[Socket.IO Server]
+        Prisma[Prisma ORM Client]
+    end
+
+    subgraph Storage ["Persistência & Armazenamento"]
+        DB[(Banco de Dados: SQLite / PostgreSQL)]
+        Uploads[Uploads de Receitas Médicas]
+    end
+
+    P --> UI
+    F --> UI
+    UI --> Val
+    UI --> Service
+    UI --> SocketClient
+
+    Service --> MW
+    SocketClient <--> SocketServer
+    MW --> Controllers
+    Controllers --> Val
+    Controllers --> Prisma
+    Controllers --> SocketServer
+    Controllers --> Uploads
+    Prisma --> DB
+```
 
 ---
 
-## 🧪 Desafios Técnicos
+## 🔄 Fluxo de Negócio (Jornada da Cotação ao Pedido)
 
-### Desafio 1 — TDD: Biblioteca de Validação
-Funções de validação (`ehEmailValido`, `ehCPFValido`, `ehSenhaForte`) desenvolvidas com testes Jest antes da implementação. A validação de CPF inclui cálculo completo dos dígitos verificadores via RegEx e lógica matemática — cobertura de casos positivos, negativos e edge cases.
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Paciente as 👤 Paciente
+    participant API as ⚙️ API MedConnect
+    actor Farmacia as 🏢 Farmácia Parceira
 
-### Desafio 2 — Pair Programming: App de Cotações
-Interface `app-cotacao` com design **Glassmorphism**, animações CSS fluidas, tipografia moderna e lógica JavaScript assíncrona simulando chamadas de API com estados de loading e sucesso.
-
-### Desafio 3 — Refatoração Segura: Código Legado
-Refatoração de código com condicionais aninhados e variáveis mal nomeadas (`d`, `t`, `r`) para código limpo e legível — sem quebrar nenhum comportamento, certificado por 8 testes automatizados.
-
-### Desafio 4 — CI/CD: Integração Contínua + Hospedagem
-Dois workflows configurados no GitHub Actions:
-- **`ci.yml`** — executa `npm run test` a cada commit ou pull request nas branches principais
-- **`deploy-pages.yml`** — deploy automático da aplicação no GitHub Pages a cada push
+    Paciente->>API: Envia receita médica (upload de imagem/PDF)
+    API->>API: Valida receita e armazena (status PENDING)
+    Farmacia->>API: Consulta receitas disponíveis no mercado
+    Farmacia->>API: Envia cotação (preço, prazo de entrega, observações)
+    API->>Paciente: Notificação em tempo real via WebSocket (new_quote)
+    Paciente->>API: Analisa cotações e aprova a melhor proposta
+    API->>API: Transação Atômica: Cria Pedido (PRODUCTION) & Aceita Cotação
+    Farmacia->>API: Acompanha e atualiza status (PREPARING → DELIVERY → DELIVERED)
+    Paciente->>API: Acompanha status do pedido em tempo real
+```
 
 ---
 
-## 📁 Estrutura do Projeto
+## 📁 Estrutura do Monorepo
 
 ```
 MedConnect_Application/
 │
 ├── .github/
 │   └── workflows/
-│       ├── ci.yml                  # Pipeline de testes automáticos
-│       └── deploy-pages.yml        # Deploy automático no GitHub Pages
+│       ├── ci.yml                  # Pipeline CI paralelo (Frontend + Backend)
+│       └── deploy-pages.yml        # Deploy contínuo do frontend no GitHub Pages
 │
-├── MedConnect/
-│   └── src/
-│       ├── components/
-│       ├── pages/
-│       ├── services/
-│       ├── hooks/
-│       ├── context/
-│       └── routes/
+├── MedConnect/                     # Aplicação SPA Frontend (React 19, Vite, Tailwind/CSS)
+│   ├── src/
+│   │   ├── components/             # Header, BottomNav, Modais, Cards
+│   │   ├── pages/
+│   │   │   ├── user/               # Home, NewQuote, QuoteOffers, Orders
+│   │   │   └── pharmacy/           # Dashboard, Requests, SendQuote, OrderManagement
+│   │   ├── services/api.js         # Cliente HTTP configurado com interceptors
+│   │   └── utils/                  # Utilitários e testes legados
+│   └── package.json
 │
-├── app-cotacao/                    # Interface Glassmorphism (Desafio 2)
+├── backend/                        # API RESTful (Express, TypeScript, Prisma, Socket.IO)
+│   ├── src/
+│   │   ├── controllers/            # Lógica de controle com checagens IDOR e RBAC
+│   │   ├── docs/swagger.yaml       # Especificação completa OpenAPI 3.0
+│   │   ├── middlewares/            # Autenticação JWT e RBAC
+│   │   └── routes/                 # Definição de rotas REST
+│   ├── prisma/
+│   │   └── schema.prisma           # Modelagem relacional e enum de status
+│   ├── tests/                      # Testes automatizados com Supertest e Jest
+│   └── package.json
 │
-├── README.md
-└── diario-de-bordo.md              # Documentação do processo de desenvolvimento
+├── packages/
+│   └── validation/                 # @medconnect/validation compartilhado (ESM + CJS + Types)
+│
+├── legacy/                         # Protótipo estático original arquivado
+│   ├── index.html
+│   └── README.md
+│
+├── docs/
+│   └── decisoes/                   # Architectural Decision Records (ADRs)
+│       ├── 001-monorepo-workspaces.md
+│       ├── 002-arquitetura-backend-prisma.md
+│       └── 003-validacao-compartilhada-e-seguranca.md
+│
+├── .editorconfig                   # Padronização de formatação de código
+├── package.json                    # Raiz do Monorepo (NPM Workspaces)
+└── README.md
 ```
 
 ---
 
-## 📖 Diário de Bordo
+## 📖 Decisões Arquiteturais (ADRs)
 
-Todo o processo de desenvolvimento — decisões técnicas, desafios superados e aprendizados — está documentado no **[Diário de Bordo](./diario-de-bordo.md)**.
+Todas as principais escolhas técnicas estão documentadas formalmente em [`docs/decisoes/`](./docs/decisoes/):
+- **[ADR 001: Adoção de Monorepo com NPM Workspaces](./docs/decisoes/001-monorepo-workspaces.md)**
+- **[ADR 002: Arquitetura Backend com Node.js, TypeScript e Prisma ORM](./docs/decisoes/002-arquitetura-backend-prisma.md)**
+- **[ADR 003: Validação Compartilhada com TDD e Modelo de Segurança RBAC / IDOR](./docs/decisoes/003-validacao-compartilhada-e-seguranca.md)**
 
 ---
 
-## ▶️ Como executar localmente
+## 🧪 Testes Automatizados
 
-**Pré-requisitos:** Node.js instalado.
+O ecossistema possui **39 testes automatizados** passando em paralelo:
+- **Frontend / Utilitários**: 29 testes unitários (validações, refatoração de código).
+- **Backend / API**: 10 testes de integração (rotas de usuários, documentação Swagger, validação de regras de negócio e controle de acesso RBAC).
 
 ```bash
-# Clone o repositório
-git clone https://github.com/alexsander020/MedConnect_Application.git
-cd MedConnect_Application
-
-# Instale as dependências
-npm install
-
-# Execute os testes
+# Executa todos os testes em paralelo no Monorepo
 npm run test
 
-# Abra o app-cotacao no navegador
-open app-cotacao/index.html
+# Executa testes isolados por workspace
+npm run test:frontend
+npm run test:backend
 ```
+
+---
+
+## ▶️ Como Executar Localmente
+
+### Pré-requisitos
+- **Node.js** v20 ou superior
+- **NPM** v10 ou superior
+
+### Passo a Passo
+
+1. **Clone o repositório:**
+   ```bash
+   git clone https://github.com/alexsander020/MedConnect_Application.git
+   cd MedConnect_Application
+   ```
+
+2. **Instale todas as dependências do Monorepo:**
+   ```bash
+   npm install --legacy-peer-deps
+   ```
+
+3. **Configure as variáveis de ambiente:**
+   - No backend: copie `backend/.env.example` para `backend/.env`
+   ```bash
+   cp backend/.env.example backend/.env
+   ```
+
+4. **Inicie o Frontend e o Backend simultaneamente:**
+   ```bash
+   npm run dev
+   ```
+
+5. **Acesse as aplicações:**
+   - **Frontend (SPA):** [http://localhost:5173](http://localhost:5173)
+   - **API Backend:** [http://localhost:3000](http://localhost:3000)
+   - **Documentação Swagger UI:** [http://localhost:3000/api-docs](http://localhost:3000/api-docs)
 
 ---
 

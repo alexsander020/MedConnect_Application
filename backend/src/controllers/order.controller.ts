@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middlewares/auth.middleware';
 
-const VALID_STATUSES = ['PENDING', 'REVIEWING', 'QUOTED', 'ACCEPTED', 'PRODUCTION', 'DELIVERED', 'CANCELLED'];
+const VALID_STATUSES = ['PENDING', 'REVIEWING', 'QUOTED', 'ACCEPTED', 'PRODUCTION', 'DELIVERY', 'DELIVERED', 'CANCELLED'];
 
 export class OrderController {
   async create(req: AuthRequest, res: Response): Promise<void> {

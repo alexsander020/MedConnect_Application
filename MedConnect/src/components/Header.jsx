@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { Bell, ArrowLeft, LogOut } from 'lucide-react';
 
 export default function Header({ title, showBack, showNotification = true }) {
-    const { currentUser, userType, logout } = useAuth();
+    const { currentUser, logout } = useAuth();
     const navigate = useNavigate();
 
     const displayName = currentUser?.name || currentUser?.email?.split('@')[0] || 'Usuário';

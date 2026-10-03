@@ -4,25 +4,27 @@ import { api, getSocket } from '../services/api';
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-    const [currentUser, setCurrentUser] = useState(null);
-    const [userType, setUserType] = useState(null); // 'PATIENT' or 'PHARMACY'
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        const token = localStorage.getItem('@MedConnect:token');
-        const user = localStorage.getItem('@MedConnect:user');
-        
-        if (token && user) {
-            try {
-                const parsedUser = JSON.parse(user);
-                setCurrentUser(parsedUser);
-                setUserType(parsedUser.role);
-            } catch (e) {
-                console.error('Failed to parse session', e);
-            }
+    const [currentUser, setCurrentUser] = useState(() => {
+        try {
+            const token = localStorage.getItem('@MedConnect:token');
+            const user = localStorage.getItem('@MedConnect:user');
+            return token && user ? JSON.parse(user) : null;
+        } catch (e) {
+            console.error('Failed to parse session', e);
+            return null;
         }
-        setLoading(false);
-    }, []);
+    });
+
+    const [userType, setUserType] = useState(() => {
+        try {
+            const user = localStorage.getItem('@MedConnect:user');
+            return user ? JSON.parse(user).role : null;
+        } catch {
+            return null;
+        }
+    });
+
+    const [loading] = useState(false);
 
     // Gerencia o ciclo de vida do WebSocket com base no usuário logado
     useEffect(() => {

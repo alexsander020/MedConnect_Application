@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Pill, Mail, Lock, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { Pill, Mail, Lock, Eye, EyeOff, ArrowLeft, Building2, User, Sparkles, CheckCircle2 } from 'lucide-react';
 
 export default function Login() {
     const navigate = useNavigate();
@@ -20,7 +20,6 @@ export default function Login() {
         setLoading(true);
         try {
             const { user } = await login(email, password, type);
-            // Usar a role retornada pela API para redirecionar
             if (user.role === 'PHARMACY') {
                 navigate('/pharmacy', { replace: true });
             } else {
@@ -35,193 +34,221 @@ export default function Login() {
     };
 
     return (
-        <div style={{ display: 'flex', minHeight: '100vh', background: 'white' }}>
-            {/* Left Side - Visual/Branding (hidden on small screens, flex on large) */}
-            <div style={{
-                flex: 1,
-                background: 'var(--gradient-hero)',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center',
-                alignItems: 'center',
-                color: 'white',
-                position: 'relative',
-                overflow: 'hidden',
-                padding: 'var(--space-8)'
-            }}>
-                {/* Decorative Elements */}
-                <div style={{
-                    position: 'absolute', top: '10%', left: '-10%',
-                    width: '400px', height: '400px', borderRadius: '50%',
-                    background: 'rgba(13,148,136,0.2)', filter: 'blur(60px)',
-                }} />
-                
-                <div style={{ position: 'relative', zIndex: 1, textAlign: 'center', maxWidth: '500px' }}>
+        <div className="aurora-container" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-6)' }}>
+            {/* Aurora Background Blobs */}
+            <div className="aurora-blob aurora-blob-1" />
+            <div className="aurora-blob aurora-blob-2" />
+            <div className="aurora-blob aurora-blob-3" />
+
+            <div style={{ width: '100%', maxWidth: '1050px', position: 'relative', zIndex: 1 }}>
+                {/* Back to Home Button */}
+                <button 
+                    className="btn btn-ghost" 
+                    onClick={() => navigate('/')} 
+                    style={{ marginBottom: 'var(--space-4)', display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 600, color: 'var(--gray-700)' }}
+                >
+                    <ArrowLeft size={18} />
+                    Voltar ao Início
+                </button>
+
+                <div className="glass-panel" style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+                    borderRadius: 'var(--radius-2xl)',
+                    overflow: 'hidden',
+                    boxShadow: '0 20px 50px -10px rgba(15, 23, 42, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.7) inset'
+                }}>
+                    {/* Left Column: Visual branding and benefits */}
                     <div style={{
-                        width: '80px', height: '80px', borderRadius: 'var(--radius-xl)',
-                        background: 'rgba(255,255,255,0.1)', display: 'flex',
-                        alignItems: 'center', justifyContent: 'center',
-                        margin: '0 auto var(--space-6)', backdropFilter: 'blur(10px)',
-                        border: '1px solid rgba(255,255,255,0.2)'
+                        background: 'linear-gradient(145deg, rgba(13, 148, 136, 0.95) 0%, rgba(15, 118, 110, 0.92) 50%, rgba(15, 23, 42, 0.95) 100%)',
+                        color: 'white',
+                        padding: 'var(--space-10) var(--space-8)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        position: 'relative',
+                        overflow: 'hidden'
                     }}>
-                        <Pill size={40} color="white" />
-                    </div>
-                    <h2 style={{ fontSize: '3rem', fontWeight: 800, marginBottom: 'var(--space-4)', lineHeight: 1.2 }}>
-                        Bem-vindo de volta ao <br/><span style={{ color: 'var(--primary-300)' }}>MedConnect</span>
-                    </h2>
-                    <p style={{ fontSize: 'var(--font-lg)', color: 'var(--gray-300)', lineHeight: 1.6 }}>
-                        A plataforma definitiva para gerenciar cotações e pedidos de medicamentos manipulados com segurança e rapidez.
-                    </p>
-                </div>
-            </div>
+                        {/* Background glow circle */}
+                        <div style={{
+                            position: 'absolute', top: '-10%', right: '-10%',
+                            width: '300px', height: '300px', borderRadius: '50%',
+                            background: 'rgba(94, 234, 212, 0.25)', filter: 'blur(50px)'
+                        }} />
 
-            {/* Right Side - Form */}
-            <div style={{
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center',
-                padding: 'var(--space-8)',
-                maxWidth: '600px',
-                margin: '0 auto'
-            }}>
-                <div style={{ width: '100%', maxWidth: '400px', margin: '0 auto' }}>
-                    {/* Back button */}
-                    <button className="btn btn-ghost" onClick={() => navigate('/')} style={{ marginBottom: 'var(--space-8)', paddingLeft: 0 }}>
-                        <ArrowLeft size={20} />
-                        Voltar para o Início
-                    </button>
+                        <div style={{ position: 'relative', zIndex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-8)' }}>
+                                <div style={{
+                                    width: '46px', height: '46px', borderRadius: '14px',
+                                    background: 'rgba(255, 255, 255, 0.15)',
+                                    backdropFilter: 'blur(10px)',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
+                                }}>
+                                    <Pill size={26} color="white" />
+                                </div>
+                                <span style={{ fontSize: 'var(--font-2xl)', fontWeight: 800, letterSpacing: '-0.02em' }}>
+                                    Med<span style={{ color: '#5eead4' }}>Connect</span>
+                                </span>
+                            </div>
 
-                    <div className="animate-scale-in" style={{ marginBottom: 'var(--space-8)' }}>
-                        <h1 style={{ fontSize: 'var(--font-3xl)', fontWeight: 800 }}>
-                            Fazer Login
-                        </h1>
-                        <p className="text-gray" style={{ marginTop: 'var(--space-2)' }}>
-                            Insira suas credenciais para acessar o painel.
-                        </p>
-                    </div>
+                            <span className="glass-badge" style={{ background: 'rgba(255,255,255,0.15)', color: '#ccfbf1', marginBottom: 'var(--space-4)' }}>
+                                <Sparkles size={13} />
+                                Acesso Seguro & Criptografado
+                            </span>
 
-                    {/* Type toggle */}
-                    <div className="toggle-group animate-slide-up" style={{ marginBottom: 'var(--space-6)' }}>
-                        <div
-                            className={`toggle-option ${type === 'user' ? 'active' : ''}`}
-                            onClick={() => setType('user')}
-                        >
-                            🧑 Paciente
+                            <h2 style={{ fontSize: 'clamp(1.75rem, 3vw, 2.3rem)', fontWeight: 800, lineHeight: 1.2, marginBottom: 'var(--space-4)', color: 'white' }}>
+                                {type === 'user' ? 'Gerencie suas cotações e economize na saúde.' : 'Receba receitas e expanda sua farmácia de manipulação.'}
+                            </h2>
+
+                            <p style={{ color: 'rgba(204, 251, 241, 0.9)', fontSize: 'var(--font-base)', lineHeight: 1.6, maxWidth: '400px' }}>
+                                {type === 'user' 
+                                    ? 'Acompanhe suas receitas enviadas, compare ofertas e receba seus remédios com comodidade e transparência.'
+                                    : 'Acesse centenas de receitas médicas na sua região, envie orçamentos e gerencie a linha de produção em tempo real.'}
+                            </p>
                         </div>
-                        <div
-                            className={`toggle-option ${type === 'pharmacy' ? 'active' : ''}`}
-                            onClick={() => setType('pharmacy')}
-                        >
-                            🏥 Farmácia
-                        </div>
-                    </div>
 
-                    {/* Form */}
-                    <form onSubmit={handleLogin} className="animate-slide-up" style={{ animationDelay: '100ms' }}>
-                        <div className="form-group">
-                            <label className="form-label">E-mail</label>
-                            <div style={{ position: 'relative' }}>
-                                <Mail size={18} style={{
-                                    position: 'absolute', left: '14px', top: '50%',
-                                    transform: 'translateY(-50%)', color: 'var(--gray-400)',
-                                }} />
-                                <input
-                                    type="email"
-                                    className="form-input"
-                                    placeholder="seu@email.com"
-                                    style={{ paddingLeft: '42px' }}
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    required
-                                />
+                        {/* Feature pills */}
+                        <div style={{ marginTop: 'var(--space-8)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', position: 'relative', zIndex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 'var(--font-sm)', color: 'rgba(255, 255, 255, 0.9)' }}>
+                                <CheckCircle2 size={18} color="#5eead4" />
+                                <span>Ambiente protegido por JWT e LGPD</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 'var(--font-sm)', color: 'rgba(255, 255, 255, 0.9)' }}>
+                                <CheckCircle2 size={18} color="#5eead4" />
+                                <span>Notificações em tempo real com WebSocket</span>
                             </div>
                         </div>
+                    </div>
 
-                        <div className="form-group">
-                            <label className="form-label">Senha</label>
-                            <div style={{ position: 'relative' }}>
-                                <Lock size={18} style={{
-                                    position: 'absolute', left: '14px', top: '50%',
-                                    transform: 'translateY(-50%)', color: 'var(--gray-400)',
-                                }} />
-                                <input
-                                    type={showPassword ? 'text' : 'password'}
-                                    className="form-input"
-                                    placeholder="••••••••"
-                                    style={{ paddingLeft: '42px', paddingRight: '42px' }}
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    required
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    style={{
-                                        position: 'absolute', right: '14px', top: '50%',
-                                        transform: 'translateY(-50%)', background: 'none',
-                                        border: 'none', color: 'var(--gray-400)', cursor: 'pointer',
-                                    }}
+                    {/* Right Column: Form */}
+                    <div style={{ padding: 'var(--space-8) var(--space-8)', background: 'rgba(255, 255, 255, 0.85)' }}>
+                        <div style={{ maxWidth: '380px', margin: '0 auto' }}>
+                            <div style={{ marginBottom: 'var(--space-6)' }}>
+                                <h1 style={{ fontSize: 'var(--font-2xl)', fontWeight: 800, color: 'var(--gray-900)' }}>
+                                    Entrar na Conta
+                                </h1>
+                                <p style={{ fontSize: 'var(--font-sm)', color: 'var(--gray-500)', marginTop: 4 }}>
+                                    Selecione seu perfil e informe seus dados
+                                </p>
+                            </div>
+
+                            {/* Profile Type Toggle */}
+                            <div className="glass-tab-container" style={{ marginBottom: 'var(--space-6)' }}>
+                                <div
+                                    className={`glass-tab ${type === 'user' ? 'active' : ''}`}
+                                    onClick={() => setType('user')}
+                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                                 >
-                                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                    <User size={16} />
+                                    Paciente
+                                </div>
+                                <div
+                                    className={`glass-tab ${type === 'pharmacy' ? 'active' : ''}`}
+                                    onClick={() => setType('pharmacy')}
+                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                                >
+                                    <Building2 size={16} />
+                                    Farmácia
+                                </div>
+                            </div>
+
+                            {/* Form */}
+                            <form onSubmit={handleLogin}>
+                                <div className="form-group" style={{ marginBottom: 'var(--space-4)' }}>
+                                    <label className="form-label" style={{ fontWeight: 600, color: 'var(--gray-700)' }}>E-mail</label>
+                                    <div style={{ position: 'relative' }}>
+                                        <Mail size={18} style={{
+                                            position: 'absolute', left: '14px', top: '50%',
+                                            transform: 'translateY(-50%)', color: 'var(--gray-400)',
+                                        }} />
+                                        <input
+                                            type="email"
+                                            className="glass-input"
+                                            placeholder="seu@email.com"
+                                            style={{ paddingLeft: '44px', width: '100%' }}
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            required
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="form-group" style={{ marginBottom: 'var(--space-4)' }}>
+                                    <label className="form-label" style={{ fontWeight: 600, color: 'var(--gray-700)' }}>Senha</label>
+                                    <div style={{ position: 'relative' }}>
+                                        <Lock size={18} style={{
+                                            position: 'absolute', left: '14px', top: '50%',
+                                            transform: 'translateY(-50%)', color: 'var(--gray-400)',
+                                        }} />
+                                        <input
+                                            type={showPassword ? 'text' : 'password'}
+                                            className="glass-input"
+                                            placeholder="••••••••"
+                                            style={{ paddingLeft: '44px', paddingRight: '44px', width: '100%' }}
+                                            value={password}
+                                            onChange={(e) => setPassword(e.target.value)}
+                                            required
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPassword(!showPassword)}
+                                            style={{
+                                                position: 'absolute', right: '14px', top: '50%',
+                                                transform: 'translateY(-50%)', background: 'none',
+                                                border: 'none', color: 'var(--gray-400)', cursor: 'pointer',
+                                            }}
+                                        >
+                                            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {error && (
+                                    <div style={{
+                                        padding: 'var(--space-3)',
+                                        background: '#fef2f2',
+                                        border: '1px solid #fecaca',
+                                        borderRadius: 'var(--radius-md)',
+                                        color: 'var(--error)',
+                                        fontSize: 'var(--font-sm)',
+                                        marginBottom: 'var(--space-4)',
+                                        textAlign: 'center'
+                                    }}>
+                                        {error}
+                                    </div>
+                                )}
+
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--space-5)' }}>
+                                    <button type="button" style={{ background: 'none', border: 'none', color: 'var(--primary-600)', fontSize: 'var(--font-sm)', fontWeight: 600, cursor: 'pointer' }}>
+                                        Esqueceu a senha?
+                                    </button>
+                                </div>
+
+                                <button 
+                                    type="submit" 
+                                    className="btn btn-glass-primary btn-lg btn-block" 
+                                    style={{ borderRadius: 'var(--radius-xl)', fontWeight: 700 }}
+                                    disabled={loading}
+                                >
+                                    {loading ? 'Entrando...' : 'Entrar na Plataforma'}
+                                </button>
+                            </form>
+
+                            {/* Sign up prompt */}
+                            <div style={{ marginTop: 'var(--space-6)', textAlign: 'center', paddingTop: 'var(--space-4)', borderTop: '1px solid rgba(226, 232, 240, 0.8)' }}>
+                                <span style={{ fontSize: 'var(--font-sm)', color: 'var(--gray-600)' }}>
+                                    Ainda não possui conta?{' '}
+                                </span>
+                                <button
+                                    onClick={() => navigate('/register', { state: { type } })}
+                                    style={{ background: 'none', border: 'none', color: 'var(--primary-700)', fontWeight: 700, cursor: 'pointer', fontSize: 'var(--font-sm)' }}
+                                >
+                                    Criar conta grátis
                                 </button>
                             </div>
                         </div>
-
-                        {error && (
-                            <div className="form-error" style={{ marginBottom: 'var(--space-4)', textAlign: 'center', color: 'var(--error)' }}>
-                                {error}
-                            </div>
-                        )}
-
-                        <div style={{ textAlign: 'right', marginBottom: 'var(--space-6)' }}>
-                            <button type="button" className="text-sm text-primary font-semibold" style={{ background: 'none', border: 'none', color: 'var(--primary-600)' }}>
-                                Esqueceu a senha?
-                            </button>
-                        </div>
-
-                        <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={loading}>
-                            {loading ? 'Entrando...' : 'Entrar na Plataforma'}
-                        </button>
-                    </form>
-
-                    {/* Divider */}
-                    <div style={{
-                        display: 'flex', alignItems: 'center', gap: 'var(--space-4)',
-                        margin: 'var(--space-6) 0',
-                    }}>
-                        <div style={{ flex: 1, height: '1px', background: 'var(--gray-200)' }} />
-                        <span className="text-sm text-gray" style={{ color: 'var(--gray-400)' }}>ou continue com</span>
-                        <div style={{ flex: 1, height: '1px', background: 'var(--gray-200)' }} />
                     </div>
-
-                    {/* Social Login */}
-                    <button className="btn btn-block" style={{
-                        border: '2px solid var(--gray-200)', padding: 'var(--space-3)',
-                        borderRadius: 'var(--radius-xl)', fontWeight: 600,
-                        color: 'var(--gray-700)', marginBottom: 'var(--space-6)',
-                        background: 'transparent'
-                    }}>
-                        <svg width="20" height="20" viewBox="0 0 24 24" style={{ marginRight: '8px' }}>
-                            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
-                            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-                            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-                        </svg>
-                        Google
-                    </button>
-
-                    {/* Register link */}
-                    <p style={{ textAlign: 'center' }}>
-                        <span className="text-gray" style={{ color: 'var(--gray-500)' }}>Não tem conta? </span>
-                        <button
-                            onClick={() => navigate('/register', { state: { type } })}
-                            className="font-semibold"
-                            style={{ background: 'none', border: 'none', color: 'var(--primary-600)', fontSize: '1rem' }}
-                        >
-                            Criar conta gratuitamente
-                        </button>
-                    </p>
                 </div>
             </div>
         </div>

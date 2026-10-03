@@ -2,10 +2,11 @@ openapi: 3.0.0
 info:
   title: MedConnect API
   version: 1.0.0
-  description: API Documentation for MedConnect Application
+  description: Documentação completa da API RESTful do ecossistema MedConnect para orçamentos de manipulação farmacêutica, pedidos e gestão em tempo real.
 
 servers:
   - url: http://localhost:3000
+    description: Servidor Local de Desenvolvimento
 
 components:
   securitySchemes:
@@ -14,30 +15,582 @@ components:
       scheme: bearer
       bearerFormat: JWT
 
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Mensagem detalhada de erro
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+        - type
+      properties:
+        email:
+          type: string
+          format: email
+          example: paciente@medconnect.com
+        password:
+          type: string
+          format: password
+          example: SenhaForte#123
+        type:
+          type: string
+          enum: [user, pharmacy]
+          example: user
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        user:
+          $ref: '#/components/schemas/UserResponse'
+        pharmacy:
+          $ref: '#/components/schemas/PharmacyResponse'
+
+    UserCreateRequest:
+      type: object
+      required:
+        - name
+        - email
+        - password
+      properties:
+        name:
+          type: string
+          example: Carlos Silva
+        email:
+          type: string
+          format: email
+          example: carlos@exemplo.com
+        password:
+          type: string
+          format: password
+          example: SenhaForte#123
+        phone:
+          type: string
+          example: (11) 98765-4321
+        address:
+          type: string
+          example: Av. Paulista, 1000, Apto 52 - SP
+
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: clx123456789
+        name:
+          type: string
+          example: Carlos Silva
+        email:
+          type: string
+          example: carlos@exemplo.com
+        role:
+          type: string
+          enum: [PATIENT, ADMIN]
+          example: PATIENT
+        phone:
+          type: string
+          example: (11) 98765-4321
+        address:
+          type: string
+          example: Av. Paulista, 1000, Apto 52 - SP
+        createdAt:
+          type: string
+          format: date-time
+
+    PharmacyCreateRequest:
+      type: object
+      required:
+        - name
+        - email
+        - password
+        - cnpj
+      properties:
+        name:
+          type: string
+          example: Farmácia Vida e Saúde
+        email:
+          type: string
+          format: email
+          example: contato@farmaciavida.com.br
+        password:
+          type: string
+          format: password
+          example: SenhaForte#123
+        cnpj:
+          type: string
+          example: "04.252.011/0001-10"
+        phone:
+          type: string
+          example: (11) 3456-7890
+        address:
+          type: string
+          example: Rua das Flores, 250 - São Paulo, SP
+        deliveryArea:
+          type: string
+          example: Grande São Paulo
+
+    PharmacyResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: clx987654321
+        name:
+          type: string
+          example: Farmácia Vida e Saúde
+        email:
+          type: string
+          example: contato@farmaciavida.com.br
+        cnpj:
+          type: string
+          example: "04252011000110"
+        phone:
+          type: string
+          example: (11) 3456-7890
+        address:
+          type: string
+          example: Rua das Flores, 250 - São Paulo, SP
+        deliveryArea:
+          type: string
+          example: Grande São Paulo
+        createdAt:
+          type: string
+          format: date-time
+
+    PrescriptionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: clxpresc123
+        patientId:
+          type: string
+          example: clx123456789
+        fileUrl:
+          type: string
+          example: http://localhost:3000/uploads/receita-123.jpg
+        status:
+          type: string
+          enum: [PENDING, REVIEWING, QUOTED, ACCEPTED, CANCELLED]
+          example: PENDING
+        createdAt:
+          type: string
+          format: date-time
+
+    QuoteCreateRequest:
+      type: object
+      required:
+        - prescriptionId
+        - price
+      properties:
+        prescriptionId:
+          type: string
+          example: clxpresc123
+        price:
+          type: number
+          example: 85.50
+        deliveryDays:
+          type: integer
+          example: 2
+        notes:
+          type: string
+          example: Inclui frasco conta-gotas de 30ml e orientações de uso.
+
+    QuoteResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: clxquote123
+        prescriptionId:
+          type: string
+          example: clxpresc123
+        pharmacyId:
+          type: string
+          example: clx987654321
+        price:
+          type: number
+          example: 85.50
+        deliveryDays:
+          type: integer
+          example: 2
+        notes:
+          type: string
+          example: Inclui frasco conta-gotas de 30ml
+        status:
+          type: string
+          enum: [QUOTED, ACCEPTED, REJECTED]
+          example: QUOTED
+        createdAt:
+          type: string
+          format: date-time
+
+    OrderCreateRequest:
+      type: object
+      required:
+        - quoteId
+      properties:
+        quoteId:
+          type: string
+          example: clxquote123
+
+    OrderStatusUpdateRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [PENDING, REVIEWING, QUOTED, ACCEPTED, PRODUCTION, DELIVERY, DELIVERED, CANCELLED]
+          example: PRODUCTION
+
+    OrderResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: clxorder123
+        quoteId:
+          type: string
+          example: clxquote123
+        status:
+          type: string
+          enum: [PENDING, REVIEWING, QUOTED, ACCEPTED, PRODUCTION, DELIVERY, DELIVERED, CANCELLED]
+          example: PRODUCTION
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
 paths:
-  /api/health:
+  /health:
     get:
-      summary: Health check endpoint
+      summary: Verificação de saúde da API
+      tags:
+        - Health
       responses:
         '200':
-          description: OK
+          description: API operacional
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: OK
+
   /api/auth/login:
     post:
-      summary: Login
+      summary: Autenticação de Usuário ou Farmácia
+      tags:
+        - Autenticação
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                email:
-                  type: string
-                password:
-                  type: string
-                type:
-                  type: string
-                  enum: [user, pharmacy]
+              $ref: '#/components/schemas/LoginRequest'
       responses:
         '200':
-          description: Logged in successfully
+          description: Login realizado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Credenciais ausentes ou inválidas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: E-mail ou senha incorretos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/users:
+    post:
+      summary: Cadastro de novo paciente
+      tags:
+        - Usuários
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreateRequest'
+      responses:
+        '201':
+          description: Paciente criado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          description: Dados inválidos (senha fraca, e-mail já existente)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      summary: Listagem de todos os usuários (Requer ADMIN)
+      tags:
+        - Usuários
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Lista de usuários cadastrados
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserResponse'
+        '401':
+          description: Não autorizado
+        '403':
+          description: Acesso restrito a administradores
+
+  /api/pharmacies:
+    post:
+      summary: Cadastro de nova farmácia de manipulação
+      tags:
+        - Farmácias
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PharmacyCreateRequest'
+      responses:
+        '201':
+          description: Farmácia cadastrada com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PharmacyResponse'
+        '400':
+          description: Validação falhou (CNPJ inválido, senha fraca ou duplicada)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      summary: Listagem pública de farmácias parceiras
+      tags:
+        - Farmácias
+      responses:
+        '200':
+          description: Lista de farmácias
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PharmacyResponse'
+
+  /api/prescriptions:
+    post:
+      summary: Envio de receita médica (Paciente)
+      tags:
+        - Receitas
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Arquivo da receita (imagem PNG/JPG ou PDF)
+      responses:
+        '201':
+          description: Receita enviada com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrescriptionResponse'
+        '400':
+          description: Arquivo ausente ou formato inválido
+        '401':
+          description: Não autorizado
+
+  /api/prescriptions/my:
+    get:
+      summary: Lista receitas do paciente logado com suas respectivas cotações
+      tags:
+        - Receitas
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Receitas do paciente com cotações recebidas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PrescriptionResponse'
+        '401':
+          description: Não autorizado
+
+  /api/prescriptions/pharmacy:
+    get:
+      summary: Lista receitas disponíveis no mercado para farmácias orçarem
+      tags:
+        - Receitas
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Receitas pendentes com dados do paciente e propostas enviadas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PrescriptionResponse'
+        '401':
+          description: Não autorizado
+        '403':
+          description: Acesso restrito a farmácias
+
+  /api/quotes:
+    post:
+      summary: Envio de proposta de orçamento pela farmácia
+      tags:
+        - Cotações
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuoteCreateRequest'
+      responses:
+        '201':
+          description: Proposta de cotação enviada com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuoteResponse'
+        '400':
+          description: Dados inválidos ou preço incorreto
+        '404':
+          description: Receita não encontrada
+
+  /api/quotes/my:
+    get:
+      summary: Lista histórico de cotações enviadas pela farmácia logada
+      tags:
+        - Cotações
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Histórico de cotações
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/QuoteResponse'
+
+  /api/orders:
+    post:
+      summary: Paciente aprova uma cotação e cria o pedido
+      tags:
+        - Pedidos
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderCreateRequest'
+      responses:
+        '201':
+          description: Pedido criado e cotação aceita
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '400':
+          description: Cotação já possui pedido ou dados inválidos
+        '403':
+          description: Paciente não tem permissão para aprovar cotação de outro usuário
+        '404':
+          description: Cotação não encontrada
+
+  /api/orders/my:
+    get:
+      summary: Lista pedidos do usuário (Paciente ou Farmácia)
+      tags:
+        - Pedidos
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Lista de pedidos com detalhes da farmácia ou do paciente
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrderResponse'
+
+  /api/orders/{id}/status:
+    patch:
+      summary: Atualiza status de produção/entrega do pedido (Farmácia)
+      tags:
+        - Pedidos
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: ID do pedido
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderStatusUpdateRequest'
+      responses:
+        '200':
+          description: Status atualizado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '400':
+          description: Status inválido
+        '403':
+          description: Farmácia não é dona deste pedido
+        '404':
+          description: Pedido não encontrado

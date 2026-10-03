@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import bcrypt from 'bcrypt';
+import { ehEmailValido, ehSenhaForte } from '@medconnect/validation';
 
 export class UserController {
   async create(req: Request, res: Response) {
@@ -9,6 +10,18 @@ export class UserController {
 
       if (!name || !email || !password) {
         res.status(400).json({ error: 'Nome, e-mail e senha são obrigatórios' });
+        return;
+      }
+
+      if (!ehEmailValido(email)) {
+        res.status(400).json({ error: 'Formato de e-mail inválido' });
+        return;
+      }
+
+      if (!ehSenhaForte(password)) {
+        res.status(400).json({
+          error: 'Senha fraca. A senha deve ter no mínimo 8 caracteres, incluindo letra maiúscula, número e caractere especial.'
+        });
         return;
       }
 

@@ -1,0 +1,19 @@
+{
+  "name": "@medconnect/validation",
+  "version": "1.0.0",
+  "description": "Shared validation library for MedConnect (CPF, CNPJ, Email, Password)",
+  "main": "index.cjs",
+  "module": "index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.js",
+      "require": "./index.cjs",
+      "default": "./index.js"
+    }
+  },
+  "keywords": ["validation", "cpf", "cnpj", "medconnect"],
+  "author": "MedConnect Team",
+  "license": "ISC"
+}

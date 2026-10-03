@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import swaggerUi from 'swagger-ui-express';
 import YAML from 'yamljs';
+import fs from 'fs';
 import path from 'path';
 
 import userRoutes from './routes/user.routes';
@@ -31,7 +32,14 @@ const limiter = rateLimit({
 app.use('/api/', limiter);
 
 // Configuração do Swagger
-const swaggerDocument = YAML.load(path.join(__dirname, 'docs', 'swagger.yaml'));
+const candidateSwaggerPaths = [
+  path.join(__dirname, 'docs', 'swagger.yaml'),
+  path.join(__dirname, '..', 'src', 'docs', 'swagger.yaml'),
+  path.join(process.cwd(), 'src', 'docs', 'swagger.yaml'),
+  path.join(process.cwd(), 'backend', 'src', 'docs', 'swagger.yaml')
+];
+const resolvedSwaggerPath = candidateSwaggerPaths.find(p => fs.existsSync(p)) || candidateSwaggerPaths[0];
+const swaggerDocument = YAML.load(resolvedSwaggerPath);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 app.use('/api/users', userRoutes);

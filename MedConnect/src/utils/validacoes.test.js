@@ -1,4 +1,4 @@
-import { ehEmailValido, ehCPFValido, ehSenhaForte } from './validacoes.js';
+import { ehEmailValido, ehCPFValido, ehCNPJValido, ehSenhaForte } from './validacoes.js';
 
 describe('Validações', () => {
   describe('ehEmailValido', () => {
@@ -43,6 +43,33 @@ describe('Validações', () => {
 
     test('deve retornar false para CPF inválido (dígitos incorretos)', () => {
       expect(ehCPFValido('529.982.240-26')).toBe(false);
+    });
+  });
+
+  describe('ehCNPJValido', () => {
+    test('deve retornar true para CNPJ válido formatado', () => {
+      expect(ehCNPJValido('11.222.333/0001-81')).toBe(true);
+    });
+
+    test('deve retornar true para CNPJ válido apenas números', () => {
+      expect(ehCNPJValido('11222333000181')).toBe(true);
+    });
+
+    test('deve retornar false para CNPJ com dígitos todos iguais', () => {
+      expect(ehCNPJValido('11.111.111/1111-11')).toBe(false);
+    });
+
+    test('deve retornar false para CNPJ incompleto', () => {
+      expect(ehCNPJValido('11.222.333/0001')).toBe(false);
+    });
+
+    test('deve retornar false para CNPJ com dígitos verificadores incorretos', () => {
+      expect(ehCNPJValido('11.222.333/0001-00')).toBe(false);
+    });
+
+    test('deve retornar false para string vazia ou inválida', () => {
+      expect(ehCNPJValido('')).toBe(false);
+      expect(ehCNPJValido(null)).toBe(false);
     });
   });
 

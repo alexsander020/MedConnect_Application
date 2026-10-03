@@ -1,16 +1,62 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/Header';
 import BottomNav from '../../components/BottomNav';
-import { mockOrders, orderStatuses } from '../../data/mockData';
-import { Search, Filter } from 'lucide-react';
+import { mockOrders } from '../../data/mockData';
+import { Search, Filter, Loader2 } from 'lucide-react';
+import { api } from '../../services/api';
+
+const statusConfig = {
+    PENDING: { label: 'Pendente', color: 'info' },
+    REVIEWING: { label: 'Em Análise', color: 'info' },
+    QUOTED: { label: 'Cotado', color: 'warning' },
+    ACCEPTED: { label: 'Aprovado', color: 'primary' },
+    PRODUCTION: { label: 'Em Produção', color: 'warning' },
+    DELIVERY: { label: 'Em Entrega', color: 'info' },
+    DELIVERED: { label: 'Finalizado', color: 'success' },
+    CANCELLED: { label: 'Cancelado', color: 'error' },
+    ANALYSIS: { label: 'Em Análise', color: 'info' },
+    APPROVED: { label: 'Aprovado', color: 'primary' },
+};
 
 export default function Orders() {
     const navigate = useNavigate();
+    const [orders, setOrders] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('active');
     const [search, setSearch] = useState('');
 
-    const filteredOrders = mockOrders.filter((order) => {
+    useEffect(() => {
+        api.get('/orders/my')
+            .then(res => {
+                if (res.data && res.data.length > 0) {
+                    const formatted = res.data.map(o => ({
+                        id: o.id.slice(0, 8).toUpperCase(),
+                        rawId: o.id,
+                        status: o.status,
+                        createdAt: new Date(o.createdAt).toLocaleDateString('pt-BR'),
+                        price: o.quote?.price || 0,
+                        pharmacy: o.quote?.pharmacy ? {
+                            name: o.quote.pharmacy.name,
+                            initials: o.quote.pharmacy.name.substring(0, 2).toUpperCase()
+                        } : null,
+                        medications: o.quote?.prescription?.notes
+                            ? [o.quote.prescription.notes]
+                            : ['Receita Médica Anexada']
+                    }));
+                    setOrders(formatted);
+                } else {
+                    setOrders(mockOrders);
+                }
+            })
+            .catch(err => {
+                console.warn('Carregando pedidos demonstrativos:', err);
+                setOrders(mockOrders);
+            })
+            .finally(() => setLoading(false));
+    }, []);
+
+    const filteredOrders = orders.filter((order) => {
         const matchTab = activeTab === 'active'
             ? order.status !== 'DELIVERED'
             : order.status === 'DELIVERED';
@@ -47,7 +93,12 @@ export default function Orders() {
                 </div>
 
                 {/* Orders list */}
-                {filteredOrders.length === 0 ? (
+                {loading ? (
+                    <div className="empty-state animate-scale-in" style={{ padding: 'var(--space-8)' }}>
+                        <Loader2 className="animate-spin text-primary" size={36} style={{ margin: '0 auto var(--space-3)' }} />
+                        <p className="text-sm text-gray">Carregando seus pedidos...</p>
+                    </div>
+                ) : filteredOrders.length === 0 ? (
                     <div className="empty-state animate-scale-in">
                         <Filter size={64} />
                         <h3>Nenhum pedido encontrado</h3>
@@ -60,13 +111,13 @@ export default function Orders() {
                 ) : (
                     <div className="stagger" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
                         {filteredOrders.map((order) => {
-                            const status = orderStatuses[order.status];
+                            const status = statusConfig[order.status] || { label: order.status, color: 'info' };
                             return (
                                 <div
                                     key={order.id}
                                     className="card animate-slide-up"
                                     style={{ cursor: 'pointer' }}
-                                    onClick={() => navigate(`/order/${order.id}`)}
+                                    onClick={() => navigate(`/order/${order.rawId || order.id}`)}
                                 >
                                     <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-3)' }}>
                                         <div>
