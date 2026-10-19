@@ -23,6 +23,7 @@ yarn-error.log*
 
 # Database files
 *.db
+*.db-journal
 *.sqlite
 *.sqlite3
 
@@ -32,3 +33,4 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 .idea/
+.kilo/
