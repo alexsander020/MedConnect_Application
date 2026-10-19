@@ -1,0 +1,14 @@
+node_modules
+.env*
+*.db
+*.db-journal
+*.sqlite*
+uploads
+dist
+.git
+tests
+docs
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
