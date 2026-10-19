@@ -22,22 +22,22 @@ export default function Requests() {
                     const formatted = res.data.map(p => {
                         const isQuoted = p.quotes && p.quotes.length > 0;
                         const myQuote = isQuoted ? p.quotes[0] : null;
-                        const patientName = p.patient?.name || 'Paciente';
-                        const initials = patientName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+                        const patientName = p.patient?.anonymousId || 'Paciente Anônimo';
+                        const initials = 'PA';
 
                         return {
                             id: p.id,
                             user: {
                                 name: patientName,
-                                initials: initials || 'PA'
+                                initials: initials
                             },
-                            location: p.patient?.address || 'São Paulo, SP',
-                            prescription: 'Receita Médica Anexada',
+                            location: 'Região do Paciente (Oculta até aprovação)',
+                            prescription: 'Fórmula Médica Solicitada',
                             medications: [p.notes || 'Fórmula sob prescrição médica'],
                             createdAt: new Date(p.createdAt).toLocaleDateString('pt-BR'),
                             status: isQuoted ? 'quoted' : 'pending',
                             quotedPrice: myQuote?.price || 0,
-                            fileUrl: p.fileUrl
+                            fileUrl: null
                         };
                     });
                     setRequests(formatted);
@@ -233,8 +233,11 @@ export default function Requests() {
                                         borderRadius: 'var(--radius-lg)', background: 'white'
                                     }}
                                     onClick={() => {
-                                        if (req.fileUrl) window.open(req.fileUrl, '_blank');
-                                        else alert(`Visualizando detalhes da receita`);
+                                        if (req.fileUrl) {
+                                            window.open(req.fileUrl, '_blank');
+                                        } else {
+                                            alert('Conforme as normas de privacidade (LGPD), a imagem da receita e os dados de contato são liberados após o paciente aprovar sua cotação.');
+                                        }
                                     }}
                                 >
                                     <Eye size={15} />

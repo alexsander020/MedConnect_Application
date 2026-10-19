@@ -11,6 +11,9 @@ router.post('/', authMiddleware, roleMiddleware(['PATIENT']), orderController.cr
 // Obter pedidos do usuário logado (paciente ou farmácia)
 router.get('/my', authMiddleware, orderController.getMyOrders);
 
+// Obter detalhes de um pedido específico (proteção IDOR: dono ou farmácia aceita)
+router.get('/:id', authMiddleware, orderController.getById);
+
 // Farmácias atualizam o status do pedido
 router.patch('/:id/status', authMiddleware, roleMiddleware(['PHARMACY']), orderController.updateStatus);
 

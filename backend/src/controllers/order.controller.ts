@@ -159,4 +159,54 @@ export class OrderController {
       res.status(500).json({ error: 'Erro ao buscar pedidos' });
     }
   }
+
+  async getById(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'Não autorizado' });
+        return;
+      }
+
+      const { id } = req.params;
+
+      const order = await prisma.order.findUnique({
+        where: { id: id as string },
+        include: {
+          quote: {
+            include: {
+              prescription: {
+                include: {
+                  patient: {
+                    select: { id: true, name: true, phone: true, address: true }
+                  }
+                }
+              },
+              pharmacy: {
+                select: { id: true, name: true, phone: true, address: true }
+              }
+            }
+          }
+        }
+      });
+
+      if (!order) {
+        res.status(404).json({ error: 'Pedido não encontrado' });
+        return;
+      }
+
+      // IDOR protection: apenas o paciente dono da receita ou a farmácia da cotação aceita
+      const isPatientOwner = order.quote.prescription.patientId === req.user.id;
+      const isAcceptedPharmacy = order.quote.pharmacyId === req.user.id;
+
+      if (!isPatientOwner && !isAcceptedPharmacy && req.user.role !== 'ADMIN') {
+        res.status(403).json({ error: 'Acesso negado: você não tem permissão para visualizar este pedido' });
+        return;
+      }
+
+      res.json(order);
+    } catch (error) {
+      console.error('Erro ao buscar pedido por id:', error);
+      res.status(500).json({ error: 'Erro ao buscar pedido' });
+    }
+  }
 }
