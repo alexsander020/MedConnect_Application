@@ -1,10 +1,8 @@
-import 'dotenv/config';
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'medconnect_super_secret_key';
+import { env } from '../config/env';
 
 export class AuthController {
   async login(req: Request, res: Response): Promise<void> {
@@ -42,7 +40,7 @@ export class AuthController {
 
       const token = jwt.sign(
         { id: userOrPharmacy.id, email: userOrPharmacy.email, role },
-        JWT_SECRET,
+        env.JWT_SECRET,
         { expiresIn: '1d' }
       );
 

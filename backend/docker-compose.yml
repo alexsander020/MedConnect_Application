@@ -5,10 +5,8 @@ services:
     build: .
     ports:
       - "3000:3000"
-    environment:
-      - DATABASE_URL=file:./dev.db
-      - JWT_SECRET=medconnect_super_secret_key
-      - PORT=3000
+    env_file:
+      - .env
     volumes:
       - sqlite_data:/app/prisma
 

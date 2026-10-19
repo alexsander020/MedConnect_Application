@@ -41,7 +41,7 @@ jobs:
     env:
       NODE_ENV: test
       DATABASE_URL: "file:./dev.db"
-      JWT_SECRET: "ci_test_super_secret_key"
+      JWT_SECRET: "ci_test_super_secret_key_minimum_32_characters_for_testing"
     steps:
       - uses: actions/checkout@v4
 

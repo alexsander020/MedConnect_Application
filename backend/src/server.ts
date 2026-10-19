@@ -1,9 +1,8 @@
-import 'dotenv/config';
 import app from './app';
 import http from 'http';
 import { Server } from 'socket.io';
-
-const PORT = process.env.PORT || 3000;
+import jwt from 'jsonwebtoken';
+import { env } from './config/env';
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -12,10 +11,6 @@ const io = new Server(server, {
     methods: ['GET', 'POST', 'PATCH']
   }
 });
-
-import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'medconnect_super_secret_key';
 
 // Middleware de Autenticação para WebSocket
 io.use((socket, next) => {
@@ -26,7 +21,7 @@ io.use((socket, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    const decoded = jwt.verify(token, env.JWT_SECRET) as any;
     (socket as any).user = decoded;
     next();
   } catch (err) {
@@ -62,8 +57,8 @@ io.on('connection', (socket) => {
 export { io, server };
 
 if (process.env.NODE_ENV !== 'test') {
-  server.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-    console.log(`Swagger docs available at http://localhost:${PORT}/api-docs`);
+  server.listen(env.PORT, () => {
+    console.log(`Server is running on port ${env.PORT}`);
+    console.log(`Swagger docs available at http://localhost:${env.PORT}/api-docs`);
   });
 }

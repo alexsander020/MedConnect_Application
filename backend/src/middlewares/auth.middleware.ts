@@ -1,8 +1,6 @@
-import 'dotenv/config';
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'medconnect_super_secret_key';
+import { env } from '../config/env';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -29,7 +27,7 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
   const token = parts[1];
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    const decoded = jwt.verify(token, env.JWT_SECRET) as any;
     req.user = decoded;
     next();
   } catch (error) {
