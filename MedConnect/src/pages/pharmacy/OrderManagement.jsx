@@ -1,15 +1,17 @@
-import { useState, useEffect } from 'react';
-import Header from '../../components/Header';
-import BottomNav from '../../components/BottomNav';
-import { mockPharmacyOrders, orderStatuses } from '../../data/mockData';
-import { MapPin, ChevronRight, Package, Truck, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import ErrorState from '../../components/ErrorState';
+import LoadingState from '../../components/LoadingState';
+import EmptyState from '../../components/EmptyState';
+import { orderStatuses } from '../../data/mockData';
+import { MapPin, ChevronRight, Package, Truck, CheckCircle2, Loader2 } from 'lucide-react';
 import { api } from '../../services/api';
 
 export default function OrderManagement() {
-    const [orders, setOrders] = useState(mockPharmacyOrders);
+    const [orders, setOrders] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
     const [activeTab, setActiveTab] = useState('active');
     const [updatingId, setUpdatingId] = useState(null);
-    const [loading, setLoading] = useState(true);
 
     const statusFlow = ['PRODUCTION', 'DELIVERY', 'DELIVERED'];
 
@@ -18,10 +20,12 @@ export default function OrderManagement() {
         return idx < statusFlow.length - 1 ? statusFlow[idx + 1] : null;
     };
 
-    useEffect(() => {
+    const fetchOrders = useCallback(() => {
+        setLoading(true);
+        setError(null);
         api.get('/orders/my')
             .then(res => {
-                if (res.data && res.data.length > 0) {
+                if (Array.isArray(res.data)) {
                     const formatted = res.data.map(o => {
                         const patientName = o.quote?.prescription?.patient?.name || 'Paciente';
                         const initials = patientName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
@@ -40,15 +44,20 @@ export default function OrderManagement() {
                     });
                     setOrders(formatted);
                 } else {
-                    setOrders(mockPharmacyOrders);
+                    setOrders([]);
                 }
             })
             .catch(err => {
-                console.warn('Carregando pedidos demonstrativos da farmácia:', err);
-                setOrders(mockPharmacyOrders);
+                console.error('Erro ao buscar pedidos da farmácia:', err);
+                setError(err?.response?.data?.error || 'Não foi possível carregar os pedidos da farmácia. Tente novamente.');
+                setOrders([]);
             })
             .finally(() => setLoading(false));
     }, []);
+
+    useEffect(() => {
+        fetchOrders();
+    }, [fetchOrders]);
 
     const handleAdvanceStatus = async (orderId) => {
         setUpdatingId(orderId);
@@ -58,20 +67,21 @@ export default function OrderManagement() {
         if (next && currentOrder?.rawId) {
             try {
                 await api.patch(`/orders/${currentOrder.rawId}/status`, { status: next });
+                setOrders(prev => prev.map(o => {
+                    if (o.id === orderId) {
+                        return { ...o, status: next };
+                    }
+                    return o;
+                }));
             } catch (err) {
-                console.warn('Erro ao atualizar status na API, mantendo demonstração visual:', err);
+                console.error('Erro ao atualizar status na API:', err);
+                alert('Não foi possível atualizar o status do pedido no servidor.');
+            } finally {
+                setUpdatingId(null);
             }
-        }
-
-        setTimeout(() => {
-            setOrders(prev => prev.map(o => {
-                if (o.id === orderId) {
-                    return next ? { ...o, status: next } : o;
-                }
-                return o;
-            }));
+        } else {
             setUpdatingId(null);
-        }, 500);
+        }
     };
 
     const filtered = orders.filter(o =>
@@ -126,16 +136,19 @@ export default function OrderManagement() {
 
             {/* List */}
             {loading ? (
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '60px 0' }}>
-                    <Loader2 className="animate-spin text-primary" size={36} />
-                </div>
+                <LoadingState message="Carregando pedidos em produção..." />
+            ) : error ? (
+                <ErrorState
+                    title="Erro ao carregar pedidos"
+                    message={error}
+                    onRetry={fetchOrders}
+                />
             ) : filtered.length === 0 ? (
-                <div className="glass-panel" style={{ textAlign: 'center', padding: 'var(--space-12) var(--space-6)' }}>
-                    <Package size={48} color="var(--gray-300)" style={{ margin: '0 auto var(--space-4)' }} />
-                    <h3 style={{ fontSize: 'var(--font-lg)', fontWeight: 700, color: 'var(--gray-700)' }}>
-                        Nenhum pedido {activeTab === 'active' ? 'em produção no momento' : 'concluído ainda'}
-                    </h3>
-                </div>
+                <EmptyState
+                    icon={Package}
+                    title={`Nenhum pedido ${activeTab === 'active' ? 'em andamento' : 'concluído'}`}
+                    description="Novos pedidos de pacientes aparecerão aqui conforme forem aprovados."
+                />
             ) : (
                 <div style={{
                     display: 'grid',

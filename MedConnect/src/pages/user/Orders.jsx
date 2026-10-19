@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/Header';
 import BottomNav from '../../components/BottomNav';
-import { mockOrders } from '../../data/mockData';
-import { Search, Filter, Loader2 } from 'lucide-react';
+import ErrorState from '../../components/ErrorState';
+import LoadingState from '../../components/LoadingState';
+import EmptyState from '../../components/EmptyState';
+import { Search, Filter } from 'lucide-react';
 import { api } from '../../services/api';
 
 const statusConfig = {
@@ -23,13 +25,16 @@ export default function Orders() {
     const navigate = useNavigate();
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
     const [activeTab, setActiveTab] = useState('active');
     const [search, setSearch] = useState('');
 
-    useEffect(() => {
+    const fetchOrders = useCallback(() => {
+        setLoading(true);
+        setError(null);
         api.get('/orders/my')
             .then(res => {
-                if (res.data && res.data.length > 0) {
+                if (Array.isArray(res.data)) {
                     const formatted = res.data.map(o => ({
                         id: o.id.slice(0, 8).toUpperCase(),
                         rawId: o.id,
@@ -46,15 +51,20 @@ export default function Orders() {
                     }));
                     setOrders(formatted);
                 } else {
-                    setOrders(mockOrders);
+                    setOrders([]);
                 }
             })
             .catch(err => {
-                console.warn('Carregando pedidos demonstrativos:', err);
-                setOrders(mockOrders);
+                console.error('Erro ao carregar pedidos:', err);
+                setError(err?.response?.data?.error || 'Não foi possível carregar os pedidos. Verifique sua conexão.');
+                setOrders([]);
             })
             .finally(() => setLoading(false));
     }, []);
+
+    useEffect(() => {
+        fetchOrders();
+    }, [fetchOrders]);
 
     const filteredOrders = orders.filter((order) => {
         const matchTab = activeTab === 'active'
@@ -92,22 +102,25 @@ export default function Orders() {
                     />
                 </div>
 
-                {/* Orders list */}
+                {/* Content area: Loading, Error or List */}
                 {loading ? (
-                    <div className="empty-state animate-scale-in" style={{ padding: 'var(--space-8)' }}>
-                        <Loader2 className="animate-spin text-primary" size={36} style={{ margin: '0 auto var(--space-3)' }} />
-                        <p className="text-sm text-gray">Carregando seus pedidos...</p>
-                    </div>
+                    <LoadingState message="Carregando seus pedidos..." />
+                ) : error ? (
+                    <ErrorState
+                        title="Erro ao carregar pedidos"
+                        message={error}
+                        onRetry={fetchOrders}
+                    />
                 ) : filteredOrders.length === 0 ? (
-                    <div className="empty-state animate-scale-in">
-                        <Filter size={64} />
-                        <h3>Nenhum pedido encontrado</h3>
-                        <p>
-                            {activeTab === 'active'
+                    <EmptyState
+                        icon={Filter}
+                        title="Nenhum pedido encontrado"
+                        description={
+                            activeTab === 'active'
                                 ? 'Você não tem pedidos ativos no momento'
-                                : 'Nenhum pedido concluído ainda'}
-                        </p>
-                    </div>
+                                : 'Nenhum pedido concluído ainda'
+                        }
+                    />
                 ) : (
                     <div className="stagger" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
                         {filteredOrders.map((order) => {
@@ -135,7 +148,7 @@ export default function Orders() {
 
                                     <div className="flex justify-between items-center">
                                         {order.pharmacy ? (
-                                            <div className="flex items-center gap-2">
+                                             <div className="flex items-center gap-2">
                                                 <div className="avatar" style={{ width: '24px', height: '24px', fontSize: '9px' }}>
                                                     {order.pharmacy.initials}
                                                 </div>
@@ -144,11 +157,11 @@ export default function Orders() {
                                         ) : (
                                             <span className="text-xs text-gray">Aguardando propostas...</span>
                                         )}
-                                        {order.price && (
+                                        {order.price ? (
                                             <span className="font-bold text-primary">
                                                 R$ {order.price.toFixed(2).replace('.', ',')}
                                             </span>
-                                        )}
+                                        ) : null}
                                     </div>
                                 </div>
                             );
