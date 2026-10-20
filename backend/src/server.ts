@@ -7,7 +7,8 @@ import { env } from './config/env';
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: '*',
+    origin: env.CORS_ORIGINS,
+    credentials: true,
     methods: ['GET', 'POST', 'PATCH']
   }
 });

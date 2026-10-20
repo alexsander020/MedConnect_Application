@@ -340,6 +340,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Limite de tentativas de autenticação excedido (máximo 5 tentativas por 15 minutos)
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Tempo em segundos antes de poder tentar novamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Muitas tentativas de autenticação. Tente novamente mais tarde.
+                  retryAfter:
+                    type: integer
+                    example: 900
 
   /api/users:
     post:
