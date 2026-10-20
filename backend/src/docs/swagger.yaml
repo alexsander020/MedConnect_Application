@@ -272,6 +272,26 @@ components:
           type: string
           format: date-time
 
+    AnonymousPrescriptionResponse:
+      type: object
+      description: Receita médica anonimizada para cotação por farmácias credenciadas (LGPD Art. 11)
+      properties:
+        id:
+          type: string
+          example: clxpresc123
+        createdAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          example: PENDING
+        patient:
+          type: object
+          properties:
+            anonymousId:
+              type: string
+              example: Paciente #A1B2C
+
 paths:
   /health:
     get:
@@ -320,6 +340,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Limite de tentativas de autenticação excedido (máximo 5 tentativas por 15 minutos)
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Tempo em segundos antes de poder tentar novamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Muitas tentativas de autenticação. Tente novamente mais tarde.
+                  retryAfter:
+                    type: integer
+                    example: 900
 
   /api/users:
     post:
@@ -456,20 +494,20 @@ paths:
 
   /api/prescriptions/pharmacy:
     get:
-      summary: Lista receitas disponíveis no mercado para farmácias orçarem
+      summary: Lista receitas médicas abertas para cotação por farmácias (Anonimizado - LGPD Art. 11)
       tags:
         - Receitas
       security:
         - bearerAuth: []
       responses:
         '200':
-          description: Receitas pendentes com dados do paciente e propostas enviadas
+          description: Receitas com identificador anônimo, sem expor telefone, endereço nem arquivo da receita
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/PrescriptionResponse'
+                  $ref: '#/components/schemas/AnonymousPrescriptionResponse'
         '401':
           description: Não autorizado
         '403':
@@ -560,6 +598,35 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/OrderResponse'
+
+  /api/orders/{id}:
+    get:
+      summary: Detalhes de um pedido específico (Protegido por IDOR)
+      description: Retorna dados completos do pedido, incluindo endereço de entrega e arquivo da receita exclusivamente para o paciente dono ou a farmácia aceita.
+      tags:
+        - Pedidos
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: ID do pedido
+      responses:
+        '200':
+          description: Detalhes completos do pedido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '401':
+          description: Não autenticado
+        '403':
+          description: Acesso negado (IDOR)
+        '404':
+          description: Pedido não encontrado
 
   /api/orders/{id}/status:
     patch:

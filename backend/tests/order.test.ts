@@ -1,9 +1,10 @@
 import request from 'supertest';
 import app from '../src/app';
 import jwt from 'jsonwebtoken';
+import { env } from '../src/config/env';
 
 describe('Order Security & Authorization Tests', () => {
-  const secret = process.env.JWT_SECRET || 'medconnect_super_secret_key';
+  const secret = env.JWT_SECRET;
 
   const patientToken = jwt.sign(
     { id: 'patient-1', email: 'paciente@medconnect.com', role: 'PATIENT' },

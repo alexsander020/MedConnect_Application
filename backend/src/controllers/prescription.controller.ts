@@ -62,9 +62,6 @@ export class PrescriptionController {
           status: { in: ['PENDING', 'REVIEWING', 'QUOTED'] }
         },
         include: {
-          patient: {
-            select: { id: true, name: true, phone: true, address: true }
-          },
           quotes: {
             where: { pharmacyId: req.user.id }
           }
@@ -72,7 +69,18 @@ export class PrescriptionController {
         orderBy: { createdAt: 'desc' }
       });
 
-      res.json(prescriptions);
+      // LGPD Art. 11: Não expor dados diretos (nome, telefone, endereço) nem arquivo da receita na listagem aberta
+      const sanitized = prescriptions.map((p) => ({
+        id: p.id,
+        createdAt: p.createdAt,
+        status: p.status,
+        patient: {
+          anonymousId: `Paciente #${p.patientId.slice(0, 5).toUpperCase()}`
+        },
+        quotes: p.quotes
+      }));
+
+      res.json(sanitized);
     } catch (error) {
       console.error('Erro ao buscar receitas para farmácia:', error);
       res.status(500).json({ error: 'Erro ao buscar receitas' });

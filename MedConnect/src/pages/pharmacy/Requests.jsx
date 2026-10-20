@@ -1,51 +1,61 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { mockPharmacyRequests } from '../../data/mockData';
-import { Clock, MapPin, Eye, Send, Loader2, FileText, Sparkles, Filter } from 'lucide-react';
+import ErrorState from '../../components/ErrorState';
+import LoadingState from '../../components/LoadingState';
+import EmptyState from '../../components/EmptyState';
+import { Clock, MapPin, Eye, Send, FileText } from 'lucide-react';
 import { api } from '../../services/api';
 
 export default function Requests() {
     const navigate = useNavigate();
-    const [requests, setRequests] = useState(mockPharmacyRequests);
+    const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
     const [activeTab, setActiveTab] = useState('pending');
 
-    useEffect(() => {
+    const fetchRequests = useCallback(() => {
+        setLoading(true);
+        setError(null);
         api.get('/prescriptions/pharmacy')
             .then(res => {
-                if (res.data && res.data.length > 0) {
+                if (Array.isArray(res.data)) {
                     const formatted = res.data.map(p => {
                         const isQuoted = p.quotes && p.quotes.length > 0;
                         const myQuote = isQuoted ? p.quotes[0] : null;
-                        const patientName = p.patient?.name || 'Paciente';
-                        const initials = patientName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+                        const patientName = p.patient?.anonymousId || 'Paciente Anônimo';
+                        const initials = 'PA';
 
                         return {
                             id: p.id,
                             user: {
                                 name: patientName,
-                                initials: initials || 'PA'
+                                initials: initials
                             },
-                            location: p.patient?.address || 'São Paulo, SP',
-                            prescription: 'Receita Médica Anexada',
+                            location: 'Região do Paciente (Oculta até aprovação)',
+                            prescription: 'Fórmula Médica Solicitada',
                             medications: [p.notes || 'Fórmula sob prescrição médica'],
                             createdAt: new Date(p.createdAt).toLocaleDateString('pt-BR'),
                             status: isQuoted ? 'quoted' : 'pending',
                             quotedPrice: myQuote?.price || 0,
-                            fileUrl: p.fileUrl
+                            fileUrl: null
                         };
                     });
                     setRequests(formatted);
                 } else {
-                    setRequests(mockPharmacyRequests);
+                    setRequests([]);
                 }
             })
             .catch(err => {
-                console.warn('Carregando solicitações demonstrativas:', err);
-                setRequests(mockPharmacyRequests);
+                console.error('Erro ao buscar receitas para farmácia:', err);
+                setError(err?.response?.data?.error || 'Não foi possível carregar as oportunidades de receita. Tente novamente.');
+                setRequests([]);
             })
             .finally(() => setLoading(false));
     }, []);
+
+    useEffect(() => {
+        fetchRequests();
+    }, [fetchRequests]);
 
     const filtered = requests.filter(r =>
         activeTab === 'pending' ? r.status === 'pending' : r.status === 'quoted'
@@ -84,21 +94,21 @@ export default function Requests() {
                 </div>
             </div>
 
-            {/* Requests Grid */}
+            {/* Requests Area */}
             {loading ? (
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '60px 0' }}>
-                    <Loader2 className="animate-spin text-primary" size={36} />
-                </div>
+                <LoadingState message="Carregando receitas para cotação..." />
+            ) : error ? (
+                <ErrorState
+                    title="Erro ao carregar receitas"
+                    message={error}
+                    onRetry={fetchRequests}
+                />
             ) : filtered.length === 0 ? (
-                <div className="glass-panel" style={{ textAlign: 'center', padding: 'var(--space-12) var(--space-6)' }}>
-                    <FileText size={48} color="var(--gray-300)" style={{ margin: '0 auto var(--space-4)' }} />
-                    <h3 style={{ fontSize: 'var(--font-lg)', fontWeight: 700, color: 'var(--gray-700)' }}>
-                        Nenhuma receita {activeTab === 'pending' ? 'pendente no momento' : 'cotada por enquanto'}
-                    </h3>
-                    <p style={{ fontSize: 'var(--font-sm)', color: 'var(--gray-400)', marginTop: 4 }}>
-                        Novas solicitações de pacientes aparecerão aqui em tempo real.
-                    </p>
-                </div>
+                <EmptyState
+                    icon={FileText}
+                    title={`Nenhuma receita ${activeTab === 'pending' ? 'pendente' : 'cotada'}`}
+                    description="Novas solicitações de pacientes aparecerão aqui em tempo real."
+                />
             ) : (
                 <div style={{
                     display: 'grid',
@@ -223,8 +233,11 @@ export default function Requests() {
                                         borderRadius: 'var(--radius-lg)', background: 'white'
                                     }}
                                     onClick={() => {
-                                        if (req.fileUrl) window.open(req.fileUrl, '_blank');
-                                        else alert(`Visualizando detalhes da receita do paciente ${req.user.name}`);
+                                        if (req.fileUrl) {
+                                            window.open(req.fileUrl, '_blank');
+                                        } else {
+                                            alert('Conforme as normas de privacidade (LGPD), a imagem da receita e os dados de contato são liberados após o paciente aprovar sua cotação.');
+                                        }
                                     }}
                                 >
                                     <Eye size={15} />

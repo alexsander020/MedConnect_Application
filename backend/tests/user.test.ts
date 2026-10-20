@@ -14,6 +14,7 @@ jest.mock('../src/lib/prisma', () => ({
 }));
 
 import jwt from 'jsonwebtoken';
+import { env } from '../src/config/env';
 
 describe('User Routes', () => {
   it('should reject unauthenticated request to /api/users', async () => {
@@ -24,7 +25,7 @@ describe('User Routes', () => {
   it('should get all users when authenticated as ADMIN', async () => {
     const adminToken = jwt.sign(
       { id: 'admin-1', email: 'admin@medconnect.com', role: 'ADMIN' },
-      process.env.JWT_SECRET || 'medconnect_super_secret_key'
+      env.JWT_SECRET
     );
 
     const response = await request(app)
