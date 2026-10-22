@@ -1,85 +1,167 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middlewares/auth.middleware';
-
-const VALID_STATUSES = ['PENDING', 'REVIEWING', 'QUOTED', 'ACCEPTED', 'PRODUCTION', 'DELIVERY', 'DELIVERED', 'CANCELLED'];
+import { Prisma, OrderStatus, PrescriptionStatus, QuoteStatus, Role } from '@prisma/client';
+import {
+  assertValidOrderTransition,
+  assertPharmacyCanUpdateOrder,
+  OrderTransitionError,
+  OrderAuthorizationError
+} from '../domain/orderStateMachine';
+import { formatPriceCentsToDecimal } from '../lib/money';
 
 export class OrderController {
   async create(req: AuthRequest, res: Response): Promise<void> {
     try {
       if (!req.user) {
-        res.status(401).json({ error: 'Não autorizado' });
+        res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Não autorizado' } });
         return;
       }
 
       const { quoteId } = req.body;
       if (!quoteId) {
-        res.status(400).json({ error: 'quoteId é obrigatório' });
+        res.status(400).json({ error: { code: 'MISSING_FIELD', message: 'quoteId é obrigatório' } });
         return;
       }
 
-      // Validar existência da cotação e permissão do paciente
-      const quote = await prisma.quote.findUnique({
-        where: { id: quoteId },
-        include: { prescription: true, orders: true }
-      });
+      // Execução atômica com isolamento Serializable para prevenir race conditions
+      const order = await prisma.$transaction(
+        async (tx) => {
+          const quote = await tx.quote.findUnique({
+            where: { id: quoteId },
+            include: { prescription: true, order: true }
+          });
 
-      if (!quote) {
-        res.status(404).json({ error: 'Cotação não encontrada' });
-        return;
-      }
-
-      // IDOR check: Apenas o paciente dono da receita pode aprovar
-      if (quote.prescription.patientId !== req.user.id) {
-        res.status(403).json({ error: 'Acesso negado: esta cotação pertence a outro paciente' });
-        return;
-      }
-
-      // Evitar pedidos duplicados para a mesma cotação
-      if (quote.orders.length > 0) {
-        res.status(400).json({ error: 'Já existe um pedido para esta cotação' });
-        return;
-      }
-
-      // Execução atômica com transação
-      const [order] = await prisma.$transaction([
-        prisma.order.create({
-          data: {
-            quoteId,
-            status: 'PRODUCTION'
+          if (!quote) {
+            throw { status: 404, code: 'QUOTE_NOT_FOUND', message: 'Cotação não encontrada' };
           }
-        }),
-        prisma.quote.update({
-          where: { id: quoteId },
-          data: { status: 'ACCEPTED' }
-        }),
-        prisma.prescription.update({
-          where: { id: quote.prescriptionId },
-          data: { status: 'ACCEPTED' }
-        })
-      ]);
 
-      res.status(201).json(order);
-    } catch (error) {
-      console.error('Erro ao criar pedido:', error);
-      res.status(500).json({ error: 'Erro ao aprovar cotação e gerar pedido' });
+          // (a) Validação IDOR: cotação pertence a uma receita do paciente autenticado
+          if (quote.prescription.patientId !== req.user!.id) {
+            throw {
+              status: 403,
+              code: 'FORBIDDEN',
+              message: 'Acesso negado: esta cotação pertence a outro paciente'
+            };
+          }
+
+          // (b) Valida que a receita não está ACCEPTED/CANCELLED
+          if (
+            quote.prescription.status === PrescriptionStatus.ACCEPTED ||
+            quote.prescription.status === PrescriptionStatus.CANCELLED
+          ) {
+            throw {
+              status: 409,
+              code: 'PRESCRIPTION_ALREADY_FINALIZED',
+              message: 'A receita vinculada já foi aceita ou cancelada'
+            };
+          }
+
+          if (quote.order) {
+            throw {
+              status: 409,
+              code: 'ORDER_ALREADY_EXISTS',
+              message: 'Já existe um pedido criado para esta cotação'
+            };
+          }
+
+          // (c) Cria o pedido com status inicial PRODUCTION
+          const createdOrder = await tx.order.create({
+            data: {
+              quoteId,
+              status: OrderStatus.PRODUCTION,
+              history: {
+                create: {
+                  fromStatus: OrderStatus.PRODUCTION,
+                  toStatus: OrderStatus.PRODUCTION,
+                  changedByType: Role.PATIENT,
+                  changedById: req.user!.id
+                }
+              }
+            },
+            include: {
+              quote: {
+                include: {
+                  pharmacy: { select: { id: true, name: true, phone: true } },
+                  prescription: true
+                }
+              },
+              history: true
+            }
+          });
+
+          // (d) Marca a cotação como ACCEPTED
+          await tx.quote.update({
+            where: { id: quoteId },
+            data: { status: QuoteStatus.ACCEPTED }
+          });
+
+          // (e) Marca as demais cotações da receita como REJECTED
+          await tx.quote.updateMany({
+            where: {
+              prescriptionId: quote.prescriptionId,
+              id: { not: quoteId }
+            },
+            data: { status: QuoteStatus.REJECTED }
+          });
+
+          // (f) Marca a receita como ACCEPTED
+          await tx.prescription.update({
+            where: { id: quote.prescriptionId },
+            data: { status: PrescriptionStatus.ACCEPTED }
+          });
+
+          return createdOrder;
+        },
+        {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+        }
+      );
+
+      res.status(201).json({
+        ...order,
+        quote: {
+          ...order.quote,
+          price: formatPriceCentsToDecimal(order.quote.priceCents)
+        }
+      });
+    } catch (error: any) {
+      if (error?.code === 'P2002' || error?.code === 'P2034') {
+        res.status(409).json({
+          error: {
+            code: 'ORDER_ALREADY_EXISTS',
+            message: 'Conflito de concorrência: já existe um pedido gerado para esta cotação ou receita'
+          }
+        });
+        return;
+      }
+
+      if (error?.status) {
+        res.status(error.status).json({
+          error: {
+            code: error.code || 'BAD_REQUEST',
+            message: error.message
+          }
+        });
+        return;
+      }
+
+      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Erro ao aprovar cotação e gerar pedido' } });
     }
   }
 
   async updateStatus(req: AuthRequest, res: Response): Promise<void> {
     try {
       if (!req.user) {
-        res.status(401).json({ error: 'Não autorizado' });
+        res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Não autorizado' } });
         return;
       }
 
       const { id } = req.params;
       const { status } = req.body;
 
-      if (!status || !VALID_STATUSES.includes(status)) {
-        res.status(400).json({
-          error: `Status inválido. Valores aceitos: ${VALID_STATUSES.join(', ')}`
-        });
+      if (!status) {
+        res.status(400).json({ error: { code: 'MISSING_STATUS', message: 'Status é obrigatório' } });
         return;
       }
 
@@ -89,32 +171,73 @@ export class OrderController {
       });
 
       if (!order) {
-        res.status(404).json({ error: 'Pedido não encontrado' });
+        res.status(404).json({ error: { code: 'ORDER_NOT_FOUND', message: 'Pedido não encontrado' } });
         return;
       }
 
-      // IDOR check: Apenas a farmácia dona da cotação do pedido pode alterar o status
-      if (order.quote.pharmacyId !== req.user.id) {
-        res.status(403).json({ error: 'Acesso negado: este pedido pertence a outra farmácia' });
-        return;
-      }
+      // Autorização: somente a farmácia responsável pelo pedido pode alterar o status
+      assertPharmacyCanUpdateOrder(req.user, order.quote.pharmacyId);
 
-      const updatedOrder = await prisma.order.update({
-        where: { id: id as string },
-        data: { status: status as any }
+      // Validação da máquina de estados
+      assertValidOrderTransition(order.status, status as OrderStatus);
+
+      // Atualização com gravação atômica do histórico
+      const [updatedOrder] = await prisma.$transaction([
+        prisma.order.update({
+          where: { id: id as string },
+          data: { status: status as OrderStatus },
+          include: {
+            quote: true,
+            history: { orderBy: { createdAt: 'desc' } }
+          }
+        }),
+        prisma.orderStatusHistory.create({
+          data: {
+            orderId: id as string,
+            fromStatus: order.status,
+            toStatus: status as OrderStatus,
+            changedByType: Role.PHARMACY,
+            changedById: req.user.id
+          }
+        })
+      ]);
+
+      res.json({
+        ...updatedOrder,
+        quote: {
+          ...updatedOrder.quote,
+          price: formatPriceCentsToDecimal(updatedOrder.quote.priceCents)
+        }
       });
+    } catch (error: any) {
+      if (error instanceof OrderTransitionError) {
+        res.status(error.statusCode).json({
+          error: {
+            code: error.code,
+            message: error.message
+          }
+        });
+        return;
+      }
 
-      res.json(updatedOrder);
-    } catch (error) {
-      console.error('Erro ao atualizar status do pedido:', error);
-      res.status(500).json({ error: 'Erro ao atualizar status do pedido' });
+      if (error instanceof OrderAuthorizationError) {
+        res.status(error.statusCode).json({
+          error: {
+            code: error.code,
+            message: error.message
+          }
+        });
+        return;
+      }
+
+      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Erro ao atualizar status do pedido' } });
     }
   }
 
   async getMyOrders(req: AuthRequest, res: Response): Promise<void> {
     try {
       if (!req.user) {
-        res.status(401).json({ error: 'Não autorizado' });
+        res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Não autorizado' } });
         return;
       }
 
@@ -128,10 +251,13 @@ export class OrderController {
             quote: {
               include: {
                 prescription: {
-                  include: { patient: { select: { id: true, name: true, phone: true, address: true } } }
+                  include: {
+                    patient: { select: { id: true, name: true, phone: true, address: true } }
+                  }
                 }
               }
-            }
+            },
+            history: { orderBy: { createdAt: 'desc' } }
           },
           orderBy: { createdAt: 'desc' }
         });
@@ -147,23 +273,31 @@ export class OrderController {
               include: {
                 pharmacy: { select: { id: true, name: true, phone: true, address: true } }
               }
-            }
+            },
+            history: { orderBy: { createdAt: 'desc' } }
           },
           orderBy: { createdAt: 'desc' }
         });
       }
 
-      res.json(orders);
+      const formatted = orders.map((o) => ({
+        ...o,
+        quote: {
+          ...o.quote,
+          price: formatPriceCentsToDecimal(o.quote.priceCents)
+        }
+      }));
+
+      res.json(formatted);
     } catch (error) {
-      console.error('Erro ao buscar pedidos:', error);
-      res.status(500).json({ error: 'Erro ao buscar pedidos' });
+      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Erro ao buscar pedidos' } });
     }
   }
 
   async getById(req: AuthRequest, res: Response): Promise<void> {
     try {
       if (!req.user) {
-        res.status(401).json({ error: 'Não autorizado' });
+        res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Não autorizado' } });
         return;
       }
 
@@ -185,12 +319,13 @@ export class OrderController {
                 select: { id: true, name: true, phone: true, address: true }
               }
             }
-          }
+          },
+          history: { orderBy: { createdAt: 'asc' } }
         }
       });
 
       if (!order) {
-        res.status(404).json({ error: 'Pedido não encontrado' });
+        res.status(404).json({ error: { code: 'ORDER_NOT_FOUND', message: 'Pedido não encontrado' } });
         return;
       }
 
@@ -199,14 +334,24 @@ export class OrderController {
       const isAcceptedPharmacy = order.quote.pharmacyId === req.user.id;
 
       if (!isPatientOwner && !isAcceptedPharmacy && req.user.role !== 'ADMIN') {
-        res.status(403).json({ error: 'Acesso negado: você não tem permissão para visualizar este pedido' });
+        res.status(403).json({
+          error: {
+            code: 'FORBIDDEN',
+            message: 'Acesso negado: você não tem permissão para visualizar este pedido'
+          }
+        });
         return;
       }
 
-      res.json(order);
+      res.json({
+        ...order,
+        quote: {
+          ...order.quote,
+          price: formatPriceCentsToDecimal(order.quote.priceCents)
+        }
+      });
     } catch (error) {
-      console.error('Erro ao buscar pedido por id:', error);
-      res.status(500).json({ error: 'Erro ao buscar pedido' });
+      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Erro ao buscar pedido' } });
     }
   }
 }

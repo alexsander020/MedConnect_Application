@@ -19,7 +19,8 @@ describe('Security: CORS and Rate Limiting Policies', () => {
         .set('Origin', 'http://malicious-attacker.com');
 
       expect(res.status).toBe(403);
-      expect(res.body.error).toMatch(/Origem não permitida pela política de CORS/i);
+      const errorMsg = res.body.error?.message || res.body.error;
+      expect(errorMsg).toMatch(/Origem não permitida pela política de CORS/i);
       expect(res.headers['access-control-allow-origin']).toBeUndefined();
     });
 

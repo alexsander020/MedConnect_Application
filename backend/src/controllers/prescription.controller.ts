@@ -1,3 +1,4 @@
+import { PrescriptionStatus } from '@prisma/client';
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middlewares/auth.middleware';
@@ -22,7 +23,7 @@ export class PrescriptionController {
         data: {
           patientId: req.user.id,
           fileUrl,
-          status: 'PENDING'
+          status: PrescriptionStatus.PENDING
         }
       });
       
@@ -59,7 +60,7 @@ export class PrescriptionController {
 
       const prescriptions = await prisma.prescription.findMany({
         where: {
-          status: { in: ['PENDING', 'REVIEWING', 'QUOTED'] }
+          status: { in: [PrescriptionStatus.PENDING, PrescriptionStatus.QUOTED] }
         },
         include: {
           quotes: {

@@ -6,7 +6,15 @@ import {
     Building2, FileText, CheckCircle2, Eye, EyeOff,
     Shield, Star, Clock, Truck, BadgeCheck, Sparkles
 } from 'lucide-react';
-import { ehEmailValido, ehSenhaForte, ehCNPJValido } from '../utils/validacoes';
+import { ehEmailValido, ehSenhaForte, ehCNPJValido, ehCPFValido } from '../utils/validacoes';
+
+// ── Máscara de CPF: 000.000.000-00
+function maskCPF(v) {
+    return v.replace(/\D/g, '').slice(0, 11)
+        .replace(/^(\d{3})(\d)/, '$1.$2')
+        .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+        .replace(/\.(\d{3})(\d)/, '.$1-$2');
+}
 
 // ── Máscara de CNPJ: 00.000.000/0001-00
 function maskCNPJ(v) {
@@ -97,6 +105,7 @@ export default function Register() {
     const [showPassword, setShowPassword] = useState(false);
     const [phone, setPhone] = useState('');
     const [address, setAddress] = useState('');
+    const [cpf, setCpf] = useState('');
 
     // Campos exclusivos de farmácia
     const [cnpj, setCnpj] = useState('');
@@ -142,6 +151,11 @@ export default function Register() {
                 setError('Selecione o raio de atendimento.');
                 return;
             }
+        } else {
+            if (!ehCPFValido(cpf)) {
+                setError('CPF inválido. Verifique os 11 números digitados.');
+                return;
+            }
         }
 
         if (!phone) { setError('Informe o número de telefone ou WhatsApp.'); return; }
@@ -151,12 +165,12 @@ export default function Register() {
         try {
             const userData = {
                 name, email, password, phone, address,
-                ...(type === 'pharmacy' && { cnpj: cnpj.replace(/\D/g, ''), deliveryArea }),
+                ...(type === 'pharmacy' ? { cnpj: cnpj.replace(/\D/g, ''), deliveryArea } : { cpf: cpf.replace(/\D/g, '') }),
             };
             await register(userData, type);
             setStep(3);
         } catch (err) {
-            const msg = err.response?.data?.error || err.message || 'Erro ao criar conta. Tente novamente.';
+            const msg = err.response?.data?.error?.message || err.response?.data?.error || err.message || 'Erro ao criar conta. Tente novamente.';
             setError(msg);
         } finally {
             setLoading(false);
@@ -507,6 +521,25 @@ export default function Register() {
                                                     style={{ paddingLeft: 42, background: 'rgba(255, 255, 255, 0.7)' }}
                                                     value={cnpj}
                                                     onChange={e => setCnpj(maskCNPJ(e.target.value))}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* CPF — só paciente */}
+                                    {!isPharmacy && (
+                                        <div className="form-group" style={{ marginBottom: 0 }}>
+                                            <label className="form-label" style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--gray-700)' }}>
+                                                CPF do Paciente
+                                            </label>
+                                            <div style={{ position: 'relative' }}>
+                                                <FileText size={18} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)' }} />
+                                                <input
+                                                    className="form-input"
+                                                    placeholder="000.000.000-00"
+                                                    style={{ paddingLeft: 42, background: 'rgba(255, 255, 255, 0.7)' }}
+                                                    value={cpf}
+                                                    onChange={e => setCpf(maskCPF(e.target.value))}
                                                 />
                                             </div>
                                         </div>

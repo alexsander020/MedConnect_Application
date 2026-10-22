@@ -29,6 +29,7 @@ describe('LGPD & Privacy Data Protection Tests', () => {
 
   beforeAll(async () => {
     // Limpeza prévia de registros sintéticos de teste
+    await prisma.orderStatusHistory.deleteMany();
     await prisma.order.deleteMany({ where: { id: { in: [orderAId] } } });
     await prisma.quote.deleteMany({ where: { id: { in: [quoteAId] } } });
     await prisma.prescription.deleteMany({ where: { id: { in: [prescriptionId] } } });
@@ -82,7 +83,7 @@ describe('LGPD & Privacy Data Protection Tests', () => {
         id: quoteAId,
         prescriptionId,
         pharmacyId: pharmacyAId,
-        price: 99.5,
+        priceCents: 9950,
         status: 'ACCEPTED',
       },
     });
@@ -97,6 +98,7 @@ describe('LGPD & Privacy Data Protection Tests', () => {
   });
 
   afterAll(async () => {
+    await prisma.orderStatusHistory.deleteMany();
     await prisma.order.deleteMany({ where: { id: { in: [orderAId] } } });
     await prisma.quote.deleteMany({ where: { id: { in: [quoteAId] } } });
     await prisma.prescription.deleteMany({ where: { id: { in: [prescriptionId] } } });
@@ -143,6 +145,7 @@ describe('LGPD & Privacy Data Protection Tests', () => {
       .set('Authorization', `Bearer ${pharmacyBToken}`);
 
     expect(res.status).toBe(403);
-    expect(res.body.error).toMatch(/permissão/i);
+    const errorMsg = res.body.error?.message || res.body.error;
+    expect(errorMsg).toMatch(/permissão/i);
   });
 });

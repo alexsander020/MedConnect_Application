@@ -18,7 +18,11 @@
     "build": "npm run build -w MedConnect && npm run build -w backend",
     "build:frontend": "npm run build -w MedConnect",
     "build:backend": "npm run build -w backend",
-    "lint": "npm run lint -w MedConnect"
+    "lint": "npm run lint -w MedConnect",
+    "db:up": "npm run db:up -w backend",
+    "db:migrate": "npm run db:migrate -w backend",
+    "db:seed": "npm run db:seed -w backend",
+    "db:studio": "npm run db:studio -w backend"
   },
   "devDependencies": {
     "concurrently": "^9.2.4"
