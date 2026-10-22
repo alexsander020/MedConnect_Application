@@ -16,7 +16,7 @@ COPY prisma ./prisma/
 RUN npm ci
 
 # Gera Prisma Client para runtime
-ENV DATABASE_URL="file:./temp.db"
+ENV DATABASE_URL="postgresql://user:password@localhost:5432/medconnect?schema=public"
 RUN npx prisma generate
 
 # Copia arquivos de código-fonte

@@ -9,11 +9,13 @@ describe('Validation Integration Tests', () => {
         .send({
           name: 'João Silva',
           email: 'invalid-email-format',
-          password: 'Password123!'
+          password: 'Password123!',
+          cpf: '11144477735'
         });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toMatch(/e-mail/i);
+      const errorMsg = response.body.error?.message || response.body.error;
+      expect(errorMsg).toMatch(/e-mail/i);
     });
 
     it('should reject registration when password is weak', async () => {
@@ -22,11 +24,28 @@ describe('Validation Integration Tests', () => {
         .send({
           name: 'João Silva',
           email: 'joao@exemplo.com',
-          password: '123'
+          password: '123',
+          cpf: '11144477735'
         });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toMatch(/senha/i);
+      const errorMsg = response.body.error?.message || response.body.error;
+      expect(errorMsg).toMatch(/senha/i);
+    });
+
+    it('should reject registration when CPF is invalid', async () => {
+      const response = await request(app)
+        .post('/api/users')
+        .send({
+          name: 'João Silva',
+          email: 'joao.cpf@exemplo.com',
+          password: 'Password123!',
+          cpf: '123.456.789-00' // CPF matematicamente inválido
+        });
+
+      expect(response.status).toBe(400);
+      const errorMsg = response.body.error?.message || response.body.error;
+      expect(errorMsg).toMatch(/CPF/i);
     });
   });
 
@@ -42,7 +61,8 @@ describe('Validation Integration Tests', () => {
         });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toMatch(/CNPJ inválido/i);
+      const errorMsg = response.body.error?.message || response.body.error;
+      expect(errorMsg).toMatch(/CNPJ/i);
     });
   });
 });

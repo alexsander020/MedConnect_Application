@@ -28,7 +28,8 @@ describe('Order Security & Authorization Tests', () => {
       .send({ quoteId: 'quote-123' });
 
     expect(response.status).toBe(403);
-    expect(response.body.error).toMatch(/Acesso negado/i);
+    const errorMsg = response.body.error?.message || response.body.error;
+    expect(errorMsg).toMatch(/Acesso negado/i);
   });
 
   it('should forbid patient from updating order status (PHARMACY only)', async () => {
@@ -38,6 +39,7 @@ describe('Order Security & Authorization Tests', () => {
       .send({ status: 'DELIVERY' });
 
     expect(response.status).toBe(403);
-    expect(response.body.error).toMatch(/Acesso negado/i);
+    const errorMsg = response.body.error?.message || response.body.error;
+    expect(errorMsg).toMatch(/Acesso negado/i);
   });
 });

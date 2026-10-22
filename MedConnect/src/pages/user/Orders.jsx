@@ -159,7 +159,7 @@ export default function Orders() {
                                         )}
                                         {order.price ? (
                                             <span className="font-bold text-primary">
-                                                R$ {order.price.toFixed(2).replace('.', ',')}
+                                                R$ {Number(order.price).toFixed(2).replace('.', ',')}
                                             </span>
                                         ) : null}
                                     </div>

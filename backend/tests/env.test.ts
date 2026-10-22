@@ -63,6 +63,7 @@ describe('Environment Configuration & JWT Secret Validation', () => {
       .set('Authorization', `Bearer ${tokenWithOldSecret}`);
 
     expect(res.status).toBe(401);
-    expect(res.body.error).toBe('Token inválido');
+    const errorMsg = res.body.error?.message || res.body.error;
+    expect(errorMsg).toMatch(/Token inválido/i);
   });
 });

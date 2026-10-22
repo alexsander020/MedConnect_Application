@@ -14,13 +14,13 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
   const authHeader = req.headers.authorization;
 
   if (!authHeader) {
-    res.status(401).json({ error: 'Token não fornecido' });
+    res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Token não fornecido' } });
     return;
   }
 
   const parts = authHeader.split(' ');
   if (parts.length !== 2 || parts[0] !== 'Bearer') {
-    res.status(401).json({ error: 'Formato de token inválido' });
+    res.status(401).json({ error: { code: 'INVALID_TOKEN_FORMAT', message: 'Formato de token inválido' } });
     return;
   }
 
@@ -31,14 +31,14 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
     req.user = decoded;
     next();
   } catch (error) {
-    res.status(401).json({ error: 'Token inválido' });
+    res.status(401).json({ error: { code: 'INVALID_OR_EXPIRED_TOKEN', message: 'Token inválido ou expirado' } });
   }
 }
 
 export function roleMiddleware(allowedRoles: string[]) {
   return (req: AuthRequest, res: Response, next: NextFunction): void => {
     if (!req.user || !allowedRoles.includes(req.user.role)) {
-      res.status(403).json({ error: 'Acesso negado' });
+      res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Acesso negado' } });
       return;
     }
     next();

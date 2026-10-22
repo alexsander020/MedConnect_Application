@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -13,11 +13,21 @@ enum Role {
   ADMIN
 }
 
-enum Status {
+enum PrescriptionStatus {
   PENDING
-  REVIEWING
   QUOTED
   ACCEPTED
+  CANCELLED
+}
+
+enum QuoteStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum OrderStatus {
   PRODUCTION
   DELIVERY
   DELIVERED
@@ -32,56 +42,119 @@ model User {
   role          Role           @default(PATIENT)
   phone         String?
   address       String?
+  cpfEncrypted  String?
+  cpfHash       String?        @unique
+  cpfLastDigits String?
+  emailVerified Boolean        @default(false)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   prescriptions Prescription[]
 }
 
 model Pharmacy {
-  id           String   @id @default(uuid())
-  name         String
-  email        String   @unique
-  password     String
-  cnpj         String   @unique
-  phone        String?
-  address      String?
-  deliveryArea String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  quotes       Quote[]
+  id            String   @id @default(uuid())
+  name          String
+  email         String   @unique
+  password      String
+  cnpj          String   @unique
+  phone         String?
+  address       String?
+  deliveryArea  String?
+  verified      Boolean  @default(false)
+  emailVerified Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  quotes        Quote[]
 }
 
 model Prescription {
-  id        String   @id @default(uuid())
+  id        String             @id @default(uuid())
   patientId String
   fileUrl   String
-  status    Status   @default(PENDING)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  patient   User     @relation(fields: [patientId], references: [id])
+  status    PrescriptionStatus @default(PENDING)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  patient   User               @relation(fields: [patientId], references: [id])
   quotes    Quote[]
+
+  @@index([patientId, status])
 }
 
 model Quote {
   id             String       @id @default(uuid())
   prescriptionId String
   pharmacyId     String
-  price          Float
+  priceCents     Int
   deliveryDays   Int?
   notes          String?
-  status         Status       @default(PENDING)
+  status         QuoteStatus  @default(PENDING)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   prescription   Prescription @relation(fields: [prescriptionId], references: [id])
   pharmacy       Pharmacy     @relation(fields: [pharmacyId], references: [id])
-  orders         Order[]
+  order          Order?
+
+  @@unique([prescriptionId, pharmacyId])
+  @@index([prescriptionId])
+  @@index([pharmacyId])
 }
 
 model Order {
+  id        String               @id @default(uuid())
+  quoteId   String               @unique
+  status    OrderStatus          @default(PRODUCTION)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+  quote     Quote                @relation(fields: [quoteId], references: [id])
+  history   OrderStatusHistory[]
+}
+
+model OrderStatusHistory {
+  id            String      @id @default(uuid())
+  orderId       String
+  fromStatus    OrderStatus
+  toStatus      OrderStatus
+  changedByType Role
+  changedById   String
+  createdAt     DateTime    @default(now())
+  order         Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+model RefreshToken {
+  id         String   @id @default(uuid())
+  userId     String?
+  pharmacyId String?
+  tokenHash  String   @unique
+  familyId   String
+  isRevoked  Boolean  @default(false)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([familyId])
+  @@index([userId])
+  @@index([pharmacyId])
+}
+
+model PasswordResetToken {
   id        String   @id @default(uuid())
-  quoteId   String
-  status    Status   @default(PRODUCTION)
+  email     String
+  tokenHash String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  quote     Quote    @relation(fields: [quoteId], references: [id])
+
+  @@index([email])
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(uuid())
+  email     String
+  tokenHash String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([email])
 }

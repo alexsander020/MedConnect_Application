@@ -11,6 +11,15 @@ export const envSchema = z
       .string()
       .default('http://localhost:5173,http://localhost:3000')
       .transform((val) => val.split(',').map((origin) => origin.trim()).filter(Boolean)),
+    CPF_ENCRYPTION_KEY: z
+      .string()
+      .min(32, 'CPF_ENCRYPTION_KEY deve ter no mínimo 32 caracteres')
+      .default('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'),
+    SMTP_HOST: z.string().optional(),
+    SMTP_PORT: z.coerce.number().optional().default(587),
+    SMTP_USER: z.string().optional(),
+    SMTP_PASS: z.string().optional(),
+    SMTP_FROM: z.string().default('MedConnect <nao-responda@medconnect.com.br>'),
     CLOUDINARY_CLOUD_NAME: z.string().optional(),
     CLOUDINARY_API_KEY: z.string().optional(),
     CLOUDINARY_API_SECRET: z.string().optional(),

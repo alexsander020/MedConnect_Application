@@ -17,6 +17,8 @@ dist/
 *.db-journal
 *.sqlite
 *.sqlite3
+.pgdata*
+
 
 # Prisma generated
 /generated/prisma

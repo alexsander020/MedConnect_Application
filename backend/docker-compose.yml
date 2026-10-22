@@ -32,9 +32,8 @@ services:
         condition: service_healthy
     volumes:
       - api_uploads:/app/uploads
-      - sqlite_data:/app/prisma
 
 volumes:
   postgres_data:
   api_uploads:
-  sqlite_data:
+

@@ -20,8 +20,21 @@ components:
       type: object
       properties:
         error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: BAD_REQUEST
+            message:
+              type: string
+              example: Requisição inválida
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
           type: string
-          example: Mensagem detalhada de erro
+          example: Operação realizada com sucesso
 
     LoginRequest:
       type: object
@@ -46,6 +59,9 @@ components:
     LoginResponse:
       type: object
       properties:
+        message:
+          type: string
+          example: Login realizado com sucesso
         token:
           type: string
           example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
@@ -54,12 +70,55 @@ components:
         pharmacy:
           $ref: '#/components/schemas/PharmacyResponse'
 
+    RefreshTokenResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        user:
+          $ref: '#/components/schemas/UserResponse'
+        pharmacy:
+          $ref: '#/components/schemas/PharmacyResponse'
+
+    ForgotPasswordRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          example: paciente@medconnect.com
+
+    ResetPasswordRequest:
+      type: object
+      required:
+        - token
+        - newPassword
+      properties:
+        token:
+          type: string
+          example: 9a8b7c6d5e4f3a2b1c0d
+        newPassword:
+          type: string
+          format: password
+          example: NovaSenhaForte#456
+
+    VerifyEmailRequest:
+      type: object
+      properties:
+        token:
+          type: string
+          example: a1b2c3d4e5f6
+
     UserCreateRequest:
       type: object
       required:
         - name
         - email
         - password
+        - cpf
       properties:
         name:
           type: string
@@ -72,6 +131,10 @@ components:
           type: string
           format: password
           example: SenhaForte#123
+        cpf:
+          type: string
+          example: "04938271043"
+          description: CPF do paciente com validação por algoritmo dos dígitos verificadores
         phone:
           type: string
           example: (11) 98765-4321
@@ -95,6 +158,10 @@ components:
           type: string
           enum: [PATIENT, ADMIN]
           example: PATIENT
+        cpf:
+          type: string
+          example: "***.***.***-43"
+          description: CPF mascarado para proteção de dados do paciente
         phone:
           type: string
           example: (11) 98765-4321
@@ -161,6 +228,9 @@ components:
         deliveryArea:
           type: string
           example: Grande São Paulo
+        isVerified:
+          type: boolean
+          example: true
         createdAt:
           type: string
           format: date-time
@@ -179,7 +249,7 @@ components:
           example: http://localhost:3000/uploads/receita-123.jpg
         status:
           type: string
-          enum: [PENDING, REVIEWING, QUOTED, ACCEPTED, CANCELLED]
+          enum: [PENDING, QUOTED, ACCEPTED, CANCELLED]
           example: PENDING
         createdAt:
           type: string
@@ -195,8 +265,9 @@ components:
           type: string
           example: clxpresc123
         price:
-          type: number
-          example: 85.50
+          type: string
+          example: "85.50"
+          description: Preço em reais no formato decimal
         deliveryDays:
           type: integer
           example: 2
@@ -217,8 +288,13 @@ components:
           type: string
           example: clx987654321
         price:
-          type: number
-          example: 85.50
+          type: string
+          example: "85.50"
+          description: Preço em reais formatado com duas casas decimais
+        priceCents:
+          type: integer
+          example: 8550
+          description: Preço em centavos armazenado com precisão inteira
         deliveryDays:
           type: integer
           example: 2
@@ -227,8 +303,8 @@ components:
           example: Inclui frasco conta-gotas de 30ml
         status:
           type: string
-          enum: [QUOTED, ACCEPTED, REJECTED]
-          example: QUOTED
+          enum: [PENDING, ACCEPTED, REJECTED, EXPIRED]
+          example: PENDING
         createdAt:
           type: string
           format: date-time
@@ -249,8 +325,35 @@ components:
       properties:
         status:
           type: string
-          enum: [PENDING, REVIEWING, QUOTED, ACCEPTED, PRODUCTION, DELIVERY, DELIVERED, CANCELLED]
+          enum: [PRODUCTION, DELIVERY, DELIVERED, CANCELLED]
+          example: DELIVERY
+
+    OrderStatusHistoryItem:
+      type: object
+      properties:
+        id:
+          type: string
+          example: clxhist123
+        orderId:
+          type: string
+          example: clxorder123
+        fromStatus:
+          type: string
+          enum: [PRODUCTION, DELIVERY, DELIVERED, CANCELLED]
           example: PRODUCTION
+        toStatus:
+          type: string
+          enum: [PRODUCTION, DELIVERY, DELIVERED, CANCELLED]
+          example: DELIVERY
+        changedByType:
+          type: string
+          example: pharmacy
+        changedById:
+          type: string
+          example: clxpharm123
+        createdAt:
+          type: string
+          format: date-time
 
     OrderResponse:
       type: object
@@ -263,8 +366,12 @@ components:
           example: clxquote123
         status:
           type: string
-          enum: [PENDING, REVIEWING, QUOTED, ACCEPTED, PRODUCTION, DELIVERY, DELIVERED, CANCELLED]
+          enum: [PRODUCTION, DELIVERY, DELIVERED, CANCELLED]
           example: PRODUCTION
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderStatusHistoryItem'
         createdAt:
           type: string
           format: date-time
@@ -359,6 +466,145 @@ paths:
                     type: integer
                     example: 900
 
+  /api/auth/refresh:
+    post:
+      summary: Rotação de Refresh Token
+      description: Rotaciona o refresh token opaco recebido via cookie HttpOnly (ou payload opcional) e emite um novo access token JWT de 15 minutos com detecção de reuso.
+      tags:
+        - Autenticação
+      responses:
+        '200':
+          description: Token renovado com sucesso e novo refresh token emitido via cookie HttpOnly
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshTokenResponse'
+        '401':
+          description: Refresh token inválido, expirado ou reutilizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/auth/logout:
+    post:
+      summary: Logout e revogação de tokens
+      description: Revoga a família de refresh tokens associada e limpa o cookie HttpOnly da sessão.
+      tags:
+        - Autenticação
+      responses:
+        '200':
+          description: Sessão encerrada com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+
+  /api/auth/forgot-password:
+    post:
+      summary: Solicitação de redefinição de senha
+      description: Gera um token de recuperação de uso único com envio por e-mail. Para evitar enumeração de contas, a resposta é idêntica e executada em tempo constante para e-mails existentes e inexistentes.
+      tags:
+        - Autenticação
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+      responses:
+        '200':
+          description: Instruções enviadas caso o e-mail exista
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: E-mail em formato inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Limite de solicitações excedido
+
+  /api/auth/reset-password:
+    post:
+      summary: Redefinição de senha com token de uso único
+      description: Valida o token de redefinição e atualiza a senha do usuário ou farmácia.
+      tags:
+        - Autenticação
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '200':
+          description: Senha redefinida com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: Token inválido, expirado ou requisitos de senha não atendidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Limite de solicitações excedido
+
+  /api/auth/verify-email:
+    post:
+      summary: Verificação de e-mail por token
+      description: Valida o endereço de e-mail do usuário/farmácia com token de uso único.
+      tags:
+        - Autenticação
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyEmailRequest'
+      responses:
+        '200':
+          description: E-mail verificado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: Token inválido ou expirado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      summary: Verificação de e-mail via link (query param token)
+      tags:
+        - Autenticação
+      parameters:
+        - in: query
+          name: token
+          schema:
+            type: string
+          description: Token de verificação de e-mail
+      responses:
+        '200':
+          description: E-mail verificado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: Token inválido ou expirado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/users:
     post:
       summary: Cadastro de novo paciente
@@ -378,7 +624,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/UserResponse'
         '400':
-          description: Dados inválidos (senha fraca, e-mail já existente)
+          description: Dados inválidos (CPF inválido, senha fraca ou campos obrigatórios ausentes)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: E-mail ou CPF já cadastrado
           content:
             application/json:
               schema:
@@ -422,7 +674,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/PharmacyResponse'
         '400':
-          description: Validação falhou (CNPJ inválido, senha fraca ou duplicada)
+          description: Validação falhou (CNPJ inválido, senha fraca ou campos ausentes)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: E-mail ou CNPJ já cadastrado
           content:
             application/json:
               schema:
@@ -470,6 +728,10 @@ paths:
                 $ref: '#/components/schemas/PrescriptionResponse'
         '400':
           description: Arquivo ausente ou formato inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Não autorizado
 
@@ -535,8 +797,28 @@ paths:
                 $ref: '#/components/schemas/QuoteResponse'
         '400':
           description: Dados inválidos ou preço incorreto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Farmácia não verificada para enviar cotações
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Receita não encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Receita já aceita/cancelada ou cotação já enviada por esta farmácia
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/quotes/my:
     get:
@@ -576,11 +858,29 @@ paths:
               schema:
                 $ref: '#/components/schemas/OrderResponse'
         '400':
-          description: Cotação já possui pedido ou dados inválidos
+          description: Dados inválidos da requisição
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '403':
           description: Paciente não tem permissão para aprovar cotação de outro usuário
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Cotação não encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Cotação já possui pedido ou receita já finalizada (conflito de estado)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/orders/my:
     get:
@@ -630,7 +930,7 @@ paths:
 
   /api/orders/{id}/status:
     patch:
-      summary: Atualiza status de produção/entrega do pedido (Farmácia)
+      summary: Atualiza status de produção/entrega do pedido (Farmácia proprietária)
       tags:
         - Pedidos
       security:
@@ -657,7 +957,25 @@ paths:
                 $ref: '#/components/schemas/OrderResponse'
         '400':
           description: Status inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: Farmácia não é dona deste pedido
+          description: Apenas a farmácia dona deste pedido pode alterar o status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Pedido não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Transição de status não permitida pela máquina de estados do pedido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
