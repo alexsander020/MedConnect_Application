@@ -33,5 +33,40 @@ Para a integração contínua, criamos arquivos na pasta `.github/workflows`.
 1. **ci.yml**: Configurado para instalar dependências do ecossistema e executar o `npm run test` a cada commit ou pull request nas ramificações principais, garantindo que nenhum teste (Desafio 1 e 3) quebre.
 2. **deploy-pages.yml**: Automatiza a hospedagem da aplicação desenvolvida no Desafio 2 (na pasta `app-cotacao`), usando as Actions para gerar e fazer upload dos assets estáticos diretamente para a URL do **GitHub Pages**.
 
+## Fase 1: Fundação Técnica do Backend & Integridade Transacional
+
+A Fase 1 estabeleceu uma arquitetura de produção sólida para o MedConnect, garantindo integridade transacional, isolamento de concorrência e conformidade rigorosa com normas de segurança e LGPD:
+
+### Tarefa 1.1: Migração PostgreSQL & Migrations Versionadas
+- **Adoção do PostgreSQL**: Substituição do SQLite por PostgreSQL com enums nativos, isolamento Serializable e migrations SQL auditáveis (`20261021235746_init`).
+- **Isolamento de Testes**: Banco dedicado `medconnect_test` provisionado automaticamente com purge transacional por suíte.
+- **ADR 010**: Documentação formal da migração.
+
+### Tarefa 1.2: Integridade Cotação → Pedido (TDD)
+- **Concorrência Segura**: Aprovação de cotação executada sob transação `Serializable`, garantindo que requisições simultâneas gerem exatamente um único pedido e convertendo conflitos (P2002/P2034) em HTTP 409 Conflict.
+- **Regras de Negócio**: Validação anti-IDOR da receita pelo paciente autenticado; cotações concorrentes marcadas como `REJECTED`; guarda exigindo farmácia com verificação ativa (`verified: true`).
+
+### Tarefa 1.3: Máquina de Estados do Pedido & Auditoria
+- **Matriz de Estados**: Implementação em `orderStateMachine.ts` permitindo estritamente `PRODUCTION -> DELIVERY`, `DELIVERY -> DELIVERED` e `PRODUCTION -> CANCELLED` (qualquer outra combinação resulta em HTTP 409).
+- **Trilha de Auditoria**: Tabela `OrderStatusHistory` registrando compulsoriamente cada transição com ator (`changedByType`) e carimbo de data/hora.
+- **Definição de Produto Alinhada**: Apenas a farmácia responsável pelo pedido pode atualizar o status ou cancelar (evitando desperdício de insumos já manipulados); o paciente titular possui permissão apenas de leitura e acompanhamento.
+- **ADR 011**: Documentação formal da máquina de estados e auditoria.
+
+### Tarefa 1.4: Dinheiro e CPF (LGPD)
+- **Aritmética Inteira**: Preços armazenados em `priceCents` (Int), com conversão na borda da API para string decimal (`123.45`), eliminando bugs de precisão IEEE 754 Float.
+- **Proteção de CPF**: Decisão confirmada de manter o CPF do paciente sob estrita conformidade com a LGPD: criptografia com chave forte AES-256-GCM (`cpfEncrypted`), hash determinístico HMAC-SHA256 para consultas indexadas (`cpfHash`), exibição mascarada (`***.***.***-XX`) e validação algorítmica dos dígitos verificadores.
+
+### Tarefa 1.5: Autenticação Robusta & Sessão Segura
+- **Tokens**: Access Token JWT de 15 minutos em memória e Refresh Token opaco rotativo em cookie HttpOnly com SameSite e detecção de reuso de família (revogação imediata em caso de comprometimento).
+- **Proteção Anti-Enumeração**: Endpoints de recuperação de senha retornam mensagens idênticas para e-mails existentes ou não, com cálculo de hash fictício contra timing attacks.
+- **Envio de E-mail**: Interface `EmailSender` com `ConsoleEmailSender` para desenvolvimento e `SmtpEmailSender` via Nodemailer configurável por variáveis de ambiente para produção.
+- **ADR 012**: Documentação formal da autenticação robusta.
+
+### Tarefa 1.6: Validação, Tratamento Central de Erros e Logs
+- **Zod & Middleware**: Validação desacoplada de `body`, `params` e `query`.
+- **Tratamento de Erros**: Respostas 500 genéricas no formato `{ error: { code, message } }`, blindando detalhes internos e stacks.
+- **Pino com Redaction**: Mascaramento automático de `authorization`, `cookie`, `password`, `token`, `cpf`, `phone` e `address` nos logs estruturados, associados ao `X-Request-Id`.
+
 ## Conclusão
-Ao aplicar TDD, Refatoração Segura, Design Vanilla focado em estética e Integração Contínua, atingimos um alto padrão de qualidade em código e produto no desenvolvimento da prova de conceito do MedConnect.
+Ao aplicar TDD, Refatoração Segura, Design Vanilla focado em estética, Integração Contínua e uma base de produção com PostgreSQL, atingimos um alto padrão de qualidade em código e produto no ecossistema MedConnect.
+
