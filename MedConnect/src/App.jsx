@@ -1,4 +1,8 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient, setupSocketQueryInvalidation } from './lib/queryClient';
+import { ToastProvider } from './context/ToastContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
 // Pages
@@ -22,6 +26,9 @@ import Requests from './pages/pharmacy/Requests';
 import SendQuote from './pages/pharmacy/SendQuote';
 import OrderManagement from './pages/pharmacy/OrderManagement';
 import Reviews from './pages/pharmacy/Reviews';
+
+// Admin pages
+import AdminDashboard from './pages/admin/AdminDashboard';
 
 function ProtectedRoute({ children, requiredType }) {
   const { isAuthenticated, userType } = useAuth();
@@ -69,6 +76,11 @@ function AppRoutes() {
         <Route path="reviews" element={<Reviews />} />
       </Route>
 
+      {/* Admin routes */}
+      <Route path="/admin" element={
+        <ProtectedRoute requiredType="ADMIN"><AdminDashboard /></ProtectedRoute>
+      } />
+
       {/* Shared */}
       <Route path="/profile" element={
         <ProtectedRoute><Profile /></ProtectedRoute>
@@ -81,11 +93,19 @@ function AppRoutes() {
 }
 
 export default function App() {
+  useEffect(() => {
+    setupSocketQueryInvalidation();
+  }, []);
+
   return (
-    <BrowserRouter basename={import.meta.env.BASE_URL}>
-      <AuthProvider>
-        <AppRoutes />
-      </AuthProvider>
-    </BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <ToastProvider>
+        <BrowserRouter basename={import.meta.env.BASE_URL}>
+          <AuthProvider>
+            <AppRoutes />
+          </AuthProvider>
+        </BrowserRouter>
+      </ToastProvider>
+    </QueryClientProvider>
   );
 }

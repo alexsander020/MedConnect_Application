@@ -6,7 +6,7 @@ import { env } from '../src/config/env';
 import { cleanDatabase } from './helpers/dbCleanup';
 import { parsePriceToCents, formatPriceCentsToDecimal } from '../src/lib/money';
 import { encryptCpf, decryptCpf, hashCpf, maskCpf, getCpfLastDigits } from '../src/lib/cpfCrypto';
-import { PrescriptionStatus } from '@prisma/client';
+import { PrescriptionStatus, PharmacyVerificationStatus } from '@prisma/client';
 
 describe('TAREFA 1.4 — Dinheiro e CPF', () => {
   describe('1. Aritmética Monetária Inteira (money.ts)', () => {
@@ -132,7 +132,8 @@ describe('TAREFA 1.4 — Dinheiro e CPF', () => {
           email: 'farmacia.preco@test.com',
           password: 'Password123!',
           cnpj: '77777777000107',
-          verified: true
+          verified: true,
+          verificationStatus: PharmacyVerificationStatus.VERIFIED
         }
       });
 

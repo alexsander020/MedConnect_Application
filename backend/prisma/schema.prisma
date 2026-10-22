@@ -34,6 +34,12 @@ enum OrderStatus {
   CANCELLED
 }
 
+enum PharmacyVerificationStatus {
+  PENDING_VERIFICATION
+  VERIFIED
+  REJECTED
+}
+
 model User {
   id            String         @id @default(uuid())
   name          String
@@ -49,33 +55,47 @@ model User {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   prescriptions Prescription[]
+  reviews       Review[]
 }
 
 model Pharmacy {
-  id            String   @id @default(uuid())
-  name          String
-  email         String   @unique
-  password      String
-  cnpj          String   @unique
-  phone         String?
-  address       String?
-  deliveryArea  String?
-  verified      Boolean  @default(false)
-  emailVerified Boolean  @default(false)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  quotes        Quote[]
+  id                       String                     @id @default(uuid())
+  name                     String
+  email                    String                     @unique
+  password                 String
+  cnpj                     String                     @unique
+  phone                    String?
+  address                  String?
+  deliveryArea             String?
+  verified                 Boolean                    @default(false)
+  verificationStatus       PharmacyVerificationStatus @default(PENDING_VERIFICATION)
+  sanitaryLicense          String?
+  operatingAuth            String?
+  technicalResponsibleName String?
+  technicalResponsibleCrf  String?
+  technicalResponsibleUf   String?
+  documentUrl              String?
+  verifiedById             String?
+  verifiedAt               DateTime?
+  rejectionReason          String?
+  cnpjData                 String?
+  emailVerified            Boolean                    @default(false)
+  createdAt                DateTime                   @default(now())
+  updatedAt                DateTime                   @updatedAt
+  quotes                   Quote[]
+  reviews                  Review[]
 }
 
 model Prescription {
-  id        String             @id @default(uuid())
-  patientId String
-  fileUrl   String
-  status    PrescriptionStatus @default(PENDING)
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
-  patient   User               @relation(fields: [patientId], references: [id])
-  quotes    Quote[]
+  id         String                  @id @default(uuid())
+  patientId  String
+  fileUrl    String
+  status     PrescriptionStatus      @default(PENDING)
+  createdAt  DateTime                @default(now())
+  updatedAt  DateTime                @updatedAt
+  patient    User                    @relation(fields: [patientId], references: [id])
+  quotes     Quote[]
+  accessLogs PrescriptionAccessLog[]
 
   @@index([patientId, status])
 }
@@ -107,6 +127,7 @@ model Order {
   updatedAt DateTime             @updatedAt
   quote     Quote                @relation(fields: [quoteId], references: [id])
   history   OrderStatusHistory[]
+  review    Review?
 }
 
 model OrderStatusHistory {
@@ -120,6 +141,48 @@ model OrderStatusHistory {
   order         Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
+}
+
+model Review {
+  id         String   @id @default(uuid())
+  orderId    String   @unique
+  patientId  String
+  pharmacyId String
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now())
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  patient    User     @relation(fields: [patientId], references: [id])
+  pharmacy   Pharmacy @relation(fields: [pharmacyId], references: [id])
+
+  @@index([pharmacyId])
+  @@index([patientId])
+}
+
+model Notification {
+  id         String   @id @default(uuid())
+  userId     String?
+  pharmacyId String?
+  type       String
+  title      String
+  message    String
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([pharmacyId])
+}
+
+model PrescriptionAccessLog {
+  id             String       @id @default(uuid())
+  prescriptionId String
+  accessedById   String
+  accessedByType Role
+  ipAddress      String?
+  createdAt      DateTime     @default(now())
+  prescription   Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  @@index([prescriptionId])
 }
 
 model RefreshToken {
@@ -158,3 +221,4 @@ model EmailVerificationToken {
 
   @@index([email])
 }
+

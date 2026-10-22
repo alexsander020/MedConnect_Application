@@ -9,6 +9,7 @@ import {
   OrderAuthorizationError
 } from '../domain/orderStateMachine';
 import { formatPriceCentsToDecimal } from '../lib/money';
+import { createAndSendNotification } from '../services/notificationService';
 
 export class OrderController {
   async create(req: AuthRequest, res: Response): Promise<void> {
@@ -118,6 +119,18 @@ export class OrderController {
         }
       );
 
+      // Notifica a farmácia sobre a nova aprovação e criação do pedido
+      try {
+        await createAndSendNotification({
+          pharmacyId: order.quote.pharmacyId,
+          type: 'QUOTE_ACCEPTED',
+          title: 'Cotação Aprovada!',
+          message: `Sua cotação foi aprovada pelo paciente. Um novo pedido foi iniciado em Produção.`
+        });
+      } catch (e) {
+        // Ignora erros não críticos de notificação
+      }
+
       res.status(201).json({
         ...order,
         quote: {
@@ -167,7 +180,7 @@ export class OrderController {
 
       const order = await prisma.order.findUnique({
         where: { id: id as string },
-        include: { quote: true }
+        include: { quote: { include: { prescription: true } } }
       });
 
       if (!order) {
@@ -201,6 +214,18 @@ export class OrderController {
           }
         })
       ]);
+
+      // Notifica o paciente sobre o avanço no status do pedido
+      try {
+        await createAndSendNotification({
+          userId: order.quote.prescription.patientId,
+          type: 'ORDER_STATUS_UPDATE',
+          title: 'Status do Pedido Atualizado',
+          message: `O status do seu pedido foi alterado para: ${status}.`
+        });
+      } catch (e) {
+        // Ignora erros não críticos de notificação
+      }
 
       res.json({
         ...updatedOrder,

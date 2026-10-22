@@ -4,7 +4,7 @@ import { prisma } from '../src/lib/prisma';
 import jwt from 'jsonwebtoken';
 import { env } from '../src/config/env';
 import { cleanDatabase } from './helpers/dbCleanup';
-import { PrescriptionStatus, QuoteStatus, OrderStatus } from '@prisma/client';
+import { PrescriptionStatus, QuoteStatus, OrderStatus, PharmacyVerificationStatus } from '@prisma/client';
 
 describe('TAREFA 1.2 — Integridade do fluxo cotação -> pedido', () => {
   const patientId = 'patient-test-int-1';
@@ -48,7 +48,8 @@ describe('TAREFA 1.2 — Integridade do fluxo cotação -> pedido', () => {
         email: 'pharmacy1.int@test.com',
         password: 'Password123!',
         cnpj: '11111111000101',
-        verified: true
+        verified: true,
+        verificationStatus: PharmacyVerificationStatus.VERIFIED
       }
     });
 
@@ -60,7 +61,8 @@ describe('TAREFA 1.2 — Integridade do fluxo cotação -> pedido', () => {
         email: 'pharmacy2.int@test.com',
         password: 'Password123!',
         cnpj: '22222222000102',
-        verified: true
+        verified: true,
+        verificationStatus: PharmacyVerificationStatus.VERIFIED
       }
     });
   });
