@@ -1,20 +1,52 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import Header from '../../components/Header';
 import StarRating from '../../components/StarRating';
-import { Check, Send } from 'lucide-react';
+import { Check, Send, Loader2 } from 'lucide-react';
+import { api } from '../../services/api';
+import { useToast } from '../../context/ToastContext';
 
 export default function Review() {
     const navigate = useNavigate();
     const { id } = useParams();
+    const toast = useToast();
+    const queryClient = useQueryClient();
+
     const [rating, setRating] = useState(0);
     const [comment, setComment] = useState('');
     const [submitted, setSubmitted] = useState(false);
 
+    const reviewMutation = useMutation({
+        mutationFn: async ({ orderId, rating, comment }) => {
+            const res = await api.post('/reviews', { orderId, rating, comment });
+            return res.data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['order', id] });
+            queryClient.invalidateQueries({ queryKey: ['myOrders'] });
+            setSubmitted(true);
+            toast.success('Avaliação enviada com sucesso! Obrigado pelo feedback.');
+            setTimeout(() => navigate('/orders'), 2200);
+        },
+        onError: (err) => {
+            const msg = err?.response?.data?.error?.message || 'Não foi possível registrar a avaliação.';
+            toast.error(msg);
+        }
+    });
+
     const handleSubmit = (e) => {
         e.preventDefault();
-        setSubmitted(true);
-        setTimeout(() => navigate('/orders'), 2000);
+        if (rating < 1 || rating > 5) {
+            toast.warning('Selecione uma nota de 1 a 5 estrelas.');
+            return;
+        }
+
+        reviewMutation.mutate({
+            orderId: id,
+            rating,
+            comment: comment.trim() || undefined
+        });
     };
 
     if (submitted) {
@@ -35,7 +67,7 @@ export default function Review() {
                     <h2 style={{ fontSize: 'var(--font-xl)', fontWeight: 700, marginBottom: 'var(--space-2)' }}>
                         Avaliação Enviada!
                     </h2>
-                    <p className="text-sm text-gray">Obrigado pelo seu feedback</p>
+                    <p className="text-sm text-gray">Obrigado por ajudar a manter a qualidade da rede</p>
                 </div>
             </div>
         );
@@ -45,7 +77,7 @@ export default function Review() {
         <div className="app-container">
             <Header title="Avaliar Atendimento" showBack />
 
-            <div className="page">
+            <div className="page" style={{ maxWidth: '540px', margin: '0 auto' }}>
                 <div className="animate-slide-up" style={{ textAlign: 'center', marginBottom: 'var(--space-8)' }}>
                     <div style={{
                         width: '80px', height: '80px', borderRadius: '50%',
@@ -58,7 +90,7 @@ export default function Review() {
                     <h2 style={{ fontSize: 'var(--font-xl)', fontWeight: 700, marginBottom: 'var(--space-2)' }}>
                         Como foi sua experiência?
                     </h2>
-                    <p className="text-sm text-gray">Pedido {id}</p>
+                    <p className="text-sm text-gray">Pedido #{id ? id.slice(0, 8).toUpperCase() : ''}</p>
                 </div>
 
                 <form onSubmit={handleSubmit}>
@@ -94,9 +126,22 @@ export default function Review() {
                                 />
                             </div>
 
-                            <button type="submit" className="btn btn-primary btn-lg btn-block mt-4">
-                                <Send size={18} />
-                                Enviar Avaliação
+                            <button
+                                type="submit"
+                                className="btn btn-primary btn-lg btn-block mt-4"
+                                disabled={reviewMutation.isPending}
+                            >
+                                {reviewMutation.isPending ? (
+                                    <>
+                                        <Loader2 size={18} className="animate-spin" />
+                                        Enviando...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Send size={18} />
+                                        Enviar Avaliação
+                                    </>
+                                )}
                             </button>
                         </div>
                     )}

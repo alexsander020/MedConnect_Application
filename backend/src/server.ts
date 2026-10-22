@@ -13,6 +13,21 @@ const io = new Server(server, {
   }
 });
 
+// Suporte a múltiplas instâncias via Redis Adapter (configurável por flag)
+if (process.env.REDIS_URL || process.env.USE_REDIS_SOCKET === 'true') {
+  try {
+    const { createAdapter } = require('@socket.io/redis-adapter');
+    const { Redis } = require('ioredis');
+    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+    const pubClient = new Redis(redisUrl);
+    const subClient = pubClient.duplicate();
+    io.adapter(createAdapter(pubClient, subClient));
+    console.log('🔌 Socket.IO: Redis Adapter conectado para suporte a cluster/múltiplas instâncias');
+  } catch (err: any) {
+    console.warn('⚠️ Falha ao inicializar Redis Adapter, mantendo memória local:', err?.message);
+  }
+}
+
 // Middleware de Autenticação para WebSocket
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.replace('Bearer ', '');

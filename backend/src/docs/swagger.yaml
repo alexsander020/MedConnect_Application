@@ -979,3 +979,160 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+
+  /api/prescriptions/{id}:
+    get:
+      summary: Consulta detalhes de uma receita
+      tags:
+        - Receitas
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Dados da receita
+        '403':
+          description: Acesso não autorizado
+        '404':
+          description: Receita não encontrada
+
+  /api/prescriptions/{id}/quotes:
+    get:
+      summary: Lista cotações de uma receita para o paciente titular
+      tags:
+        - Receitas
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lista de propostas
+        '403':
+          description: Apenas o paciente dono pode ver as propostas desta receita
+
+  /api/prescriptions/{id}/view-url:
+    get:
+      summary: Gera URL assinada de visualização privada (5 minutos) com auditoria
+      tags:
+        - Receitas
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: URL assinada de acesso temporário
+        '403':
+          description: Acesso restrito ao paciente titular ou à farmácia com pedido aceito
+
+  /api/pharmacies/stats:
+    get:
+      summary: Retorna estatísticas e totais operacionais da farmácia autenticada
+      tags:
+        - Farmácias
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Métricas da farmácia (cotações, pedidos, faturamento, avaliações)
+
+  /api/admin/pharmacies/pending:
+    get:
+      summary: Lista farmácias aguardando verificação regulatória (ADMIN)
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Farmácias pendentes
+        '403':
+          description: Acesso restrito a administradores
+
+  /api/admin/pharmacies/{id}/verify:
+    patch:
+      summary: Aprova ou reprova credenciamento sanitário da farmácia (ADMIN)
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Farmácia verificada com sucesso
+
+  /api/reviews:
+    post:
+      summary: Paciente avalia pedido entregue (DELIVERED)
+      tags:
+        - Avaliações
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Avaliação registrada
+        '409':
+          description: Pedido ainda não entregue ou já avaliado
+
+  /api/reviews/pharmacy/{id}:
+    get:
+      summary: Lista avaliações públicas da farmácia
+      tags:
+        - Avaliações
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lista de avaliações
+
+  /api/notifications:
+    get:
+      summary: Lista notificações persistidas do usuário logado
+      tags:
+        - Notificações
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Lista de notificações
+
+  /api/notifications/{id}/read:
+    patch:
+      summary: Marca notificação como lida
+      tags:
+        - Notificações
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Notificação atualizada
+

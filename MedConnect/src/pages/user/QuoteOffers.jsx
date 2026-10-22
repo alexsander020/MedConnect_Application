@@ -1,70 +1,81 @@
-import { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Header from '../../components/Header';
 import BottomNav from '../../components/BottomNav';
 import StarRating from '../../components/StarRating';
-import { mockQuoteOffers } from '../../data/mockData';
-import { MapPin, Clock, MessageSquare, Check, ArrowRight, Loader2, Sparkles, Award, ShieldCheck } from 'lucide-react';
+import { MapPin, Clock, Check, ArrowRight, Loader2, Award, ShieldCheck, AlertCircle, Package } from 'lucide-react';
 import { api } from '../../services/api';
+import { useToast } from '../../context/ToastContext';
 
 export default function QuoteOffers() {
     const navigate = useNavigate();
-    const [selectedQuote, setSelectedQuote] = useState(null);
-    const [offers, setOffers] = useState(mockQuoteOffers);
-    const [loading, setLoading] = useState(false);
+    const toast = useToast();
+    const queryClient = useQueryClient();
+    const [selectedQuoteId, setSelectedQuoteId] = useState(null);
 
-    useEffect(() => {
-        api.get('/prescriptions/my')
-            .then(res => {
-                if (res.data && res.data.length > 0) {
-                    const allQuotes = [];
-                    res.data.forEach(p => {
-                        if (p.quotes && p.quotes.length > 0) {
-                            p.quotes.forEach(q => {
-                                allQuotes.push({
-                                    id: q.id,
-                                    pharmacy: {
-                                        name: q.pharmacy?.name || 'Farmácia Parceira',
-                                        initials: (q.pharmacy?.name || 'FP').slice(0, 2).toUpperCase(),
-                                        rating: 4.9,
-                                        totalReviews: 184,
-                                        distance: '2.3 km'
-                                    },
-                                    price: q.price,
-                                    deliveryDays: q.deliveryDays || 2,
-                                    notes: q.notes || 'Medicamento manipulado com alto rigor e insumos certificados.',
-                                    medications: [p.notes || 'Receita Médica'],
-                                });
-                            });
-                        }
-                    });
-                    if (allQuotes.length > 0) {
-                        setOffers(allQuotes);
-                    }
-                }
-            })
-            .catch(err => {
-                console.warn('Usando cotações demonstrativas:', err);
-            })
-            .finally(() => {
-                setLoading(false);
-            });
-    }, []);
-
-    // Sort by price to find best
-    const sortedOffers = [...offers].sort((a, b) => a.price - b.price);
-    const bestPriceId = sortedOffers[0]?.id;
-
-    const handleAccept = async (quoteId) => {
-        setSelectedQuote(quoteId);
-        try {
-            await api.post('/orders', { quoteId });
-        } catch (err) {
-            console.warn('Erro ao criar pedido na API, mantendo demonstração visual:', err);
-        } finally {
-            setTimeout(() => navigate('/orders'), 1600);
+    // Consulta em tempo real de receitas e suas respectivas cotações recebidas
+    const {
+        data: prescriptions = [],
+        isLoading,
+        isError,
+        refetch
+    } = useQuery({
+        queryKey: ['myPrescriptions'],
+        queryFn: async () => {
+            const res = await api.get('/prescriptions/my');
+            return Array.isArray(res.data) ? res.data : [];
         }
+    });
+
+    // Mutaçāo transacional de aprovação de cotação e criação de pedido
+    const acceptMutation = useMutation({
+        mutationFn: async (quoteId) => {
+            const res = await api.post('/orders', { quoteId });
+            return res.data;
+        },
+        onSuccess: (newOrder) => {
+            queryClient.invalidateQueries({ queryKey: ['myPrescriptions'] });
+            queryClient.invalidateQueries({ queryKey: ['myOrders'] });
+            toast.success('Cotação aprovada com sucesso! Seu pedido entrou em produção.');
+            setTimeout(() => {
+                navigate(`/order/${newOrder.id}`);
+            }, 1200);
+        },
+        onError: (err) => {
+            const msg = err?.response?.data?.error?.message || 'Não foi possível aprovar a cotação. Tente novamente.';
+            toast.error(msg);
+            setSelectedQuoteId(null);
+        }
+    });
+
+    const handleAcceptQuote = (quoteId) => {
+        setSelectedQuoteId(quoteId);
+        acceptMutation.mutate(quoteId);
     };
+
+    // Agrupa todas as cotações pendentes de aprovação
+    const offers = [];
+    prescriptions.forEach((presc) => {
+        if (presc.quotes && presc.quotes.length > 0) {
+            presc.quotes.forEach((q) => {
+                if (q.status === 'PENDING') {
+                    offers.push({
+                        ...q,
+                        prescriptionId: presc.id,
+                        medicationsText: presc.notes || 'Receita médica enviada',
+                        pharmacyName: q.pharmacy?.name || 'Farmácia Parceira',
+                        deliveryDaysText: q.deliveryDays ? `${q.deliveryDays} dias úteis` : '2 dias úteis',
+                        priceFormatted: q.price || (q.priceCents ? (q.priceCents / 100).toFixed(2) : '0.00'),
+                        numericPrice: Number(q.price || (q.priceCents ? q.priceCents / 100 : 0))
+                    });
+                }
+            });
+        }
+    });
+
+    const sortedOffers = [...offers].sort((a, b) => a.numericPrice - b.numericPrice);
+    const bestPriceId = sortedOffers[0]?.id;
 
     return (
         <div className="aurora-container" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -87,199 +98,129 @@ export default function QuoteOffers() {
                             background: 'rgba(99, 102, 241, 0.15)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center'
                         }}>
-                            <Award size={24} color="var(--secondary-600)" />
+                            <Award size={24} color="var(--primary-600)" />
                         </div>
                         <div style={{ flex: 1 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <p style={{ fontSize: 'var(--font-base)', fontWeight: 800, color: 'var(--gray-900)' }}>
-                                    {offers.length} Farmácias Responderam
+                                <p style={{ fontSize: 'var(--font-base)', fontWeight: 800, color: 'var(--gray-900)', margin: 0 }}>
+                                    {offers.length} Proposta{offers.length === 1 ? '' : 's'} Recebida{offers.length === 1 ? '' : 's'}
                                 </p>
-                                <span className="glass-pill glass-pill-primary" style={{ fontSize: '10px', padding: '2px 8px' }}>
-                                    Melhor Preço Identificado
-                                </span>
+                                {offers.length > 0 && (
+                                    <span className="badge badge-success" style={{ fontSize: '10px', padding: '2px 8px' }}>
+                                        Melhor Preço Destacado
+                                    </span>
+                                )}
                             </div>
-                            <p style={{ fontSize: 'var(--font-xs)', color: 'var(--gray-600)', marginTop: 2 }}>
-                                Escolha a melhor opção de preço, avaliação e prazo de entrega
+                            <p style={{ fontSize: '12px', color: 'var(--gray-600)', margin: '2px 0 0' }}>
+                                Compare prazos, orçamentos e aprove com 1 clique para iniciar a manipulação.
                             </p>
                         </div>
                     </div>
 
-                    {/* Offers List */}
-                    {loading ? (
-                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '60px 0' }}>
-                            <Loader2 className="animate-spin" size={36} color="var(--primary-600)" />
+                    {/* Content */}
+                    {isLoading ? (
+                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '300px' }}>
+                            <Loader2 className="animate-spin" size={40} color="var(--primary-600)" />
+                        </div>
+                    ) : isError ? (
+                        <div className="glass-card" style={{ padding: 'var(--space-8)', textAlign: 'center' }}>
+                            <AlertCircle size={40} color="var(--error)" style={{ margin: '0 auto 12px' }} />
+                            <h3 style={{ fontSize: 'var(--font-lg)', fontWeight: 700, marginBottom: 8 }}>Erro ao carregar cotações</h3>
+                            <p style={{ color: 'var(--gray-600)', marginBottom: 16 }}>Não foi possível buscar as propostas enviadas pelas farmácias.</p>
+                            <button className="btn btn-primary" onClick={() => refetch()}>Tentar Novamente</button>
+                        </div>
+                    ) : offers.length === 0 ? (
+                        <div className="glass-card" style={{ padding: 'var(--space-10)', textAlign: 'center' }}>
+                            <Package size={48} color="var(--gray-400)" style={{ margin: '0 auto 16px' }} />
+                            <h3 style={{ fontSize: 'var(--font-lg)', fontWeight: 700, marginBottom: 8 }}>
+                                Nenhuma proposta pendente no momento
+                            </h3>
+                            <p style={{ color: 'var(--gray-600)', maxWidth: '420px', margin: '0 auto 20px', lineHeight: 1.5 }}>
+                                As farmácias credenciadas estão analisando suas receitas enviadas. Assim que uma proposta for formulada, você receberá um aviso instantâneo.
+                            </p>
+                            <button className="btn btn-primary" onClick={() => navigate('/new-quote')}>
+                                Enviar Nova Receita
+                            </button>
                         </div>
                     ) : (
-                        <div className="stagger" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-                            {sortedOffers.map((offer) => {
-                                const isBest = offer.id === bestPriceId;
-                                const isSelected = selectedQuote === offer.id;
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                            {sortedOffers.map((quote) => {
+                                const isBestPrice = quote.id === bestPriceId;
+                                const isProcessing = acceptMutation.isPending && selectedQuoteId === quote.id;
 
                                 return (
                                     <div
-                                        key={offer.id}
+                                        key={quote.id}
                                         className="glass-card animate-slide-up"
                                         style={{
                                             padding: 'var(--space-5)',
-                                            position: 'relative',
-                                            overflow: 'hidden',
-                                            border: isBest ? '2px solid var(--primary-400)' : '1px solid rgba(255, 255, 255, 0.75)',
-                                            background: isSelected 
-                                                ? 'linear-gradient(135deg, rgba(209, 250, 229, 0.95) 0%, rgba(240, 253, 250, 0.95) 100%)'
-                                                : isBest
-                                                    ? 'linear-gradient(135deg, rgba(240, 253, 250, 0.92) 0%, rgba(255, 255, 255, 0.95) 100%)'
-                                                    : 'rgba(255, 255, 255, 0.85)'
+                                            border: isBestPrice ? '2px solid #10b981' : '1px solid rgba(255,255,255,0.4)',
+                                            position: 'relative'
                                         }}
                                     >
-                                        {/* Success overlay on select */}
-                                        {isSelected && (
-                                            <div className="animate-scale-in" style={{
-                                                position: 'absolute', inset: 0, display: 'flex',
-                                                alignItems: 'center', justifyContent: 'center',
-                                                background: 'rgba(255, 255, 255, 0.95)',
-                                                backdropFilter: 'blur(10px)',
-                                                zIndex: 10
+                                        {isBestPrice && (
+                                            <div style={{
+                                                position: 'absolute', top: '-10px', right: '16px',
+                                                background: '#10b981', color: 'white', fontSize: '11px',
+                                                fontWeight: 800, padding: '2px 10px', borderRadius: '12px',
+                                                boxShadow: '0 2px 8px rgba(16, 185, 129, 0.4)'
                                             }}>
-                                                <div style={{ textAlign: 'center' }}>
-                                                    <div style={{
-                                                        width: '54px', height: '54px', borderRadius: '50%',
-                                                        background: 'var(--success)', display: 'flex',
-                                                        alignItems: 'center', justifyContent: 'center',
-                                                        margin: '0 auto var(--space-3)',
-                                                        boxShadow: '0 8px 20px rgba(16, 185, 129, 0.35)'
-                                                    }}>
-                                                        <Check size={28} color="white" />
-                                                    </div>
-                                                    <h3 style={{ fontSize: 'var(--font-lg)', fontWeight: 800, color: 'var(--gray-900)' }}>
-                                                        Proposta Aprovada!
-                                                    </h3>
-                                                    <p style={{ fontSize: 'var(--font-xs)', color: 'var(--gray-600)', marginTop: 2 }}>
-                                                        Gerando pedido e enviando para produção...
-                                                    </p>
+                                                ⭐ MENOR PREÇO
+                                            </div>
+                                        )}
+
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                                            <div>
+                                                <h3 style={{ fontSize: '16px', fontWeight: 800, margin: '0 0 4px', color: 'var(--gray-900)' }}>
+                                                    {quote.pharmacyName}
+                                                </h3>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                    <StarRating rating={5} size={12} />
+                                                    <span style={{ fontSize: '12px', fontWeight: 700 }}>5.0</span>
+                                                    <span style={{ fontSize: '12px', color: 'var(--gray-500)' }}>(Farmácia Credenciada)</span>
                                                 </div>
                                             </div>
-                                        )}
 
-                                        {/* Best price badge */}
-                                        {isBest && (
-                                            <div style={{
-                                                position: 'absolute', top: 0, right: 0,
-                                                background: 'linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)',
-                                                color: 'white', fontSize: '11px', fontWeight: 800,
-                                                padding: '4px 14px', borderBottomLeftRadius: '12px',
-                                                display: 'flex', alignItems: 'center', gap: 4,
-                                                boxShadow: '0 2px 8px rgba(13, 148, 136, 0.3)'
-                                            }}>
-                                                <Sparkles size={12} />
-                                                MELHOR CUSTO-BENEFÍCIO
-                                            </div>
-                                        )}
-
-                                        {/* Pharmacy Info Header */}
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
-                                            <div style={{
-                                                width: '46px', height: '46px', borderRadius: '14px',
-                                                background: 'linear-gradient(135deg, #4f46e5 0%, #818cf8 100%)',
-                                                color: 'white', display: 'flex', alignItems: 'center',
-                                                justifyContent: 'center', fontWeight: 800, fontSize: '15px',
-                                                boxShadow: '0 4px 12px rgba(79, 70, 229, 0.25)'
-                                            }}>
-                                                {offer.pharmacy.initials}
-                                            </div>
-                                            <div style={{ flex: 1 }}>
-                                                <h4 style={{ fontWeight: 700, fontSize: 'var(--font-base)', color: 'var(--gray-900)' }}>
-                                                    {offer.pharmacy.name}
-                                                </h4>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                                                    <StarRating rating={Math.round(offer.pharmacy.rating || 5)} size={12} />
-                                                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--gray-700)' }}>
-                                                        {offer.pharmacy.rating || 4.9}
-                                                    </span>
-                                                    <span style={{ fontSize: '12px', color: 'var(--gray-400)' }}>
-                                                        ({offer.pharmacy.totalReviews || 120} avaliações)
-                                                    </span>
-                                                </div>
+                                            <div style={{ textAlign: 'right' }}>
+                                                <span style={{ fontSize: '20px', fontWeight: 800, color: 'var(--primary-700)', display: 'block' }}>
+                                                    R$ {quote.priceFormatted}
+                                                </span>
+                                                <span style={{ fontSize: '12px', color: 'var(--gray-500)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                                    <Clock size={12} /> {quote.deliveryDaysText}
+                                                </span>
                                             </div>
                                         </div>
 
-                                        {/* Price & Delivery Highlights */}
-                                        <div style={{
-                                            display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 'var(--space-3)',
-                                            marginBottom: 'var(--space-4)',
-                                        }}>
-                                            <div className="glass-panel" style={{
-                                                padding: 'var(--space-3) var(--space-4)',
-                                                background: 'rgba(255, 255, 255, 0.7)',
-                                                borderRadius: 'var(--radius-lg)'
-                                            }}>
-                                                <p style={{ fontSize: '11px', color: 'var(--gray-500)', fontWeight: 600 }}>Valor Total</p>
-                                                <p style={{
-                                                    fontSize: 'var(--font-2xl)', fontWeight: 900,
-                                                    color: isBest ? 'var(--primary-700)' : 'var(--gray-900)',
-                                                    letterSpacing: '-0.02em', marginTop: 2
-                                                }}>
-                                                    R$ {Number(offer.price).toFixed(2).replace('.', ',')}
-                                                </p>
-                                            </div>
+                                        <p style={{ fontSize: '13px', color: 'var(--gray-600)', background: 'rgba(243, 244, 246, 0.6)', padding: '8px 12px', borderRadius: '8px', margin: '0 0 16px' }}>
+                                            <strong>Receita:</strong> {quote.medicationsText}
+                                            {quote.notes && <span style={{ display: 'block', marginTop: '4px', fontStyle: 'italic' }}>Obs: {quote.notes}</span>}
+                                        </p>
 
-                                            <div className="glass-panel" style={{
-                                                padding: 'var(--space-3) var(--space-4)',
-                                                background: 'rgba(255, 255, 255, 0.7)',
-                                                borderRadius: 'var(--radius-lg)'
-                                            }}>
-                                                <p style={{ fontSize: '11px', color: 'var(--gray-500)', fontWeight: 600 }}>Prazo de Entrega</p>
-                                                <p style={{ fontSize: 'var(--font-lg)', fontWeight: 800, color: 'var(--gray-800)', marginTop: 4 }}>
-                                                    {offer.deliveryDays} {offer.deliveryDays > 1 ? 'dias úteis' : 'dia útil'}
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        {/* Notes */}
-                                        {offer.notes && (
-                                            <div style={{
-                                                padding: 'var(--space-3)',
-                                                background: 'rgba(241, 245, 249, 0.7)',
-                                                borderRadius: 'var(--radius-md)',
-                                                fontSize: 'var(--font-xs)',
-                                                color: 'var(--gray-600)',
-                                                marginBottom: 'var(--space-4)',
-                                                display: 'flex',
-                                                alignItems: 'flex-start',
-                                                gap: 6
-                                            }}>
-                                                <MessageSquare size={14} color="var(--gray-400)" style={{ marginTop: 2, flexShrink: 0 }} />
-                                                <span>{offer.notes}</span>
-                                            </div>
-                                        )}
-
-                                        {/* Distance and badges */}
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 'var(--font-xs)', color: 'var(--gray-500)' }}>
-                                                <MapPin size={13} color="var(--gray-400)" />
-                                                <span>Distância: {offer.pharmacy.distance || '3 km'}</span>
-                                            </div>
-                                            <span style={{ fontSize: '11px', color: 'var(--success)', fontWeight: 700 }}>
-                                                ✓ Frete com rastreamento
-                                            </span>
-                                        </div>
-
-                                        {/* Accept Button */}
                                         <button
-                                            className={`btn btn-block ${isBest ? 'btn-glass-primary' : 'btn-primary'}`}
+                                            className="btn btn-primary btn-block"
+                                            onClick={() => handleAcceptQuote(quote.id)}
+                                            disabled={acceptMutation.isPending}
                                             style={{
-                                                padding: '12px',
-                                                borderRadius: 'var(--radius-xl)',
+                                                padding: '10px 16px',
+                                                fontSize: '14px',
                                                 fontWeight: 700,
                                                 display: 'flex',
-                                                alignItems: 'center',
                                                 justifyContent: 'center',
+                                                alignItems: 'center',
                                                 gap: 8
                                             }}
-                                            onClick={() => handleAccept(offer.id)}
-                                            disabled={selectedQuote !== null}
                                         >
-                                            Aceitar esta Proposta
-                                            <ArrowRight size={18} />
+                                            {isProcessing ? (
+                                                <>
+                                                    <Loader2 size={16} className="animate-spin" />
+                                                    Processando Pedido...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Check size={16} />
+                                                    Aprovar Cotação e Fazer Pedido
+                                                </>
+                                            )}
                                         </button>
                                     </div>
                                 );

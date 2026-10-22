@@ -1,4 +1,4 @@
-import { PrismaClient, Role, PrescriptionStatus, QuoteStatus } from '@prisma/client';
+import { PrismaClient, Role, PrescriptionStatus, QuoteStatus, PharmacyVerificationStatus } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { encryptCpf, hashCpf, getCpfLastDigits } from '../src/lib/cpfCrypto';
 import { ehCPFValido } from '@medconnect/validation';
@@ -75,10 +75,13 @@ async function main() {
   });
   console.log(`👥 Pacientes registrados: ${paciente1.email}, ${paciente2.email}`);
 
-  // 3. Criar 2 Farmácias Verificadas
+  // 3. Criar Farmácias Verificadas e Pendentes
   const farmacia1 = await prisma.pharmacy.upsert({
     where: { email: 'contato@farmaciavidaesaude.com.br' },
-    update: { verified: true },
+    update: {
+      verified: true,
+      verificationStatus: PharmacyVerificationStatus.VERIFIED
+    },
     create: {
       name: 'Farmácia de Manipulação Vida & Saúde',
       email: 'contato@farmaciavidaesaude.com.br',
@@ -88,13 +91,22 @@ async function main() {
       address: 'Rua da Consolação, 1500 - Consolação, São Paulo, SP',
       deliveryArea: 'São Paulo, Guarulhos e Osasco',
       verified: true,
+      verificationStatus: PharmacyVerificationStatus.VERIFIED,
+      sanitaryLicense: 'CEVS-355030801-477-000123-1-2',
+      operatingAuth: 'AFE-1.23456.7',
+      technicalResponsibleName: 'Dra. Fernanda Alencar',
+      technicalResponsibleCrf: 'CRF-SP 45.678',
+      technicalResponsibleUf: 'SP',
       emailVerified: true
     }
   });
 
   const farmacia2 = await prisma.pharmacy.upsert({
     where: { email: 'atendimento@pharmabiomanipulacao.com.br' },
-    update: { verified: true },
+    update: {
+      verified: true,
+      verificationStatus: PharmacyVerificationStatus.VERIFIED
+    },
     create: {
       name: 'PharmaBio Manipulações Especiais',
       email: 'atendimento@pharmabiomanipulacao.com.br',
@@ -104,10 +116,43 @@ async function main() {
       address: 'Av. Paulista, 1800 - Bela Vista, São Paulo, SP',
       deliveryArea: 'Toda a Região Metropolitana de São Paulo',
       verified: true,
+      verificationStatus: PharmacyVerificationStatus.VERIFIED,
+      sanitaryLicense: 'CEVS-355030801-477-000456-1-8',
+      operatingAuth: 'AFE-1.98765.4',
+      technicalResponsibleName: 'Dr. Roberto Meireles',
+      technicalResponsibleCrf: 'CRF-SP 32.145',
+      technicalResponsibleUf: 'SP',
       emailVerified: true
     }
   });
-  console.log(`🏥 Farmácias verificadas registradas: ${farmacia1.name}, ${farmacia2.name}`);
+
+  const farmaciaPendente = await prisma.pharmacy.upsert({
+    where: { email: 'nova@farmaciapendente.com.br' },
+    update: {
+      verificationStatus: PharmacyVerificationStatus.PENDING_VERIFICATION,
+      verified: false
+    },
+    create: {
+      name: 'Farmácia Alquimia Viva (Aguardando Aprovação)',
+      email: 'nova@farmaciapendente.com.br',
+      password: passwordHash,
+      cnpj: '33.444.555/0001-66',
+      phone: '1133339999',
+      address: 'Rua Augusta, 900 - Consolação, São Paulo, SP',
+      deliveryArea: 'São Paulo Centro',
+      verified: false,
+      verificationStatus: PharmacyVerificationStatus.PENDING_VERIFICATION,
+      sanitaryLicense: 'CEVS-355030801-477-000789-1-0',
+      operatingAuth: 'AFE-1.55555.5',
+      technicalResponsibleName: 'Dra. Camila Nogueira',
+      technicalResponsibleCrf: 'CRF-SP 55.432',
+      technicalResponsibleUf: 'SP',
+      documentUrl: 'https://storage.medconnect.com/docs/alquimia-viva-licenca.pdf',
+      emailVerified: true
+    }
+  });
+
+  console.log(`🏥 Farmácias registradas: ${farmacia1.name} (VERIFICADA), ${farmacia2.name} (VERIFICADA), ${farmaciaPendente.name} (PENDENTE)`);
 
   // 4. Criar Receitas de Exemplo
   let receita1 = await prisma.prescription.findFirst({

@@ -56,6 +56,8 @@ describe('LGPD & Privacy Data Protection Tests', () => {
         email: 'farmacia.a@test.com',
         password: 'HashedPassword123!',
         cnpj: '11222333000181',
+        verified: true,
+        verificationStatus: 'VERIFIED'
       },
     });
 
@@ -66,6 +68,8 @@ describe('LGPD & Privacy Data Protection Tests', () => {
         email: 'farmacia.b@test.com',
         password: 'HashedPassword123!',
         cnpj: '22333444000192',
+        verified: true,
+        verificationStatus: 'VERIFIED'
       },
     });
 

@@ -12,5 +12,18 @@ router.get('/my', authMiddleware, roleMiddleware(['PATIENT']), prescriptionContr
 
 // Farmácias podem consultar receitas aguardando cotação
 router.get('/pharmacy', authMiddleware, roleMiddleware(['PHARMACY']), prescriptionController.getAvailableForPharmacy);
+router.get('/available', authMiddleware, roleMiddleware(['PHARMACY']), prescriptionController.getAvailableForPharmacy);
+
+// Consulta de detalhes de uma receita
+router.get('/:id', authMiddleware, prescriptionController.getById);
+
+// Listagem de cotações de uma receita (exclusivo para o paciente titular da receita ou ADMIN)
+router.get('/:id/quotes', authMiddleware, roleMiddleware(['PATIENT', 'ADMIN']), prescriptionController.getQuotes);
+
+// Geração de URL assinada de visualização (5 min) com auditoria compulsória
+router.get('/:id/view-url', authMiddleware, prescriptionController.getSignedViewUrl);
+
+// Rota de visualização assinada local (desenvolvimento / fallback)
+router.get('/:id/view', prescriptionController.serveLocalView);
 
 export default router;

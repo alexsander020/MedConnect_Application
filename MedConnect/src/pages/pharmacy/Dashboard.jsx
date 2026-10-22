@@ -1,171 +1,318 @@
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { mockPharmacyRequests, mockPharmacyOrders } from '../../data/mockData';
-
-const productionQueue = [
-    { id: '#8921', room: 'Lab Room 02', stage: 'Weighing', color: '#FFAB00', bg: '#FFAB00', progress: 25 },
-    { id: '#8918', room: 'Lab Room 01', stage: 'Mixing', color: '#0052CC', bg: '#0052CC', progress: 60 },
-    { id: '#8915', room: 'QC Station A', stage: 'Quality Control', color: '#36B37E', bg: '#36B37E', progress: 85 },
-    { id: '#8910', room: 'Outbound Bay', stage: 'Ready for Delivery', color: '#36B37E', bg: '#36B37E', progress: 100 },
-];
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../../services/api';
+import { orderStatuses, pharmacyVerificationStatuses } from '../../constants/status';
+import { Clock, CheckCircle2, TrendingUp, AlertTriangle, ShieldCheck, Loader2, ArrowRight, Package, Building2 } from 'lucide-react';
 
 export default function PharmacyDashboard() {
     const navigate = useNavigate();
 
-    const pendingRequests = mockPharmacyRequests.filter(r => r.status === 'pending');
-    const inProductionOrders = mockPharmacyOrders.filter(o => o.status !== 'DELIVERED');
+    // 1. Estatísticas consolidadas da farmácia autenticada
+    const {
+        data: stats = {},
+        isLoading: isLoadingStats
+    } = useQuery({
+        queryKey: ['pharmacyStats'],
+        queryFn: async () => {
+            const res = await api.get('/pharmacy/stats');
+            return res.data;
+        }
+    });
+
+    // 2. Receitas disponíveis para envio de cotação
+    const {
+        data: availablePrescriptions = [],
+        isLoading: isLoadingRequests
+    } = useQuery({
+        queryKey: ['availablePrescriptions'],
+        queryFn: async () => {
+            try {
+                const res = await api.get('/prescriptions/pharmacy');
+                return Array.isArray(res.data) ? res.data : [];
+            } catch (err) {
+                return [];
+            }
+        }
+    });
+
+    // 3. Pedidos em andamento / produção
+    const {
+        data: pharmacyOrders = [],
+        isLoading: isLoadingOrders
+    } = useQuery({
+        queryKey: ['pharmacyOrders'],
+        queryFn: async () => {
+            try {
+                const res = await api.get('/orders/my');
+                return Array.isArray(res.data) ? res.data : [];
+            } catch (err) {
+                return [];
+            }
+        }
+    });
+
+    const isPendingVerification = stats.verificationStatus === 'PENDING_VERIFICATION';
+    const isRejected = stats.verificationStatus === 'REJECTED';
+    const isVerified = stats.verificationStatus === 'VERIFIED';
+
+    const pendingCount = stats.pendingQuotes ?? availablePrescriptions.length;
+    const inProductionCount = stats.inProgressOrders ?? pharmacyOrders.filter(o => o.status !== 'DELIVERED').length;
+    const revenueFormatted = stats.totalRevenue ? `R$ ${stats.totalRevenue}` : 'R$ 0,00';
+    const ratingDisplay = stats.averageRating ? `${stats.averageRating}/5.0` : '5.0/5.0';
 
     return (
-        <div className="max-w-container-max mx-auto space-y-lg pb-24 md:pb-0">
+        <div className="max-w-container-max mx-auto space-y-lg pb-24 md:pb-0" style={{ padding: '24px 16px' }}>
+            {/* Regulatory Banner if not VERIFIED */}
+            {isPendingVerification && (
+                <div className="glass-card animate-slide-down" style={{
+                    padding: '16px 20px',
+                    marginBottom: '24px',
+                    background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
+                    border: '1px solid #f59e0b',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '14px'
+                }}>
+                    <AlertTriangle size={24} color="#d97706" style={{ flexShrink: 0 }} />
+                    <div style={{ flex: 1 }}>
+                        <h4 style={{ fontSize: '15px', fontWeight: 800, color: '#92400e', margin: '0 0 2px' }}>
+                            Cadastro em Análise Regulatória
+                        </h4>
+                        <p style={{ fontSize: '13px', color: '#b45309', margin: 0, lineHeight: 1.4 }}>
+                            Sua licença sanitária e registro de responsável técnico estão sendo validados pela administração do MedConnect. Assim que aprovada, você poderá visualizar receitas e enviar propostas.
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {isRejected && (
+                <div className="glass-card animate-slide-down" style={{
+                    padding: '16px 20px',
+                    marginBottom: '24px',
+                    background: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)',
+                    border: '1px solid #ef4444',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '14px'
+                }}>
+                    <AlertTriangle size={24} color="#dc2626" style={{ flexShrink: 0 }} />
+                    <div style={{ flex: 1 }}>
+                        <h4 style={{ fontSize: '15px', fontWeight: 800, color: '#991b1b', margin: '0 0 2px' }}>
+                            Credenciamento Recusado
+                        </h4>
+                        <p style={{ fontSize: '13px', color: '#b91c1c', margin: 0, lineHeight: 1.4 }}>
+                            Motivo: {stats.rejectionReason || 'Documentação em desacordo com as exigências sanitárias vigentes.'}
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {/* 1. Summary Section (KPIs) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-lg">
+            <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                gap: '16px',
+                marginBottom: '24px'
+            }}>
                 {/* KPI Card: Pending Quotes */}
-                <div className="bg-surface p-lg rounded-xl border border-outline-variant soft-shadow flex flex-col gap-base hover-shadow transition-shadow cursor-pointer" onClick={() => navigate('/pharmacy/requests')}>
-                    <div className="flex justify-between items-start">
-                        <span className="text-label-md text-on-surface-variant">Pending Quotes</span>
-                        <div className="p-2 bg-primary/10 rounded-lg">
-                            <span className="material-symbols-outlined text-primary">pending_actions</span>
+                <div
+                    className="card animate-slide-up"
+                    style={{ padding: '20px', cursor: 'pointer', background: 'white' }}
+                    onClick={() => navigate('/pharmacy/requests')}
+                >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                        <span style={{ fontSize: '13px', color: 'var(--gray-500)', fontWeight: 600 }}>Cotações Disponíveis</span>
+                        <div style={{ padding: '8px', background: 'rgba(20, 184, 166, 0.1)', borderRadius: '8px' }}>
+                            <Clock size={18} color="var(--primary-600)" />
                         </div>
                     </div>
-                    <div className="text-headline-lg font-headline-lg text-on-surface">{pendingRequests.length}</div>
-                    <div className="flex items-center gap-1 text-label-sm text-secondary font-bold">
-                        <span className="material-symbols-outlined text-sm">trending_up</span>
-                        12% vs last week
+                    <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--gray-900)', marginBottom: '4px' }}>
+                        {isLoadingStats ? '-' : pendingCount}
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--primary-600)', fontWeight: 600 }}>
+                        Aguardando orçamento
                     </div>
                 </div>
 
                 {/* KPI Card: In Production */}
-                <div className="bg-surface p-lg rounded-xl border border-outline-variant soft-shadow flex flex-col gap-base hover-shadow transition-shadow cursor-pointer" onClick={() => navigate('/pharmacy/orders')}>
-                    <div className="flex justify-between items-start">
-                        <span className="text-label-md text-on-surface-variant">In Production</span>
-                        <div className="p-2 bg-secondary/10 rounded-lg">
-                            <span className="material-symbols-outlined text-secondary">precision_manufacturing</span>
+                <div
+                    className="card animate-slide-up"
+                    style={{ padding: '20px', cursor: 'pointer', background: 'white' }}
+                    onClick={() => navigate('/pharmacy/orders')}
+                >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                        <span style={{ fontSize: '13px', color: 'var(--gray-500)', fontWeight: 600 }}>Em Produção / Entrega</span>
+                        <div style={{ padding: '8px', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '8px' }}>
+                            <Package size={18} color="var(--warning)" />
                         </div>
                     </div>
-                    <div className="text-headline-lg font-headline-lg text-on-surface">{inProductionOrders.length}</div>
-                    <div className="text-label-sm text-on-surface-variant">8 orders nearing QC</div>
+                    <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--gray-900)', marginBottom: '4px' }}>
+                        {isLoadingStats ? '-' : inProductionCount}
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--warning)', fontWeight: 600 }}>
+                        Fórmulas ativas
+                    </div>
                 </div>
 
-                {/* KPI Card: Monthly Revenue */}
-                <div className="bg-surface p-lg rounded-xl border border-outline-variant soft-shadow flex flex-col gap-base">
-                    <div className="flex justify-between items-start">
-                        <span className="text-label-md text-on-surface-variant">Monthly Revenue</span>
-                        <div className="p-2 bg-tertiary/10 rounded-lg">
-                            <span className="material-symbols-outlined text-tertiary">payments</span>
+                {/* KPI Card: Total Revenue */}
+                <div className="card animate-slide-up" style={{ padding: '20px', background: 'white' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                        <span style={{ fontSize: '13px', color: 'var(--gray-500)', fontWeight: 600 }}>Faturamento Total</span>
+                        <div style={{ padding: '8px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '8px' }}>
+                            <TrendingUp size={18} color="var(--success)" />
                         </div>
                     </div>
-                    <div className="text-headline-lg font-headline-lg text-on-surface">R$ 42.8k</div>
-                    <div className="flex items-center gap-1 text-label-sm text-secondary font-bold">
-                        <span className="material-symbols-outlined text-sm">trending_up</span>
-                        5.2% grow
+                    <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--gray-900)', marginBottom: '4px' }}>
+                        {isLoadingStats ? '-' : revenueFormatted}
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--success)', fontWeight: 600 }}>
+                        {stats.deliveredOrders || 0} pedidos entregues
                     </div>
                 </div>
 
                 {/* KPI Card: Average Rating */}
-                <div className="bg-surface p-lg rounded-xl border border-outline-variant soft-shadow flex flex-col gap-base hover-shadow transition-shadow cursor-pointer" onClick={() => navigate('/pharmacy/reviews')}>
-                    <div className="flex justify-between items-start">
-                        <span className="text-label-md text-on-surface-variant">Average Rating</span>
-                        <div className="p-2 bg-yellow-100 rounded-lg">
-                            <span className="material-symbols-outlined text-yellow-600" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                <div
+                    className="card animate-slide-up"
+                    style={{ padding: '20px', cursor: 'pointer', background: 'white' }}
+                    onClick={() => navigate('/pharmacy/reviews')}
+                >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                        <span style={{ fontSize: '13px', color: 'var(--gray-500)', fontWeight: 600 }}>Nota de Avaliação</span>
+                        <div style={{ padding: '8px', background: 'rgba(234, 179, 8, 0.1)', borderRadius: '8px' }}>
+                            ⭐
                         </div>
                     </div>
-                    <div className="text-headline-lg font-headline-lg text-on-surface">4.9/5.0</div>
-                    <div className="text-label-sm text-on-surface-variant">98% customer satisfaction</div>
+                    <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--gray-900)', marginBottom: '4px' }}>
+                        {isLoadingStats ? '-' : ratingDisplay}
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--gray-500)' }}>
+                        {stats.reviewsCount || 0} avaliações recebidas
+                    </div>
                 </div>
             </div>
 
             {/* Layout: Recent Quotes and Production Queue */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-lg">
+            <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+                gap: '24px'
+            }}>
                 {/* 2. Recent Quote Requests */}
-                <div className="xl:col-span-2 bg-surface rounded-xl border border-outline-variant soft-shadow overflow-hidden flex flex-col">
-                    <div className="p-lg border-b border-outline-variant flex justify-between items-center bg-white/50 backdrop-blur-md">
-                        <h3 className="font-headline-md text-headline-md text-on-surface">Recent Quote Requests</h3>
-                        <button onClick={() => navigate('/pharmacy/requests')} className="text-primary font-label-md hover:underline">Ver todos</button>
+                <div className="card animate-slide-up" style={{ padding: '20px', background: 'white' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <h3 style={{ fontSize: '16px', fontWeight: 800, margin: 0, color: 'var(--gray-900)' }}>
+                            Receitas Recentes para Cotar
+                        </h3>
+                        <button
+                            onClick={() => navigate('/pharmacy/requests')}
+                            className="section-link"
+                            style={{ fontSize: '13px' }}
+                        >
+                            Ver todas <ArrowRight size={14} style={{ display: 'inline' }} />
+                        </button>
                     </div>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="bg-surface-container-low text-label-md text-on-surface-variant">
-                                    <th className="px-lg py-md font-semibold">Paciente</th>
-                                    <th className="px-lg py-md font-semibold">Medicação/Tipo</th>
-                                    <th className="px-lg py-md font-semibold text-center">Data</th>
-                                    <th className="px-lg py-md font-semibold text-right">Ação</th>
-                                </tr>
-                            </thead>
-                            <tbody className="font-body-sm text-body-sm divide-y divide-outline-variant">
-                                {pendingRequests.slice(0, 4).map((req, i) => {
-                                    const colors = ['primary', 'secondary', 'tertiary', 'error'];
-                                    const colorClass = colors[i % colors.length];
-                                    return (
-                                        <tr key={req.id} className="hover:bg-surface-container-lowest transition-colors">
-                                            <td className="px-lg py-md">
-                                                <div className="flex items-center gap-md">
-                                                    <div className={`w-8 h-8 rounded-full bg-${colorClass}/10 flex items-center justify-center text-${colorClass} font-bold`}>
-                                                        {req.user.initials}
-                                                    </div>
-                                                    <span className="font-medium text-on-surface">{req.user.name}</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-lg py-md text-on-surface-variant truncate max-w-[200px]">{req.medications.join(', ')}</td>
-                                            <td className="px-lg py-md text-center text-on-surface-variant whitespace-nowrap">{req.createdAt}</td>
-                                            <td className="px-lg py-md text-right">
-                                                <button 
-                                                    onClick={() => navigate('/pharmacy/requests')}
-                                                    className="bg-primary-container text-on-primary py-xs px-md rounded-lg font-label-md transition-all active:scale-95 whitespace-nowrap"
-                                                >
-                                                    View & Quote
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    )
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
 
-                {/* 3. Production Queue */}
-                <div className="bg-surface rounded-xl border border-outline-variant soft-shadow flex flex-col h-full">
-                    <div className="p-lg border-b border-outline-variant flex justify-between items-center">
-                        <h3 className="font-headline-md text-headline-md text-on-surface">Production Queue</h3>
-                        <button onClick={() => navigate('/pharmacy/orders')}><span className="material-symbols-outlined text-on-surface-variant">more_vert</span></button>
-                    </div>
-                    <div className="p-lg space-y-md overflow-y-auto no-scrollbar">
-                        {productionQueue.map((item) => (
-                            <div key={item.id} className="p-md rounded-lg border border-outline-variant bg-white flex flex-col gap-sm hover-shadow transition-shadow">
-                                <div className="flex justify-between items-start">
+                    {isLoadingRequests ? (
+                        <div style={{ padding: '30px', textAlign: 'center' }}>
+                            <Loader2 size={24} className="animate-spin" color="var(--primary-600)" style={{ margin: '0 auto' }} />
+                        </div>
+                    ) : availablePrescriptions.length === 0 ? (
+                        <div style={{ padding: '30px 16px', textAlign: 'center', background: 'rgba(249, 250, 251, 0.6)', borderRadius: '8px' }}>
+                            <p style={{ fontSize: '13px', color: 'var(--gray-500)', margin: 0 }}>
+                                Nenhuma receita aguardando cotação no momento.
+                            </p>
+                        </div>
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            {availablePrescriptions.slice(0, 4).map((p) => (
+                                <div
+                                    key={p.id}
+                                    style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        padding: '12px',
+                                        background: 'rgba(243, 244, 246, 0.6)',
+                                        borderRadius: '8px',
+                                        cursor: 'pointer'
+                                    }}
+                                    onClick={() => navigate(`/pharmacy/send-quote/${p.id}`)}
+                                >
                                     <div>
-                                        <p className="font-bold text-on-surface">Ord {item.id}</p>
-                                        <p className="text-label-sm text-on-surface-variant">{item.room}</p>
+                                        <p style={{ fontSize: '14px', fontWeight: 700, margin: '0 0 2px', color: 'var(--gray-900)' }}>
+                                            {p.patient?.anonymousId || `Receita #${p.id.slice(0, 6).toUpperCase()}`}
+                                        </p>
+                                        <p style={{ fontSize: '12px', color: 'var(--gray-500)', margin: 0 }}>
+                                            {p.notes || 'Fórmula sob prescrição médica'}
+                                        </p>
                                     </div>
-                                    <div 
-                                        className="px-2 py-1 rounded text-label-sm font-bold uppercase tracking-wider"
-                                        style={{ backgroundColor: `${item.color}1A`, color: item.color }}
-                                    >
-                                        {item.stage}
-                                    </div>
+                                    <button className="btn btn-primary" style={{ padding: '4px 12px', fontSize: '12px' }}>
+                                        Cotar
+                                    </button>
                                 </div>
-                                <div className="w-full bg-surface-container-low h-1.5 rounded-full overflow-hidden">
-                                    <div className="h-full transition-all duration-1000" style={{ backgroundColor: item.bg, width: `${item.progress}%` }}></div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
-            </div>
 
-            {/* Asymmetric / Glassmorphism Extra: Inventory Alerts */}
-            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary to-primary-container p-xl text-on-primary">
-                <div className="absolute -top-24 -right-24 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
-                <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-lg">
-                    <div className="space-y-sm text-center md:text-left">
-                        <h4 className="font-headline-md text-headline-md font-bold">Inventário Crítico</h4>
-                        <p className="text-body-md opacity-90 max-w-lg">
-                            3 substâncias (Metformina, Lisinopril, Loratadina) atingiram o estoque de segurança. Reabasteça para evitar interrupções na produção.
-                        </p>
+                {/* 3. Orders in Production */}
+                <div className="card animate-slide-up" style={{ padding: '20px', background: 'white' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <h3 style={{ fontSize: '16px', fontWeight: 800, margin: 0, color: 'var(--gray-900)' }}>
+                            Fórmulas em Manipulação
+                        </h3>
+                        <button
+                            onClick={() => navigate('/pharmacy/orders')}
+                            className="section-link"
+                            style={{ fontSize: '13px' }}
+                        >
+                            Gerenciar <ArrowRight size={14} style={{ display: 'inline' }} />
+                        </button>
                     </div>
-                    <button className="bg-white text-primary font-bold py-md px-xl rounded-xl shadow-lg hover:bg-surface transition-all active:scale-95 whitespace-nowrap">
-                        Gerenciar Estoque
-                    </button>
+
+                    {isLoadingOrders ? (
+                        <div style={{ padding: '30px', textAlign: 'center' }}>
+                            <Loader2 size={24} className="animate-spin" color="var(--primary-600)" style={{ margin: '0 auto' }} />
+                        </div>
+                    ) : pharmacyOrders.length === 0 ? (
+                        <div style={{ padding: '30px 16px', textAlign: 'center', background: 'rgba(249, 250, 251, 0.6)', borderRadius: '8px' }}>
+                            <p style={{ fontSize: '13px', color: 'var(--gray-500)', margin: 0 }}>
+                                Nenhum pedido em manipulação ativa no momento.
+                            </p>
+                        </div>
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            {pharmacyOrders.slice(0, 4).map((o) => {
+                                const statusCfg = orderStatuses[o.status] || orderStatuses.PRODUCTION;
+                                return (
+                                    <div
+                                        key={o.id}
+                                        style={{
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            padding: '12px',
+                                            background: 'rgba(243, 244, 246, 0.6)',
+                                            borderRadius: '8px'
+                                        }}
+                                    >
+                                        <div>
+                                            <p style={{ fontSize: '14px', fontWeight: 700, margin: '0 0 2px', color: 'var(--gray-900)' }}>
+                                                #{o.id.slice(0, 8).toUpperCase()}
+                                            </p>
+                                            <p style={{ fontSize: '12px', color: 'var(--gray-500)', margin: 0 }}>
+                                                {o.quote?.prescription?.notes || 'Fórmula Manipulada'}
+                                            </p>
+                                        </div>
+                                        <span className={`badge badge-dot badge-${statusCfg.color}`}>
+                                            {statusCfg.label}
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

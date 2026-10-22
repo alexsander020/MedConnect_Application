@@ -41,6 +41,28 @@ async function main() {
       persistent: true
     });
 
+    const pidFile = path.join(pgDataDir, 'postmaster.pid');
+    if (fs.existsSync(pidFile)) {
+      try {
+        fs.unlinkSync(pidFile);
+        console.log('🧹 Arquivo postmaster.pid obsoleto removido.');
+      } catch (e) {
+        // Ignorar se não puder remover
+      }
+    }
+
+    const confFile = path.join(pgDataDir, 'postgresql.conf');
+    if (fs.existsSync(confFile)) {
+      try {
+        const confContent = fs.readFileSync(confFile, 'utf8');
+        if (!confContent.includes('autovacuum = off')) {
+          fs.appendFileSync(confFile, '\nautovacuum = off\nmax_connections = 60\n');
+        }
+      } catch (e) {
+        // Ignorar
+      }
+    }
+
     if (!isInitialized) {
       console.log('📦 Inicializando cluster PostgreSQL local...');
       await pg.initialise();

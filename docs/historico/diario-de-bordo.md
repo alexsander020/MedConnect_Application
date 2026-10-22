@@ -67,6 +67,39 @@ A Fase 1 estabeleceu uma arquitetura de produção sólida para o MedConnect, ga
 - **Tratamento de Erros**: Respostas 500 genéricas no formato `{ error: { code, message } }`, blindando detalhes internos e stacks.
 - **Pino com Redaction**: Mascaramento automático de `authorization`, `cookie`, `password`, `token`, `cpf`, `phone` e `address` nos logs estruturados, associados ao `X-Request-Id`.
 
+## Fase 2: Produto Real (Branch: `fase-2-produto`)
+
+A Fase 2 concluiu a transição da aplicação para um produto 100% real, com dados conectados ao banco, eliminação completa de mocks, auditoria rigorosa, privacidade LGPD e fluxo operacional completo:
+
+### Tarefa 2.1: Eliminação Total dos Mocks & Adoção de TanStack Query
+- **Auditoria de Mocks**: Mapeados e eliminados todos os imports de `mockData.js` no frontend (`Dashboard.jsx`, `OrderTracking.jsx`, `QuoteOffers.jsx`, `SendQuote.jsx`, `Reviews.jsx`, `OrderManagement.jsx`). O arquivo `MedConnect/src/data/mockData.js` foi completamente apagado (`grep -r mockData MedConnect/src` retorna vazio).
+- **TanStack Query v5**: Implementado com cache reativo, tratamento de estados de carregamento, erro e dados vazios em todas as telas.
+- **Invalidação via Socket.IO**: Eventos push (`new_quote`, `quote_accepted`, `order_status_updated`, `notification`) invalidam automaticamente as consultas em cache.
+- **Novos Endpoints Reais**: Criados e documentados no Swagger: `GET /orders/:id`, `GET /prescriptions/:id`, `GET /prescriptions/:id/quotes` e `GET /pharmacy/stats`.
+
+### Tarefa 2.2: Verificação Regulatória de Farmácias & Painel Admin
+- **Modelo Pharmacy Estendido**: Adicionados `verificationStatus` (`PENDING_VERIFICATION`, `VERIFIED`, `REJECTED`), campos de licença sanitária, autorização de funcionamento (AFE/ANVISA), dados do responsável técnico (nome, CRF, UF), URL de comprovante e trilha de auditoria (`verifiedById`, `verifiedAt`, `rejectionReason`).
+- **Guarda Farmácia Verificada**: Bloqueio compulsório (HTTP 403 `PHARMACY_NOT_VERIFIED`) em `GET /prescriptions/pharmacy` e `POST /quotes` para farmácias pendentes ou reprovadas.
+- **Consulta CNPJ**: Interface `CnpjLookup` com suporte a `BrasilApiCnpjLookup` e `MockCnpjLookup`, registrando a situação cadastral na criação.
+- **Painel ADMIN**: Endpoints `GET /admin/pharmacies/pending` e `PATCH /admin/pharmacies/:id/verify`, associados à tela visual para aprovação/rejeição com registro do administrador.
+
+### Tarefa 2.3: Privacidade e Segurança de Receitas (LGPD Art. 11)
+- **Armazenamento Privado & URLs Assinadas**: URLs com expiração curta de 5 minutos geradas unicamente para o paciente dono e para a farmácia vencedora da cotação.
+- **Auditoria Compulsória**: Tabela `PrescriptionAccessLog` registrando quem acessou, qual receita, data/hora e IP do requisitante.
+- **Validação por Magic Bytes**: Rejeição de executáveis disfarçados de PDF (bytes `MZ`/`ELF`), aceitando apenas cabeçalhos reais de PDF, JPEG e PNG.
+- **Proteção de Privacidade**: Sanitização e remoção de metadados EXIF de fotografias de receitas e ponto de extensão `MalwareScanner` para integração com antivírus.
+
+### Tarefa 2.4: Avaliações (Reviews) & Notificações Acessíveis
+- **Módulo de Avaliações**: Modelo `Review` (pedido único, nota 1-5, comentário). Validação estrita: somente o paciente titular pode avaliar, e apenas após o pedido estar no status `DELIVERED`. Duplicidades rejeitadas com HTTP 409.
+- **Notificações Persistidas**: Tabela `Notification` no PostgreSQL (`userId`/`pharmacyId`, tipo, mensagem, status de leitura) com endpoints para listagem e marcação como lida.
+- **Notificações no Frontend**: Componente de Toast acessível (`role="status"`, `aria-live="polite"`), substituindo diálogos `alert()`.
+- **Socket.IO Redis Adapter**: Configurado com suporte a instâncias múltiplas atrás de flag (`USE_REDIS_SOCKET` ou `REDIS_URL`).
+
+### Tarefa 2.5: Limpeza & Documentação
+- Remoção do pacote `@supabase/supabase-js` e `src/lib/supabase.js`.
+- Substituição do README padrão do Vite por documentação real do projeto.
+- Migração de `legacy/` e `diario-de-bordo.md` para `docs/historico/`.
+
 ## Conclusão
 Ao aplicar TDD, Refatoração Segura, Design Vanilla focado em estética, Integração Contínua e uma base de produção com PostgreSQL, atingimos um alto padrão de qualidade em código e produto no ecossistema MedConnect.
 

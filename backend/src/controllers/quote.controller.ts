@@ -4,6 +4,7 @@ import { AuthRequest } from '../middlewares/auth.middleware';
 import { io } from '../server';
 import { parsePriceToCents, formatPriceCentsToDecimal } from '../lib/money';
 import { PrescriptionStatus, QuoteStatus } from '@prisma/client';
+import { createAndSendNotification } from '../services/notificationService';
 
 export class QuoteController {
   async create(req: AuthRequest, res: Response): Promise<void> {
@@ -18,16 +19,16 @@ export class QuoteController {
         return;
       }
 
-      // Guard: Exigir farmácia verificada
+      // Guard: Exigir farmácia com verificação ativa (VERIFIED)
       const pharmacy = await prisma.pharmacy.findUnique({
         where: { id: req.user.id }
       });
 
-      if (!pharmacy || !pharmacy.verified) {
+      if (!pharmacy || pharmacy.verificationStatus !== 'VERIFIED' || !pharmacy.verified) {
         res.status(403).json({
           error: {
             code: 'PHARMACY_NOT_VERIFIED',
-            message: 'Apenas farmácias verificadas podem enviar orçamentos na plataforma.'
+            message: 'Apenas farmácias com verificação ativa podem enviar orçamentos na plataforma.'
           }
         });
         return;
@@ -119,8 +120,14 @@ export class QuoteController {
         });
       }
 
-      // Notificação em tempo real via WebSocket
+      // Notificação persistida e em tempo real via WebSocket
       try {
+        await createAndSendNotification({
+          userId: prescription.patientId,
+          type: 'NEW_QUOTE',
+          title: 'Nova Proposta de Cotação',
+          message: `Você recebeu uma nova cotação no valor de R$ ${formatPriceCentsToDecimal(quote.priceCents)}.`
+        });
         io.to(prescription.patientId).emit('new_quote', {
           message: 'Você recebeu uma nova cotação!',
           quote: {

@@ -18,6 +18,9 @@ import pharmacyRoutes from './routes/pharmacy.routes';
 import prescriptionRoutes from './routes/prescription.routes';
 import quoteRoutes from './routes/quote.routes';
 import orderRoutes from './routes/order.routes';
+import adminRoutes from './routes/admin.routes';
+import reviewRoutes from './routes/review.routes';
+import notificationRoutes from './routes/notification.routes';
 
 const app = express();
 
@@ -71,9 +74,13 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 app.use('/api/users', userRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/pharmacies', pharmacyRoutes);
+app.use('/api/pharmacy', pharmacyRoutes);
 app.use('/api/prescriptions', prescriptionRoutes);
 app.use('/api/quotes', quoteRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/reviews', reviewRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'OK' });
