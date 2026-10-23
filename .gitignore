@@ -36,3 +36,10 @@ Thumbs.db
 !.vscode/extensions.json
 .idea/
 .kilo/
+
+# Test coverage and artifacts
+coverage/
+backend/coverage/
+test-results/
+playwright-report/
+

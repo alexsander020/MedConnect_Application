@@ -402,7 +402,7 @@ components:
 paths:
   /health:
     get:
-      summary: Verificação de saúde da API
+      summary: Verificação de saúde da API (Process Liveness)
       tags:
         - Health
       responses:
@@ -415,7 +415,70 @@ paths:
                 properties:
                   status:
                     type: string
-                    example: OK
+                    example: ok
+                  uptime:
+                    type: integer
+                    example: 120
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  /ready:
+    get:
+      summary: Verificação de prontidão da infraestrutura e banco de dados (Readiness Check)
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Banco de dados conectado e pronto para receber tráfego
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ready
+                  database:
+                    type: string
+                    example: connected
+                  timestamp:
+                    type: string
+                    format: date-time
+        '503':
+          description: Falha de conexão com o banco de dados
+
+  /metrics:
+    get:
+      summary: Métricas operacionais, taxa de erro e latência da API
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Métricas consolidadas do processo e requisições
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uptimeSeconds:
+                    type: integer
+                    example: 3600
+                  totalRequests:
+                    type: integer
+                    example: 1250
+                  errorCount:
+                    type: integer
+                    example: 4
+                  errorRate:
+                    type: string
+                    example: "0.32%"
+                  pendingQuotes:
+                    type: integer
+                    example: 3
+                  activeOrders:
+                    type: integer
+                    example: 5
 
   /api/auth/login:
     post:
@@ -1135,4 +1198,16 @@ paths:
       responses:
         '200':
           description: Notificação atualizada
+
+  /api/notifications/read-all:
+    patch:
+      summary: Marca todas as notificações do usuário como lidas
+      tags:
+        - Notificações
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Todas as notificações foram marcadas como lidas
+
 

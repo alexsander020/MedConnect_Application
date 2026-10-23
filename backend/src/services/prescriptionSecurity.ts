@@ -192,5 +192,12 @@ export function verifyLocalSignedUrl(
     .update(`${prescriptionId}:${actorId}:${expiresTimestamp}`)
     .digest('hex');
 
-  return crypto.timingSafeEqual(Buffer.from(token), Buffer.from(expectedHmac));
+  const tokenBuffer = Buffer.from(token);
+  const expectedBuffer = Buffer.from(expectedHmac);
+
+  if (tokenBuffer.length !== expectedBuffer.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(tokenBuffer, expectedBuffer);
 }

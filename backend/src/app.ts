@@ -8,8 +8,10 @@ import fs from 'fs';
 import path from 'path';
 
 import { env } from './config/env';
+import { initSentry } from './lib/sentry';
 import { globalApiLimiter } from './middlewares/rate-limit.middleware';
 import { requestIdMiddleware } from './middlewares/requestId.middleware';
+import { metricsMiddleware } from './middlewares/metrics.middleware';
 import { csrfProtection } from './middlewares/csrf.middleware';
 import { errorHandler } from './middlewares/errorHandler.middleware';
 import userRoutes from './routes/user.routes';
@@ -21,6 +23,10 @@ import orderRoutes from './routes/order.routes';
 import adminRoutes from './routes/admin.routes';
 import reviewRoutes from './routes/review.routes';
 import notificationRoutes from './routes/notification.routes';
+import healthRoutes from './routes/health.routes';
+
+// Inicializa Sentry se SENTRY_DSN estiver configurado
+initSentry();
 
 const app = express();
 
@@ -57,6 +63,8 @@ app.use(express.json());
 app.use(requestIdMiddleware);
 app.use(csrfProtection);
 
+app.use(metricsMiddleware);
+
 // Limite de requisições global para a API (/api/)
 app.use('/api/', globalApiLimiter);
 
@@ -71,6 +79,10 @@ const resolvedSwaggerPath = candidateSwaggerPaths.find((p) => fs.existsSync(p)) 
 const swaggerDocument = YAML.load(resolvedSwaggerPath);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
+// Rotas de Monitoramento, Saúde e Métricas
+app.use('/', healthRoutes);
+app.use('/api', healthRoutes);
+
 app.use('/api/users', userRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/pharmacies', pharmacyRoutes);
@@ -81,10 +93,6 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/notifications', notificationRoutes);
-
-app.get('/health', (req, res) => {
-  res.json({ status: 'OK' });
-});
 
 // Middleware Central de Erros
 app.use(errorHandler);
