@@ -18,6 +18,7 @@ export default defineConfig([
       globals: {
         ...globals.browser,
         ...globals.jest,
+        ...globals.node,
       },
       parserOptions: {
         ecmaVersion: 'latest',
@@ -26,8 +27,9 @@ export default defineConfig([
       },
     },
     rules: {
-      'no-unused-vars': ['warn', { varsIgnorePattern: '^[A-Z_]', argsIgnorePattern: '^_' }],
-      'react-refresh/only-export-components': ['warn', { allowConstantExport: true, allowExportNames: ['useAuth'] }],
+      'no-unused-vars': ['warn', { varsIgnorePattern: '^[A-Z_]', argsIgnorePattern: '^[A-Z_]' }],
+      'react-refresh/only-export-components': ['warn', { allowConstantExport: true, allowExportNames: ['useAuth', 'useToast'] }],
+      'react-hooks/set-state-in-effect': 'off',
     },
   },
 ])

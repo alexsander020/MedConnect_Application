@@ -10,9 +10,6 @@ jobs:
   test-frontend:
     name: Frontend Tests (React)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./MedConnect
     steps:
       - uses: actions/checkout@v4
 
@@ -21,27 +18,40 @@ jobs:
         with:
           node-version: '20.x'
           cache: 'npm'
-          cache-dependency-path: './MedConnect/package-lock.json'
+          cache-dependency-path: 'package-lock.json'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Run linter
         run: npm run lint
 
       - name: Run frontend tests
-        run: npm run test
+        run: npm run test:frontend
 
   test-backend:
     name: Backend Tests (Node + Express + Prisma)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./backend
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: medconnect_user
+          POSTGRES_PASSWORD: medconnect_dev_password_only_for_local
+          POSTGRES_DB: medconnect_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       NODE_ENV: test
-      DATABASE_URL: "file:./dev.db"
+      DATABASE_URL: "postgresql://medconnect_user:medconnect_dev_password_only_for_local@localhost:5432/medconnect_test?schema=public"
       JWT_SECRET: "ci_test_super_secret_key_minimum_32_characters_for_testing"
+      CPF_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      CORS_ORIGINS: "http://localhost:5173,http://localhost:3000"
     steps:
       - uses: actions/checkout@v4
 
@@ -50,13 +60,19 @@ jobs:
         with:
           node-version: '20.x'
           cache: 'npm'
-          cache-dependency-path: './backend/package-lock.json'
+          cache-dependency-path: 'package-lock.json'
 
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
       - name: Generate Prisma Client
+        working-directory: ./backend
         run: npx prisma generate
 
+      - name: Run Prisma Migrations
+        working-directory: ./backend
+        run: npx prisma migrate deploy
+
       - name: Run backend tests
-        run: npm run test
+        run: npm run test:backend
+

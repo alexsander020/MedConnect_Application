@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../services/api';
-import { orderStatuses, pharmacyVerificationStatuses } from '../../constants/status';
+import { orderStatuses } from '../../constants/status';
 import { Clock, CheckCircle2, TrendingUp, AlertTriangle, ShieldCheck, Loader2, ArrowRight, Package, Building2 } from 'lucide-react';
 
 export default function PharmacyDashboard() {
@@ -30,7 +30,7 @@ export default function PharmacyDashboard() {
             try {
                 const res = await api.get('/prescriptions/pharmacy');
                 return Array.isArray(res.data) ? res.data : [];
-            } catch (err) {
+            } catch {
                 return [];
             }
         }
@@ -46,7 +46,7 @@ export default function PharmacyDashboard() {
             try {
                 const res = await api.get('/orders/my');
                 return Array.isArray(res.data) ? res.data : [];
-            } catch (err) {
+            } catch {
                 return [];
             }
         }
@@ -54,7 +54,6 @@ export default function PharmacyDashboard() {
 
     const isPendingVerification = stats.verificationStatus === 'PENDING_VERIFICATION';
     const isRejected = stats.verificationStatus === 'REJECTED';
-    const isVerified = stats.verificationStatus === 'VERIFIED';
 
     const pendingCount = stats.pendingQuotes ?? availablePrescriptions.length;
     const inProductionCount = stats.inProgressOrders ?? pharmacyOrders.filter(o => o.status !== 'DELIVERED').length;
