@@ -37,6 +37,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      # Prisma config requires DATABASE_URL even for `prisma generate` (no connection is made)
+      DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci?schema=public"
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -166,6 +169,8 @@ jobs:
     needs: [lint, typecheck]
     permissions:
       contents: read
+    env:
+      DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci?schema=public"
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -219,7 +224,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run Gitleaks
-        uses: gitleaks/gitleaks-action@e855737be74e44485501ae13702425b0373ab196 # v2.3.9
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -234,9 +239,9 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@48ab28a6f5dab2a823ea73d09a259976378e90f2 # v3.28.11
+        uses: github/codeql-action/init@6bb031afdd8eb862ea3fc1848194185e076637e5 # v3.28.11
         with:
           languages: javascript-typescript
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@48ab28a6f5dab2a823ea73d09a259976378e90f2 # v3.28.11
+        uses: github/codeql-action/analyze@6bb031afdd8eb862ea3fc1848194185e076637e5 # v3.28.11

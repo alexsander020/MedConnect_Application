@@ -1,10 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
-import { ZodSchema, ZodError } from 'zod';
+import { ZodType, ZodError } from 'zod';
 
 export interface RequestValidationSchema {
-  body?: ZodSchema<any>;
-  params?: ZodSchema<any>;
-  query?: ZodSchema<any>;
+  body?: ZodType<any>;
+  params?: ZodType<any>;
+  query?: ZodType<any>;
 }
 
 /**
@@ -37,12 +37,12 @@ export function validateRequest(schema: RequestValidationSchema) {
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        const message = error.errors.map((e) => `${e.path.join('.') || 'geral'}: ${e.message}`).join('; ');
+        const message = error.issues.map((e) => `${e.path.join('.') || 'geral'}: ${e.message}`).join('; ');
         res.status(400).json({
           error: {
             code: 'VALIDATION_ERROR',
             message,
-            details: error.errors
+            details: error.issues
           }
         });
         return;

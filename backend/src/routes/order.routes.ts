@@ -19,7 +19,7 @@ const updateOrderStatusSchema = {
   }),
   body: z.object({
     status: z.enum(['PRODUCTION', 'DELIVERY', 'DELIVERED', 'CANCELLED'], {
-      errorMap: () => ({ message: 'Status deve ser PRODUCTION, DELIVERY, DELIVERED ou CANCELLED' })
+      error: 'Status deve ser PRODUCTION, DELIVERY, DELIVERED ou CANCELLED'
     })
   })
 };
