@@ -7,19 +7,16 @@ import StarRating from '../../components/StarRating';
 import { orderStatuses } from '../../constants/status';
 import { Check, Clock, Phone, MessageCircle, MapPin, Package, Loader2, Sparkles, ShieldCheck, FileText, Star, AlertCircle } from 'lucide-react';
 import { api } from '../../services/api';
-import { useToast } from '../../context/ToastContext';
 
 export default function OrderTracking() {
     const { id } = useParams();
     const navigate = useNavigate();
-    const toast = useToast();
 
     // Consulta de detalhes reais do pedido via TanStack Query
     const {
         data: orderData,
         isLoading,
-        isError,
-        refetch
+        isError
     } = useQuery({
         queryKey: ['order', id],
         queryFn: async () => {

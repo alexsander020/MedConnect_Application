@@ -21,7 +21,7 @@ export function AuthProvider({ children }) {
           setCurrentUser(user);
           setUserType(user.role);
         }
-      } catch (err) {
+      } catch {
         // Sessão não ativa ou cookie expirado
         if (isMounted) {
           setAccessToken(null);
@@ -98,7 +98,7 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     try {
       await api.post('/auth/logout');
-    } catch (e) {
+    } catch {
       // Ignora erro no logout
     } finally {
       setAccessToken(null);

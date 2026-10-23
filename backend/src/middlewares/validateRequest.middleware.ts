@@ -19,7 +19,17 @@ export function validateRequest(schema: RequestValidationSchema) {
         req.params = await schema.params.parseAsync(req.params);
       }
       if (schema.query) {
-        req.query = await schema.query.parseAsync(req.query);
+        const parsedQuery = await schema.query.parseAsync(req.query);
+        try {
+          req.query = parsedQuery;
+        } catch {
+          Object.defineProperty(req, 'query', {
+            value: parsedQuery,
+            writable: true,
+            configurable: true,
+            enumerable: true
+          });
+        }
       }
       if (schema.body) {
         req.body = await schema.body.parseAsync(req.body);

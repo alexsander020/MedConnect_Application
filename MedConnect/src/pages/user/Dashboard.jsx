@@ -240,7 +240,7 @@ export default function Dashboard() {
                                                 <span className="text-xs text-gray">{pharmacy.address || 'São Paulo, SP'} • {distance}</span>
                                             </div>
                                             <div className="flex items-center gap-2 mt-2">
-                                                <StarRating rating={5} size={12} />
+                                                <StarRating rating={rating} size={12} />
                                                 <span className="text-xs font-semibold">5.0</span>
                                                 <span className="text-xs text-gray">(Credenciada)</span>
                                             </div>

@@ -12,4 +12,14 @@ module.exports = {
   transform: {
     ...tsJestTransformCfg,
   },
+  collectCoverageFrom: [
+    "src/controllers/**/*.ts",
+    "src/services/**/*.ts",
+  ],
+  coverageThreshold: {
+    global: {
+      statements: 80,
+      lines: 80,
+    },
+  },
 };

@@ -45,6 +45,12 @@ export function errorHandler(
     'Erro capturado no middleware central de erros'
   );
 
+  // Envio ao Sentry se configurado
+  if (statusCode >= 500) {
+    const { captureException } = require('../lib/sentry');
+    captureException(err, { requestId, method: req.method, path: req.originalUrl });
+  }
+
   res.status(statusCode).json({
     error: {
       code,
