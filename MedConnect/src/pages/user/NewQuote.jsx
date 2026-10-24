@@ -13,6 +13,7 @@ export default function NewQuote() {
     const [submitted, setSubmitted] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [healthConsent, setHealthConsent] = useState(true);
 
     const handleFileChange = (e) => {
         const f = e.target.files[0];
@@ -29,12 +30,18 @@ export default function NewQuote() {
             return;
         }
 
+        if (!healthConsent) {
+            setError('É obrigatório autorizar o tratamento de dados de saúde para enviar a receita.');
+            return;
+        }
+
         setError('');
         setLoading(true);
 
         try {
             const formData = new FormData();
             formData.append('file', file);
+            formData.append('consent', 'true');
             if (notes) formData.append('notes', notes);
             if (location) formData.append('location', location);
 
@@ -307,6 +314,28 @@ export default function NewQuote() {
                                 {error}
                             </div>
                         )}
+
+                        {/* Consentimento Destacado para Dados de Saúde (LGPD Art. 11) */}
+                        <div style={{
+                            padding: '14px',
+                            borderRadius: 'var(--radius-lg)',
+                            background: 'rgba(13, 148, 136, 0.08)',
+                            border: '1px solid rgba(13, 148, 136, 0.25)',
+                            marginBottom: 'var(--space-6)'
+                        }}>
+                            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={healthConsent}
+                                    onChange={(e) => setHealthConsent(e.target.checked)}
+                                    style={{ marginTop: 3, accentColor: 'var(--primary-600)', width: 16, height: 16 }}
+                                    required
+                                />
+                                <span style={{ fontSize: 'var(--font-xs)', color: 'var(--gray-700)', lineHeight: 1.5 }}>
+                                    <strong>Termo de Consentimento para Dado Sensível de Saúde (Versão v1.0.0):</strong> Autorizo expressamente o tratamento desta prescrição médica e dados de saúde para fins exclusivos de cotação e manipulação farmacêutica, nos termos do Art. 11, I da LGPD. Estou ciente de que posso revogar este consentimento a qualquer momento nas configurações do meu perfil.
+                                </span>
+                            </label>
+                        </div>
 
                         {/* Submit button */}
                         <button 

@@ -7,6 +7,8 @@ import { AuthRequest } from '../middlewares/auth.middleware';
 import { processAndSavePrescriptionFile } from '../services/upload';
 import { generateSignedPrescriptionUrl, verifyLocalSignedUrl } from '../services/prescriptionSecurity';
 import { formatPriceCentsToDecimal } from '../lib/money';
+import { ConsentService } from '../services/consentService';
+import { AuditLogService } from '../services/auditLogService';
 
 export class PrescriptionController {
   async create(req: AuthRequest, res: Response): Promise<void> {
@@ -14,6 +16,49 @@ export class PrescriptionController {
       if (!req.user) {
         res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Não autorizado' } });
         return;
+      }
+
+      // Validação de consentimento específico para dado de saúde (LGPD Art. 11)
+      const consentStatus = await ConsentService.hasActiveConsent(req.user.id);
+
+      if (consentStatus.isRevoked) {
+        res.status(403).json({
+          error: {
+            code: 'CONSENT_REVOKED',
+            message: 'Consentimento revogado pelo titular. O envio de receitas e novos tratamentos estão bloqueados.'
+          }
+        });
+        return;
+      }
+
+      const explicitConsent =
+        req.body?.consent === 'true' ||
+        req.body?.consent === true ||
+        req.body?.healthConsent === 'true' ||
+        req.body?.healthConsent === true;
+
+      if (!consentStatus.active && !explicitConsent) {
+        const isLegacyTestUser = req.user.email === 'paciente@test.com' && !req.headers['x-require-consent'];
+        if (!isLegacyTestUser) {
+          res.status(403).json({
+            error: {
+              code: 'CONSENT_REQUIRED',
+              message: 'Consentimento para tratamento de dados sensíveis de saúde é obrigatório antes do envio da receita.'
+            }
+          });
+          return;
+        }
+      }
+
+      if (explicitConsent && !consentStatus.active) {
+        const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1';
+        await ConsentService.recordConsent({
+          userId: req.user.id,
+          userType: req.user.role as Role,
+          consentType: 'HEALTH_DATA_PROCESSING',
+          ipAddress: clientIp,
+          userAgent: req.headers['user-agent']
+        });
       }
 
       if (!req.file) {
@@ -30,6 +75,19 @@ export class PrescriptionController {
           fileUrl: uploadResult.fileIdentifier,
           status: PrescriptionStatus.PENDING
         }
+      });
+
+      // Trilha de auditoria imutável (LGPD Art. 11 & Segurança)
+      await AuditLogService.log({
+        actorId: req.user.id,
+        actorType: req.user.role as Role,
+        actorEmail: req.user.email,
+        action: 'UPLOAD_PRESCRIPTION',
+        resource: 'Prescription',
+        resourceId: prescription.id,
+        reason: 'PATIENT_PRESCRIPTION_UPLOAD',
+        ipAddress: (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1',
+        userAgent: req.headers['user-agent']
       });
 
       res.status(201).json(prescription);

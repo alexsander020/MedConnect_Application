@@ -51,11 +51,15 @@ model User {
   cpfEncrypted  String?
   cpfHash       String?        @unique
   cpfLastDigits String?
+  isAnonymized  Boolean        @default(false)
+  anonymizedAt  DateTime?
+  keyId         String?        @default("v1")
   emailVerified Boolean        @default(false)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   prescriptions Prescription[]
   reviews       Review[]
+  consents      Consent[]
 }
 
 model Pharmacy {
@@ -220,5 +224,46 @@ model EmailVerificationToken {
   createdAt DateTime @default(now())
 
   @@index([email])
+}
+
+model Consent {
+  id               String    @id @default(uuid())
+  userId           String
+  userType         Role      @default(PATIENT)
+  consentType      String
+  textVersion      String
+  textHash         String?
+  ipAddress        String?
+  userAgent        String?
+  consentedAt      DateTime  @default(now())
+  revokedAt        DateTime?
+  revokedIp        String?
+  revocationReason String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, consentType])
+  @@index([revokedAt])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String
+  actorType  Role
+  actorEmail String?
+  action     String
+  resource   String
+  resourceId String?
+  reason     String
+  details    String?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([resource, resourceId])
+  @@index([action])
+  @@index([createdAt])
 }
 

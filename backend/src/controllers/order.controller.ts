@@ -10,6 +10,8 @@ import {
 } from '../domain/orderStateMachine';
 import { formatPriceCentsToDecimal } from '../lib/money';
 import { createAndSendNotification } from '../services/notificationService';
+import { decryptFieldSafe } from '../lib/fieldEncryption';
+import { AuditLogService } from '../services/auditLogService';
 
 export class OrderController {
   async create(req: AuthRequest, res: Response): Promise<void> {
@@ -368,11 +370,54 @@ export class OrderController {
         return;
       }
 
+      if (isAcceptedPharmacy) {
+        await AuditLogService.log({
+          actorId: req.user.id,
+          actorType: req.user.role as Role,
+          actorEmail: req.user.email,
+          action: 'VIEW_CONTACT_DATA',
+          resource: 'Order',
+          resourceId: order.id,
+          reason: 'ORDER_DELIVERY_PREPARATION',
+          details: {
+            patientId: order.quote.prescription.patientId,
+            prescriptionId: order.quote.prescription.id
+          },
+          ipAddress: (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1',
+          userAgent: req.headers['user-agent']
+        });
+      }
+
+      // Descriptografa com segurança os dados de contato em repouso para exibição aos autorizados
+      const patient = order.quote.prescription.patient;
+      const pharmacy = order.quote.pharmacy;
+
+      const formattedPatient = patient
+        ? {
+            ...patient,
+            phone: decryptFieldSafe(patient.phone),
+            address: decryptFieldSafe(patient.address)
+          }
+        : patient;
+
+      const formattedPharmacy = pharmacy
+        ? {
+            ...pharmacy,
+            phone: decryptFieldSafe(pharmacy.phone),
+            address: decryptFieldSafe(pharmacy.address)
+          }
+        : pharmacy;
+
       res.json({
         ...order,
         quote: {
           ...order.quote,
-          price: formatPriceCentsToDecimal(order.quote.priceCents)
+          price: formatPriceCentsToDecimal(order.quote.priceCents),
+          prescription: {
+            ...order.quote.prescription,
+            patient: formattedPatient
+          },
+          pharmacy: formattedPharmacy
         }
       });
     } catch (error) {
