@@ -46,8 +46,9 @@ export default function Requests() {
                 }
             })
             .catch(err => {
-                console.error('Erro ao buscar receitas para farmácia:', err);
-                setError(err?.response?.data?.error || 'Não foi possível carregar as oportunidades de receita. Tente novamente.');
+                const errData = err?.response?.data?.error;
+                const msg = (typeof errData === 'string' ? errData : errData?.message) || 'Não foi possível carregar as oportunidades de receita. Tente novamente.';
+                setError(msg);
                 setRequests([]);
             })
             .finally(() => setLoading(false));

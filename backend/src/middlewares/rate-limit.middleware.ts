@@ -18,7 +18,8 @@ export const globalApiLimiter = rateLimit({
 // Limitador específico para autenticação: 5 tentativas por janela de 15 minutos por IP + identificador (email)
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 5,
+  limit: process.env.NODE_ENV === 'development' ? 30 : 5,
+  skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => {

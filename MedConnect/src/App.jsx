@@ -27,13 +27,19 @@ import SendQuote from './pages/pharmacy/SendQuote';
 import OrderManagement from './pages/pharmacy/OrderManagement';
 import Reviews from './pages/pharmacy/Reviews';
 
+import ErrorBoundary from './components/ErrorBoundary';
+
 // Admin pages
 import AdminDashboard from './pages/admin/AdminDashboard';
 
 function ProtectedRoute({ children, requiredType }) {
   const { isAuthenticated, userType } = useAuth();
   if (!isAuthenticated) return <Navigate to="/" replace />;
-  if (requiredType && userType !== requiredType) return <Navigate to="/" replace />;
+  if (requiredType && userType !== requiredType) {
+    if (userType === 'ADMIN') return <Navigate to="/admin" replace />;
+    if (userType === 'PHARMACY') return <Navigate to="/pharmacy" replace />;
+    return <Navigate to="/dashboard" replace />;
+  }
   return children;
 }
 
@@ -98,14 +104,16 @@ export default function App() {
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <ToastProvider>
-        <BrowserRouter basename={import.meta.env.BASE_URL}>
-          <AuthProvider>
-            <AppRoutes />
-          </AuthProvider>
-        </BrowserRouter>
-      </ToastProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <ToastProvider>
+          <BrowserRouter basename={import.meta.env.BASE_URL}>
+            <AuthProvider>
+              <AppRoutes />
+            </AuthProvider>
+          </BrowserRouter>
+        </ToastProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }

@@ -22,12 +22,19 @@ export default function Login() {
             const { user } = await login(email, password, type);
             if (user.role === 'PHARMACY') {
                 navigate('/pharmacy', { replace: true });
+            } else if (user.role === 'ADMIN') {
+                navigate('/admin', { replace: true });
             } else {
                 navigate('/dashboard', { replace: true });
             }
         } catch (err) {
             console.error(err);
-            setError(err.response?.data?.error || err.message || 'Falha ao fazer login. Verifique suas credenciais.');
+            const errData = err.response?.data?.error;
+            const message =
+                (typeof errData === 'string' ? errData : errData?.message) ||
+                err.message ||
+                'Falha ao fazer login. Verifique suas credenciais.';
+            setError(message);
         } finally {
             setLoading(false);
         }
@@ -215,7 +222,7 @@ export default function Login() {
                                         marginBottom: 'var(--space-4)',
                                         textAlign: 'center'
                                     }}>
-                                        {error}
+                                        {typeof error === 'string' ? error : error?.message || 'Falha ao fazer login.'}
                                     </div>
                                 )}
 
