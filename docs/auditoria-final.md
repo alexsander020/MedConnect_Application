@@ -16,7 +16,7 @@
 | **3** | Eliminação de `mockData` e Estados de Erro Reais | **APROVADO** | Nenhuma | `grep -r mockData MedConnect/src` retorna vazio; telas tratam falha com `ErrorState` e mensagens da API. |
 | **4** | Farmácias Verificadas, Redação de Contato e URLs Assinadas | **APROVADO** | Nenhuma | Farmácias não verificadas bloqueadas (403); contato só liberado após aceite; URLs protegidas por HMAC-SHA256 e expiração. |
 | **5** | Integridade do Fluxo, `@unique`, Transação e Concorrência | **APROVADO** | Nenhuma | `@unique` no schema, transação serializável, corrida simultânea controlada (409 Conflict) e máquina de estados validada. |
-| **6** | Pipeline de CI/CD, Ações por SHA e Cobertura $\ge 80\%$ | **PARCIAL** | **MÉDIA** | Actions fixadas por SHA e deploy dependente de CI verde; contudo, cobertura caiu para **78.2%** (falhando o threshold de 80%). |
+| **6** | Pipeline de CI/CD, Ações por SHA e Cobertura $\ge 80\%$ | **APROVADO** | Nenhuma | Actions fixadas por SHA; deploy condicionado a CI verde; build com `prisma generate`; audit com 0 vulnerabilidades; cobertura em **83.79% statements / 84% lines** (threshold de 80% superado). |
 | **7** | Prevenção a IDOR em Rotas com ID e Matriz de RBAC | **APROVADO** | Nenhuma | 35 rotas testadas com matriz parametrizada; tentativas de acesso cruzado rejeitadas com 403/404. |
 | **8** | Conformidade Técnica LGPD (Consentimento, Exportação, AuditLog) | **APROVADO** | Nenhuma | Consentimento versionado obrigatório, exportação JSON, anonimização de titulares, AuditLog imutável e AES-256-GCM. |
 | **9** | Coerência Documental (README, Swagger, ADRs) | **APROVADO** | Nenhuma | 17 ADRs atualizados; OpenAPI 3.0 sincronizado 1:1 com Express (validado via teste automatizado). |
@@ -151,10 +151,14 @@
 ---
 
 ### Item 6: Pipeline de CI/CD, Ações por SHA e Cobertura de Código
-- **Status**: **PARCIAL** (Severidade: **MÉDIA / ALTA**)
+- **Status**: **APROVADO** (Severidade: **NENHUMA**)
 - **Análise dos Workflows GitHub Actions**:
   - Todas as GitHub Actions em `.github/workflows/ci.yml`, `deploy-backend.yml` e `deploy-frontend.yml` estão fixadas por **commit SHA completo de 40 caracteres** (ex: `actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683`).
   - `deploy-backend.yml` e `deploy-frontend.yml` são disparados apenas após conclusão com sucesso do CI (`github.event.workflow_run.conclusion == 'success'`).
+  - Job `build` ajustado com a etapa `Generate Prisma Client` prévia à compilação `tsc`, evitando falhas de tipos inexistentes em ambientes efêmeros.
+- **Auditoria de Dependências (`npm audit`)**:
+  - Resolução da vulnerabilidade GHSA-ggr8-5vv4-36mx em `deepmerge-ts` através de override semântico `^8.0.2` no `package.json`.
+  - Execução de `npm audit --omit=dev --audit-level=high` reporta **0 vulnerabilidades**.
 - **Análise da Cobertura de Testes (`npm run test:coverage -w backend`)**:
   - Comando executado:
     ```bash
@@ -165,14 +169,14 @@
     -----------------------------|---------|----------|---------|---------|
     File                         | % Stmts | % Branch | % Funcs | % Lines |
     -----------------------------|---------|----------|---------|---------|
-    All files                    |    78.2 |    67.04 |   77.89 |   78.41 |
-     controllers                 |   78.34 |    71.58 |   87.93 |   78.13 |
-     services                    |   75.21 |    56.37 |   56.25 |   76.54 |
+    All files                    |   83.79 |    70.75 |   86.31 |      84 |
+     controllers                 |    83.2 |    75.39 |   94.82 |   83.06 |
+     services                    |   84.34 |     60.4 |   68.75 |   85.39 |
     -----------------------------|---------|----------|---------|---------|
-    Jest: "global" coverage threshold for statements (80%) not met: 78.2%
-    Jest: "global" coverage threshold for lines (80%) not met: 78.41%
+    Test Suites: 24 passed, 24 total
+    Tests:       233 passed, 233 total
     ```
-  - *Diagnóstico do Auditor*: A meta mandatória de $\ge 80\%$ de cobertura em controllers e serviços **não foi atingida** (78.2% statements / 78.41% lines). O job `test-backend` falharia no GitHub Actions devido ao threshold estrito configurado no Jest. A queda ocorreu pela adição dos novos módulos da Fase 4 e Fase 5 (`consent.controller.ts`: 30%, `dataRetentionService.ts`: 42.85%, `admin.controller.ts`: 44.44%).
+  - *Diagnóstico do Auditor*: A meta mandatória de $\ge 80\%$ foi plenamente alcançada (83.79% statements, 84.00% lines, 83.20% controllers, 84.34% services), com 100% dos testes unitários e de integração verdes.
 
 ---
 
@@ -241,18 +245,18 @@
 | Item | Falha Identificada | Severidade | Impacto Potencial | Ação Obrigatória de Mitigação |
 | :-: | :--- | :---: | :--- | :--- |
 | **#1** | Presença de segredo antigo do Supabase e SQLite nos commits `d8db6386` e `2e6528be` do histórico do Git. | **ALTA** | Exposição de credenciais legadas caso o repositório seja tornado público ou compartilhado com terceiros. | 1. Revogar/deletar o projeto no console do Supabase.<br>2. Executar `git-filter-repo --path MedConnect/.env --invert-paths` e forçar push limpo antes de abrir o repositório. |
-| **#6** | Cobertura de testes do backend está em **78.2%** (meta: $\ge 80\%$), falhando o script `test:coverage`. | **MÉDIA** | Falha automática do job de CI no GitHub Actions (`Backend Tests with Coverage Threshold`), impedindo merge na branch `main`. | Criar testes unitários para os novos módulos da Fase 4 e 5 (`consent.controller.ts`, `dataRetentionService.ts`, `admin.controller.ts`), elevando a cobertura para $\ge 82\%$. |
+
+*(Nota: As inconsistências de cobertura e dependências do Item #6 foram completamente sanadas nesta revisão).*
 
 ---
 
 ## 4. Conclusão e Recomendação do Auditor
 
-> ### Veredito: **NÃO PODE INICIAR O PILOTO EM PRODUÇÃO ATÉ O CUMPRIMENTO DAS DUAS AÇÕES DE CONTENÇÃO ABAIXO** (Apto apenas para piloto restrito em ambiente Staging/Sandbox).
+> ### Veredito: **RECOMENDAÇÃO CONDICIONADA À PURGA DE SEGREDOS HISTÓRICOS**
+> **O codebase técnico atende a 100% dos requisitos de CI, testes, arquitetura e controle de acesso.**
 
-### Condições Mandatórias para Liberação do Piloto em Produção:
-1. **Sanitização de Cobertura de Testes (Técnica)**:
-   - Adicionar suíte de testes pontual para os endpoints de consentimento e métricas administrativas para que `npm run test:coverage` atinja $\ge 80\%$ de statements/lines e o CI passe 100% verde.
-2. **Invalidação de Credenciais Legadas (Segurança)**:
-   - Confirmar a revogação do token do Supabase legado exposto no commit de abril/2026.
-3. **Validação Jurídica Formal (Compliance)**:
+### Condições Finais para Abertura do Piloto:
+1. **Invalidação de Credenciais Legadas do Histórico (Segurança)**:
+   - Confirmar a revogação do token do Supabase legado exposto no commit de abril/2026 antes de tornar o repositório público.
+2. **Validação Jurídica Formal (Compliance)**:
    - Obter parecer formal da assessoria jurídica sobre as minutas da pasta `docs/lgpd/` e respostas aos quesitos de `docs/regulatorio/perguntas-para-o-advogado.md`.
