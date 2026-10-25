@@ -3,6 +3,8 @@ import { prisma } from '../lib/prisma';
 import bcrypt from 'bcrypt';
 import { ehEmailValido, ehSenhaForte, ehCPFValido } from '@medconnect/validation';
 import { encryptCpf, hashCpf, getCpfLastDigits, maskCpf } from '../lib/cpfCrypto';
+import { encryptField, decryptFieldSafe, getCurrentKeyId } from '../lib/fieldEncryption';
+import { ConsentService } from '../services/consentService';
 
 export class UserController {
   async create(req: Request, res: Response): Promise<void> {
@@ -51,6 +53,7 @@ export class UserController {
 
       const hashedPassword = await bcrypt.hash(password, 10);
       const cleanEmail = email.trim().toLowerCase();
+      const currentKeyId = getCurrentKeyId();
 
       const user = await prisma.user.create({
         data: {
@@ -58,8 +61,9 @@ export class UserController {
           email: cleanEmail,
           password: hashedPassword,
           role: 'PATIENT',
-          phone,
-          address,
+          phone: phone ? encryptField(phone, currentKeyId) : null,
+          address: address ? encryptField(address, currentKeyId) : null,
+          keyId: currentKeyId,
           cpfEncrypted: encryptCpf(cpf),
           cpfHash: hashCpf(cpf),
           cpfLastDigits: getCpfLastDigits(cpf),
@@ -67,9 +71,24 @@ export class UserController {
         }
       });
 
+      // Se o usuário não recusou expressamente, registra consentimento de saúde versionado
+      const explicitOptOut = req.body.healthConsent === false || req.body.consent === false;
+      if (!explicitOptOut) {
+        const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1';
+        await ConsentService.recordConsent({
+          userId: user.id,
+          userType: 'PATIENT',
+          consentType: 'HEALTH_DATA_PROCESSING',
+          ipAddress: clientIp,
+          userAgent: req.headers['user-agent']
+        });
+      }
+
       const { password: _, cpfEncrypted: __, cpfHash: ___, ...userWithoutSecrets } = user;
       res.status(201).json({
         ...userWithoutSecrets,
+        phone: decryptFieldSafe(user.phone),
+        address: decryptFieldSafe(user.address),
         cpf: maskCpf(user.cpfLastDigits!)
       });
     } catch (error: any) {
@@ -117,13 +136,13 @@ export class UserController {
         }
       });
 
-      const formatted = users.map((u) => ({
+      const formatted = users.map((u: any) => ({
         id: u.id,
         name: u.name,
         email: u.email,
         role: u.role,
-        phone: u.phone,
-        address: u.address,
+        phone: decryptFieldSafe(u.phone),
+        address: decryptFieldSafe(u.address),
         cpf: u.cpfLastDigits ? maskCpf(u.cpfLastDigits) : null,
         emailVerified: u.emailVerified,
         createdAt: u.createdAt

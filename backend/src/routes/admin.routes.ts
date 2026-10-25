@@ -20,6 +20,21 @@ const verifyPharmacySchema = {
 // Todas as rotas administrativas exigem papel ADMIN
 router.use(authMiddleware, roleMiddleware(['ADMIN']));
 
+// Trilha de Auditoria (LGPD Art. 11/Art. 46) - Imutável e consultável por ADMIN
+router.use('/audit-logs', (req, res, next) => {
+  if (['PUT', 'PATCH', 'DELETE', 'POST'].includes(req.method)) {
+    res.status(405).json({
+      error: {
+        code: 'METHOD_NOT_ALLOWED',
+        message: 'A trilha de auditoria é imutável: registros não podem ser alterados ou apagados.'
+      }
+    });
+    return;
+  }
+  next();
+});
+router.get('/audit-logs', adminController.getAuditLogs.bind(adminController));
+
 // Listagem de farmácias com verificação pendente
 router.get('/pharmacies/pending', adminController.getPendingPharmacies);
 

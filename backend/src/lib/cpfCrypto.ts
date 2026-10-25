@@ -40,11 +40,19 @@ export function encryptCpf(rawCpf: string): string {
  */
 export function decryptCpf(encryptedData: string): string {
   const parts = encryptedData.split(':');
-  if (parts.length !== 3) {
+  let keyId = 'v1';
+  let ivHex: string;
+  let tagHex: string;
+  let ciphertextHex: string;
+
+  if (parts.length === 4) {
+    [keyId, ivHex, tagHex, ciphertextHex] = parts;
+  } else if (parts.length === 3) {
+    [ivHex, tagHex, ciphertextHex] = parts;
+  } else {
     throw new Error('Formato inválido de CPF criptografado');
   }
 
-  const [ivHex, tagHex, ciphertextHex] = parts;
   const iv = Buffer.from(ivHex, 'hex');
   const authTag = Buffer.from(tagHex, 'hex');
   const ciphertext = Buffer.from(ciphertextHex, 'hex');

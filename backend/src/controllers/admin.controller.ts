@@ -3,8 +3,35 @@ import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { PharmacyVerificationStatus } from '@prisma/client';
 import { createAndSendNotification } from '../services/notificationService';
+import { AuditLogService } from '../services/auditLogService';
 
 export class AdminController {
+  async getAuditLogs(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user || req.user.role !== 'ADMIN') {
+        res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Apenas administradores podem consultar a trilha de auditoria' } });
+        return;
+      }
+
+      const { actorId, action, resource, resourceId, startDate, endDate, page, limit } = req.query;
+
+      const result = await AuditLogService.listLogs({
+        actorId: actorId as string,
+        action: action as string,
+        resource: resource as string,
+        resourceId: resourceId as string,
+        startDate: startDate as string,
+        endDate: endDate as string,
+        page: page ? Number(page) : undefined,
+        limit: limit ? Number(limit) : undefined
+      });
+
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Erro ao consultar trilha de auditoria' } });
+    }
+  }
+
   async getPendingPharmacies(req: AuthRequest, res: Response): Promise<void> {
     try {
       if (!req.user || req.user.role !== 'ADMIN') {

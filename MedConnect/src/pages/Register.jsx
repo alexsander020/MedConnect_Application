@@ -106,6 +106,7 @@ export default function Register() {
     const [phone, setPhone] = useState('');
     const [address, setAddress] = useState('');
     const [cpf, setCpf] = useState('');
+    const [healthConsent, setHealthConsent] = useState(true);
 
     // Campos exclusivos de farmácia
     const [cnpj, setCnpj] = useState('');
@@ -156,6 +157,10 @@ export default function Register() {
                 setError('CPF inválido. Verifique os 11 números digitados.');
                 return;
             }
+            if (!healthConsent) {
+                setError('É obrigatório consentir com o tratamento de dados de saúde para finalizar o cadastro de paciente.');
+                return;
+            }
         }
 
         if (!phone) { setError('Informe o número de telefone ou WhatsApp.'); return; }
@@ -165,7 +170,9 @@ export default function Register() {
         try {
             const userData = {
                 name, email, password, phone, address,
-                ...(type === 'pharmacy' ? { cnpj: cnpj.replace(/\D/g, ''), deliveryArea } : { cpf: cpf.replace(/\D/g, '') }),
+                ...(type === 'pharmacy'
+                    ? { cnpj: cnpj.replace(/\D/g, ''), deliveryArea }
+                    : { cpf: cpf.replace(/\D/g, ''), healthConsent: true }),
             };
             await register(userData, type);
             setStep(3);
@@ -621,6 +628,31 @@ export default function Register() {
                                                     </button>
                                                 ))}
                                             </div>
+                                        </div>
+                                    )}
+
+                                    {/* Consentimento Destacado para Dados de Saúde (LGPD Art. 11) */}
+                                    {!isPharmacy && (
+                                        <div style={{
+                                            padding: '12px 14px',
+                                            borderRadius: 'var(--radius-lg)',
+                                            background: 'rgba(13, 148, 136, 0.08)',
+                                            border: '1px solid rgba(13, 148, 136, 0.25)',
+                                            marginTop: 'var(--space-2)',
+                                            marginBottom: 'var(--space-2)'
+                                        }}>
+                                            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={healthConsent}
+                                                    onChange={e => setHealthConsent(e.target.checked)}
+                                                    style={{ marginTop: 3, accentColor: 'var(--primary-600)', width: 16, height: 16 }}
+                                                    required
+                                                />
+                                                <span style={{ fontSize: 11, color: 'var(--gray-700)', lineHeight: 1.5 }}>
+                                                    <strong>Consentimento para Tratamento de Dados de Saúde (v1.0.0):</strong> Autorizo expressamente o tratamento das minhas receitas médicas e dados de saúde para cotação e manipulação farmacêutica, nos termos do Art. 11, I da LGPD. Posso revogar este consentimento a qualquer momento nas configurações do meu perfil.
+                                                </span>
+                                            </label>
                                         </div>
                                     )}
 
