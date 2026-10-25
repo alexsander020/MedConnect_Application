@@ -38,6 +38,9 @@ router.get('/audit-logs', adminController.getAuditLogs.bind(adminController));
 // Listagem de farmácias com verificação pendente
 router.get('/pharmacies/pending', adminController.getPendingPharmacies);
 
+// Métricas de validação do piloto (Fase 5 - Analytics agregados sem dados pessoais)
+router.get('/pilot-metrics', adminController.getPilotMetrics.bind(adminController));
+
 // Aprovação ou rejeição de credenciamento sanitário da farmácia
 router.patch('/pharmacies/:id/verify', validateRequest(verifyPharmacySchema), adminController.verifyPharmacy);
 
