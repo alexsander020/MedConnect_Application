@@ -142,7 +142,7 @@ export class DataRetentionService {
       details: report
     });
 
-    logger.info({ report }, 'Ciclo de retenção e expurgo de dados concluído com sucesso.');
+    logger.info('Ciclo de retenção e expurgo de dados concluído com sucesso.');
 
     return {
       executed: true,
