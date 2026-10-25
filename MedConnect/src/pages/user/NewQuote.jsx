@@ -52,8 +52,9 @@ export default function NewQuote() {
             setSubmitted(true);
             setTimeout(() => navigate('/orders'), 2000);
         } catch (err) {
-            console.error('Erro ao enviar receita:', err);
-            setError(err.response?.data?.error || 'Falha ao enviar receita. Tente novamente.');
+            const errData = err.response?.data?.error;
+            const msg = (typeof errData === 'string' ? errData : errData?.message) || 'Falha ao enviar receita. Tente novamente.';
+            setError(msg);
         } finally {
             setLoading(false);
         }

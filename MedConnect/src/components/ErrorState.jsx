@@ -37,7 +37,7 @@ export default function ErrorState({
           margin: '0 auto var(--space-4)',
         }}
       >
-        {message}
+        {typeof message === 'string' ? message : message?.message || 'Não foi possível carregar os dados.'}
       </p>
       {onRetry && (
         <button
