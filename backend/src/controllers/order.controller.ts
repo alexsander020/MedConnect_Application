@@ -339,7 +339,8 @@ export class OrderController {
                 include: {
                   patient: {
                     select: { id: true, name: true, phone: true, address: true }
-                  }
+                  },
+                  pet: true
                 }
               },
               pharmacy: {
@@ -408,8 +409,27 @@ export class OrderController {
           }
         : pharmacy;
 
+      const isVet = order.quote.prescription.kind === 'VETERINARY';
+      const pet = order.quote.prescription.pet;
+
+      const animalSummary =
+        isVet && pet
+          ? {
+              id: pet.id,
+              name: pet.name,
+              species: pet.species,
+              breed: pet.breed,
+              weightGrams: pet.weightGrams,
+              birthDate: pet.birthDate,
+              isFoodProducing: pet.isFoodProducing,
+              notes: pet.notes
+            }
+          : undefined;
+
       res.json({
         ...order,
+        animal: animalSummary,
+        tutor: isVet ? formattedPatient : undefined,
         quote: {
           ...order.quote,
           price: formatPriceCentsToDecimal(order.quote.priceCents),

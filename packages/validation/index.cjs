@@ -78,9 +78,75 @@ function ehSenhaForte(str) {
   return temMaiuscula && temNumero && temEspecial;
 }
 
+/**
+ * Lista oficial das 27 Unidades Federativas do Brasil
+ */
+const UFS_BRASIL = [
+  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
+  'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN',
+  'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
+];
+
+/**
+ * Lista fechada e extensível de espécies animais suportadas
+ */
+const ESPECIES_ANIMAIS = [
+  'DOG', 'CAT', 'BIRD', 'REPTILE', 'SMALL_MAMMAL', 'EQUINE', 'OTHER'
+];
+
+/**
+ * Validação de FORMATO do CRMV (Conselho Regional de Medicina Veterinária).
+ * AVISO REGULATÓRIO: Esta função valida estritamente a conformidade sintática
+ * e estrutural do registro (número com 1 a 7 dígitos e UF brasileira válida).
+ * Ela NÃO consulta bases de dados de conselhos profissionais e NÃO confirma
+ * a autenticidade, vigência ou regularidade da inscrição do profissional.
+ */
+function validarCrmv(crmv, uf) {
+  if (!crmv) return false;
+  const str = String(crmv).trim().toUpperCase();
+
+  let ufDetectada = uf ? String(uf).trim().toUpperCase() : null;
+
+  if (!ufDetectada) {
+    const ufMatch = str.match(/\b([A-Z]{2})\b/);
+    if (ufMatch && UFS_BRASIL.includes(ufMatch[1])) {
+      ufDetectada = ufMatch[1];
+    }
+  }
+
+  if (!ufDetectada || !UFS_BRASIL.includes(ufDetectada)) {
+    return false;
+  }
+
+  const cleanNum = str
+    .replace(/^CRMV[\s\/-]*/i, '')
+    .replace(new RegExp(`[\\s\\/-]*${ufDetectada}[\\s\\/-]*`, 'gi'), '')
+    .replace(/[^\d]+/g, '');
+
+  if (!cleanNum || cleanNum.length < 1 || cleanNum.length > 7) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Validação de peso do animal em gramas (estritamente inteiro, dentro de faixa plausível)
+ */
+function validarPesoGramas(pesoGrams, min = 10, max = 1500000) {
+  if (pesoGrams === undefined || pesoGrams === null || pesoGrams === '') return false;
+  const num = typeof pesoGrams === 'number' ? pesoGrams : Number(pesoGrams);
+  if (isNaN(num) || !Number.isInteger(num)) return false;
+  return num >= min && num <= max;
+}
+
 module.exports = {
   ehEmailValido,
   ehCPFValido,
   ehCNPJValido,
-  ehSenhaForte
+  ehSenhaForte,
+  UFS_BRASIL,
+  ESPECIES_ANIMAIS,
+  validarCrmv,
+  validarPesoGramas
 };

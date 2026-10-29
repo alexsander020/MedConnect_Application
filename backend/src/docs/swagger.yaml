@@ -235,6 +235,110 @@ components:
           type: string
           format: date-time
 
+    AnimalCreateRequest:
+      type: object
+      required:
+        - name
+        - species
+        - weightGrams
+      properties:
+        name:
+          type: string
+          example: Rex
+        species:
+          type: string
+          enum: [DOG, CAT, BIRD, REPTILE, SMALL_MAMMAL, EQUINE, OTHER]
+          example: DOG
+        breed:
+          type: string
+          example: Golden Retriever
+        weightGrams:
+          type: integer
+          minimum: 10
+          maximum: 1500000
+          example: 28500
+          description: Peso do animal em gramas (inteiro)
+        birthDate:
+          type: string
+          format: date
+          example: "2021-06-15"
+        isFoodProducing:
+          type: boolean
+          default: false
+          example: false
+          description: Indica se o animal é destinado à produção/consumo humano
+        notes:
+          type: string
+          example: Alérgico a corante caramelo. Sem dados sensíveis do tutor.
+
+    AnimalUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Rex
+        species:
+          type: string
+          enum: [DOG, CAT, BIRD, REPTILE, SMALL_MAMMAL, EQUINE, OTHER]
+          example: DOG
+        breed:
+          type: string
+          example: Golden Retriever
+        weightGrams:
+          type: integer
+          minimum: 10
+          maximum: 1500000
+          example: 29000
+        birthDate:
+          type: string
+          format: date
+          example: "2021-06-15"
+        isFoodProducing:
+          type: boolean
+          example: false
+        notes:
+          type: string
+          example: Atualização de peso pós consulta
+
+    AnimalResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: clxpet123
+        tutorId:
+          type: string
+          example: clx123456789
+        name:
+          type: string
+          example: Rex
+        species:
+          type: string
+          enum: [DOG, CAT, BIRD, REPTILE, SMALL_MAMMAL, EQUINE, OTHER]
+          example: DOG
+        breed:
+          type: string
+          example: Golden Retriever
+        weightGrams:
+          type: integer
+          example: 28500
+        birthDate:
+          type: string
+          format: date-time
+          example: "2021-06-15T00:00:00.000Z"
+        isFoodProducing:
+          type: boolean
+          example: false
+        notes:
+          type: string
+          example: Alérgico a corante caramelo
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
     PrescriptionResponse:
       type: object
       properties:
@@ -247,6 +351,38 @@ components:
         fileUrl:
           type: string
           example: http://localhost:3000/uploads/receita-123.jpg
+        kind:
+          type: string
+          enum: [HUMAN, VETERINARY]
+          example: VETERINARY
+        petId:
+          type: string
+          nullable: true
+          example: clxpet123
+        prescriberName:
+          type: string
+          nullable: true
+          example: Dr. Veterinário Silva
+        prescriberCrmv:
+          type: string
+          nullable: true
+          example: "12345"
+        prescriberUf:
+          type: string
+          nullable: true
+          example: SP
+        vetDocumentType:
+          type: string
+          enum: [MAGISTRAL, CONTROLLED_NOTIFICATION]
+          nullable: true
+          example: MAGISTRAL
+        controlledNotificationNumber:
+          type: string
+          nullable: true
+          example: SIPEAGRO-2026-001
+        requiresManualDocumentCheck:
+          type: boolean
+          example: false
         status:
           type: string
           enum: [PENDING, QUOTED, ACCEPTED, CANCELLED]
@@ -271,9 +407,21 @@ components:
         deliveryDays:
           type: integer
           example: 2
+        pharmaceuticalForm:
+          type: string
+          example: BISCOITO_MEDICAMENTOSO
+          description: Forma farmacêutica personalizada (ex. pasta oral, biscoito, cápsula)
+        flavoring:
+          type: string
+          example: Carne
+          description: Flavorizante palatabilizante para uso veterinário
+        estimatedPreparationDays:
+          type: integer
+          example: 1
+          description: Prazo estimado de manipulação técnica em dias
         notes:
           type: string
-          example: Inclui frasco conta-gotas de 30ml e orientações de uso.
+          example: Inclui biscoito palatabilizado sabor carne.
 
     QuoteResponse:
       type: object
@@ -298,6 +446,18 @@ components:
         deliveryDays:
           type: integer
           example: 2
+        pharmaceuticalForm:
+          type: string
+          nullable: true
+          example: BISCOITO_MEDICAMENTOSO
+        flavoring:
+          type: string
+          nullable: true
+          example: Carne
+        estimatedPreparationDays:
+          type: integer
+          nullable: true
+          example: 1
         notes:
           type: string
           example: Inclui frasco conta-gotas de 30ml
@@ -368,6 +528,10 @@ components:
           type: string
           enum: [PRODUCTION, DELIVERY, DELIVERED, CANCELLED]
           example: PRODUCTION
+        animal:
+          $ref: '#/components/schemas/AnimalResponse'
+        tutor:
+          $ref: '#/components/schemas/UserResponse'
         history:
           type: array
           items:
@@ -381,7 +545,7 @@ components:
 
     AnonymousPrescriptionResponse:
       type: object
-      description: Receita médica anonimizada para cotação por farmácias credenciadas (LGPD Art. 11)
+      description: Receita médica ou veterinária anonimizada para cotação por farmácias habilitadas (LGPD Art. 11 e D6)
       properties:
         id:
           type: string
@@ -392,6 +556,34 @@ components:
         status:
           type: string
           example: PENDING
+        kind:
+          type: string
+          enum: [HUMAN, VETERINARY]
+          example: VETERINARY
+        species:
+          type: string
+          example: DOG
+        weightGrams:
+          type: integer
+          example: 25000
+        approximateAgeMonths:
+          type: integer
+          example: 48
+        prescriber:
+          type: object
+          properties:
+            name:
+              type: string
+              example: Dr. Silva Vet
+            crmv:
+              type: string
+              example: "12345"
+            uf:
+              type: string
+              example: SP
+        requiresManualDocumentCheck:
+          type: boolean
+          example: false
         patient:
           type: object
           properties:
@@ -762,9 +954,166 @@ paths:
                 items:
                   $ref: '#/components/schemas/PharmacyResponse'
 
+  /api/animals:
+    post:
+      summary: Cadastro de novo animal de estimação sob guarda do tutor autenticado (Requer VET_ENABLED = true; caso contrário 404)
+      tags:
+        - Animais
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnimalCreateRequest'
+      responses:
+        '201':
+          description: Animal cadastrado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnimalResponse'
+        '400':
+          description: Erro de validação (peso fora da faixa plausível ou espécie inválida)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Não autorizado
+        '403':
+          description: Acesso restrito a tutores/pacientes (PATIENT)
+        '404':
+          description: Funcionalidade veterinária desabilitada (VET_ENABLED = false)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      summary: Listagem de animais ativos pertencentes ao tutor autenticado (Requer VET_ENABLED = true)
+      tags:
+        - Animais
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Lista de animais do tutor
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AnimalResponse'
+        '401':
+          description: Não autorizado
+        '403':
+          description: Acesso restrito a tutores/pacientes (PATIENT)
+        '404':
+          description: Funcionalidade veterinária desabilitada (VET_ENABLED = false)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/animals/{id}:
+    get:
+      summary: Detalhes de um animal específico do tutor autenticado (Prevenção a IDOR, 404 sem vazar existência)
+      tags:
+        - Animais
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Identificador do animal
+      responses:
+        '200':
+          description: Dados cadastrais do animal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnimalResponse'
+        '401':
+          description: Não autorizado
+        '404':
+          description: Animal não encontrado ou funcionalidade desabilitada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      summary: Atualização parcial de dados do animal do tutor
+      tags:
+        - Animais
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnimalUpdateRequest'
+      responses:
+        '200':
+          description: Animal atualizado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnimalResponse'
+        '400':
+          description: Dados inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Não autorizado
+        '404':
+          description: Animal não encontrado ou funcionalidade desabilitada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: Exclusão lógica (soft delete) do animal do tutor
+      tags:
+        - Animais
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Animal excluído com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401':
+          description: Não autorizado
+        '404':
+          description: Animal não encontrado ou funcionalidade desabilitada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/prescriptions:
     post:
-      summary: Envio de receita médica (Paciente)
+      summary: Envio de receita médica humana ou veterinária (Paciente/Tutor)
       tags:
         - Receitas
       security:
@@ -782,6 +1131,35 @@ paths:
                   type: string
                   format: binary
                   description: Arquivo da receita (imagem PNG/JPG ou PDF)
+                kind:
+                  type: string
+                  enum: [HUMAN, VETERINARY]
+                  default: HUMAN
+                  description: Tipo da receita (HUMAN ou VETERINARY)
+                petId:
+                  type: string
+                  description: Obrigatório se kind = VETERINARY. Identificador do animal pertencente ao tutor
+                prescriberName:
+                  type: string
+                  description: Obrigatório se kind = VETERINARY. Nome do médico veterinário prescritor
+                prescriberCrmv:
+                  type: string
+                  description: Obrigatório se kind = VETERINARY. Número do CRMV do prescritor
+                prescriberUf:
+                  type: string
+                  description: Obrigatório se kind = VETERINARY. UF do CRMV do prescritor
+                vetDocumentType:
+                  type: string
+                  enum: [MAGISTRAL, CONTROLLED_NOTIFICATION]
+                  default: MAGISTRAL
+                  description: Tipo documental veterinário (MAPA)
+                controlledNotificationNumber:
+                  type: string
+                  description: Obrigatório se vetDocumentType = CONTROLLED_NOTIFICATION
+                consent:
+                  type: string
+                  example: "true"
+                  description: Consentimento para tratamento de dados sensíveis (LGPD Art. 11)
       responses:
         '201':
           description: Receita enviada com sucesso
@@ -790,13 +1168,31 @@ paths:
               schema:
                 $ref: '#/components/schemas/PrescriptionResponse'
         '400':
-          description: Arquivo ausente ou formato inválido
+          description: Arquivo ausente, CRMV com formato inválido ou campos obrigatórios faltantes
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Não autorizado
+        '403':
+          description: Consentimento revogado ou ausente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Funcionalidade veterinária desligada (VET_ENABLED = false) ou animal não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Bloqueio sanitário regulatório (ANIMAL_FOOD_PRODUCING_NOT_SUPPORTED ou CONTROLLED_NOT_SUPPORTED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/prescriptions/my:
     get:
