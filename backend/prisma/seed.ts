@@ -1,4 +1,15 @@
-import { PrismaClient, Role, PrescriptionStatus, QuoteStatus, PharmacyVerificationStatus } from '@prisma/client';
+import {
+  PrismaClient,
+  Role,
+  PrescriptionStatus,
+  QuoteStatus,
+  PharmacyVerificationStatus,
+  PrescriptionKind,
+  VetDocumentType,
+  CapabilityType,
+  CapabilityStatus,
+  AnimalSpecies
+} from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { encryptCpf, hashCpf, getCpfLastDigits } from '../src/lib/cpfCrypto';
 import { ehCPFValido } from '@medconnect/validation';
@@ -232,6 +243,181 @@ async function main() {
     console.log(`💰 Cotação 2 registrada pela Farmácia 2 (R$ 110,00)`);
   }
 
+  // 6. Dados Sintéticos para a Vertical Veterinária (ETAPA V1)
+  console.log('🐾 Populando dados sintéticos da Vertical Veterinária...');
+
+  // 6.1 Farmácia só humana garante PharmacyCapability HUMAN_COMPOUNDING
+  await prisma.pharmacyCapability.upsert({
+    where: {
+      pharmacyId_type: {
+        pharmacyId: farmacia1.id,
+        type: CapabilityType.HUMAN_COMPOUNDING
+      }
+    },
+    update: { status: CapabilityStatus.VERIFIED },
+    create: {
+      pharmacyId: farmacia1.id,
+      type: CapabilityType.HUMAN_COMPOUNDING,
+      status: CapabilityStatus.VERIFIED,
+      technicalResponsibleName: 'Dra. Fernanda Alencar',
+      technicalResponsibleCrf: 'CRF-SP 45.678',
+      technicalResponsibleCrfUf: 'SP'
+    }
+  });
+
+  // 6.2 Criar Tutor com CPF sintético válido
+  const cpfTutor = '52998224725';
+  if (!ehCPFValido(cpfTutor)) {
+    throw new Error('CPF sintético do tutor falhou na validação de dígitos verificadores!');
+  }
+
+  const tutorVet = await prisma.user.upsert({
+    where: { email: 'rodrigo.tutor@exemplo.com.br' },
+    update: {},
+    create: {
+      name: 'Rodrigo Lima (Tutor Sintético)',
+      email: 'rodrigo.tutor@exemplo.com.br',
+      password: passwordHash,
+      role: Role.PATIENT,
+      phone: '11966665555',
+      address: 'Rua Bela Cintra, 800 - Consolação, São Paulo, SP',
+      cpfEncrypted: encryptCpf(cpfTutor),
+      cpfHash: hashCpf(cpfTutor),
+      cpfLastDigits: getCpfLastDigits(cpfTutor),
+      emailVerified: true
+    }
+  });
+  console.log(`🐾 Tutor registrado: ${tutorVet.email}`);
+
+  // 6.3 Criar 2 Animais (cão e gato)
+  let animalCao = await prisma.animal.findFirst({
+    where: { tutorId: tutorVet.id, name: 'Max' }
+  });
+  if (!animalCao) {
+    animalCao = await prisma.animal.create({
+      data: {
+        tutorId: tutorVet.id,
+        name: 'Max',
+        species: AnimalSpecies.DOG,
+        breed: 'Labrador Retriever',
+        weightGrams: 31500, // 31.5 kg
+        birthDate: new Date('2021-04-10'),
+        isFoodProducing: false,
+        notes: 'Animal com sensibilidade gástrica.'
+      }
+    });
+  }
+
+  let animalGato = await prisma.animal.findFirst({
+    where: { tutorId: tutorVet.id, name: 'Mia' }
+  });
+  if (!animalGato) {
+    animalGato = await prisma.animal.create({
+      data: {
+        tutorId: tutorVet.id,
+        name: 'Mia',
+        species: AnimalSpecies.CAT,
+        breed: 'Siamês',
+        weightGrams: 3800, // 3.8 kg
+        birthDate: new Date('2022-08-15'),
+        isFoodProducing: false,
+        notes: 'Fórmula recomendada em pasta oral flavorizada.'
+      }
+    });
+  }
+  console.log(`🐶 Animais registrados: ${animalCao.name} (Cão, ${animalCao.weightGrams}g) e ${animalGato.name} (Gato, ${animalGato.weightGrams}g)`);
+
+  // 6.4 Farmácia Habilitada para Humana E Veterinária
+  const cnpjVet = '11222333000181';
+  const farmaciaVet = await prisma.pharmacy.upsert({
+    where: { email: 'contato@vetmedmanipulacao.com.br' },
+    update: {
+      verified: true,
+      verificationStatus: PharmacyVerificationStatus.VERIFIED
+    },
+    create: {
+      name: 'VetMed Manipulação Especializada',
+      email: 'contato@vetmedmanipulacao.com.br',
+      password: passwordHash,
+      cnpj: cnpjVet,
+      phone: '1133338888',
+      address: 'Rua Teodoro Sampaio, 2100 - Pinheiros, São Paulo, SP',
+      deliveryArea: 'Grande São Paulo e Interior',
+      verified: true,
+      verificationStatus: PharmacyVerificationStatus.VERIFIED,
+      sanitaryLicense: 'CEVS-355030801-477-000888-1-9',
+      operatingAuth: 'AFE-1.88888.8',
+      technicalResponsibleName: 'Dra. Beatriz Santos',
+      technicalResponsibleCrf: 'CRF-SP 65.432',
+      technicalResponsibleUf: 'SP',
+      emailVerified: true
+    }
+  });
+
+  // Capacidade Humana Verificada
+  await prisma.pharmacyCapability.upsert({
+    where: {
+      pharmacyId_type: {
+        pharmacyId: farmaciaVet.id,
+        type: CapabilityType.HUMAN_COMPOUNDING
+      }
+    },
+    update: { status: CapabilityStatus.VERIFIED },
+    create: {
+      pharmacyId: farmaciaVet.id,
+      type: CapabilityType.HUMAN_COMPOUNDING,
+      status: CapabilityStatus.VERIFIED,
+      technicalResponsibleName: 'Dra. Beatriz Santos',
+      technicalResponsibleCrf: 'CRF-SP 65.432',
+      technicalResponsibleCrfUf: 'SP'
+    }
+  });
+
+  // Capacidade Veterinária Verificada com registro no MAPA e CRMV
+  await prisma.pharmacyCapability.upsert({
+    where: {
+      pharmacyId_type: {
+        pharmacyId: farmaciaVet.id,
+        type: CapabilityType.VETERINARY_COMPOUNDING
+      }
+    },
+    update: { status: CapabilityStatus.VERIFIED },
+    create: {
+      pharmacyId: farmaciaVet.id,
+      type: CapabilityType.VETERINARY_COMPOUNDING,
+      status: CapabilityStatus.VERIFIED,
+      mapaRegistrationNumber: 'MAPA-SP 009876-1',
+      crmvCompanyRegistration: 'CRMV-SP 12345-J',
+      crmvCompanyUf: 'SP',
+      technicalResponsibleName: 'Dra. Beatriz Santos',
+      technicalResponsibleCrf: 'CRF-SP 65.432',
+      technicalResponsibleCrfUf: 'SP',
+      evidenceFileKeys: ['local://mapa-registro-vetmed.pdf', 'local://crmv-pj-vetmed.pdf']
+    }
+  });
+  console.log(`🏥 Farmácia veterinária habilitada: ${farmaciaVet.name} (HUMAN_COMPOUNDING e VETERINARY_COMPOUNDING)`);
+
+  // 6.5 Receita Veterinária de Exemplo
+  let receitaVet = await prisma.prescription.findFirst({
+    where: { patientId: tutorVet.id, kind: PrescriptionKind.VETERINARY }
+  });
+  if (!receitaVet) {
+    receitaVet = await prisma.prescription.create({
+      data: {
+        patientId: tutorVet.id,
+        kind: PrescriptionKind.VETERINARY,
+        petId: animalCao.id,
+        prescriberName: 'Dra. Juliana Veterinária',
+        prescriberCrmv: 'CRMV-SP 43210',
+        prescriberUf: 'SP',
+        vetDocumentType: VetDocumentType.MAGISTRAL,
+        fileUrl: 'local://receita-veterinaria-max.pdf',
+        status: PrescriptionStatus.PENDING
+      }
+    });
+    console.log(`🐾 Receita veterinária criada para o cão Max (${receitaVet.id})`);
+  }
+
   console.log('✅ Seed de dados sintéticos concluído com sucesso!');
 }
 
@@ -243,3 +429,4 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+

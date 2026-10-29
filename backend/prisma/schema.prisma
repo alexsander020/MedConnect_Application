@@ -40,6 +40,38 @@ enum PharmacyVerificationStatus {
   REJECTED
 }
 
+enum PrescriptionKind {
+  HUMAN
+  VETERINARY
+}
+
+enum VetDocumentType {
+  MAGISTRAL
+  CONTROLLED_NOTIFICATION
+}
+
+enum CapabilityType {
+  HUMAN_COMPOUNDING
+  VETERINARY_COMPOUNDING
+}
+
+enum CapabilityStatus {
+  PENDING_VERIFICATION
+  VERIFIED
+  REJECTED
+  SUSPENDED
+}
+
+enum AnimalSpecies {
+  DOG
+  CAT
+  BIRD
+  REPTILE
+  SMALL_MAMMAL
+  EQUINE
+  OTHER
+}
+
 model User {
   id            String         @id @default(uuid())
   name          String
@@ -58,6 +90,7 @@ model User {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   prescriptions Prescription[]
+  animals       Animal[]
   reviews       Review[]
   consents      Consent[]
 }
@@ -88,35 +121,91 @@ model Pharmacy {
   updatedAt                DateTime                   @updatedAt
   quotes                   Quote[]
   reviews                  Review[]
+  capabilities             PharmacyCapability[]
+}
+
+model Animal {
+  id              String         @id @default(uuid())
+  tutorId         String
+  name            String
+  species         AnimalSpecies
+  breed           String?
+  weightGrams     Int
+  birthDate       DateTime?
+  isFoodProducing Boolean        @default(false)
+  notes           String?
+  deletedAt       DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  tutor           User           @relation(fields: [tutorId], references: [id], onDelete: Cascade)
+  prescriptions   Prescription[]
+
+  @@index([tutorId, deletedAt])
+}
+
+model PharmacyCapability {
+  id                        String           @id @default(uuid())
+  pharmacyId                String
+  type                      CapabilityType
+  status                    CapabilityStatus @default(PENDING_VERIFICATION)
+  mapaRegistrationNumber    String?
+  crmvCompanyRegistration   String?
+  crmvCompanyUf             String?
+  technicalResponsibleName  String?
+  technicalResponsibleCrf   String?
+  technicalResponsibleCrfUf String?
+  evidenceFileKeys          String[]         @default([])
+  verifiedByAdminId         String?
+  verifiedAt                DateTime?
+  rejectionReason           String?
+  createdAt                 DateTime         @default(now())
+  updatedAt                 DateTime         @updatedAt
+  pharmacy                  Pharmacy         @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+
+  @@unique([pharmacyId, type])
+  @@index([pharmacyId])
+  @@index([type, status])
 }
 
 model Prescription {
-  id         String                  @id @default(uuid())
-  patientId  String
-  fileUrl    String
-  status     PrescriptionStatus      @default(PENDING)
-  createdAt  DateTime                @default(now())
-  updatedAt  DateTime                @updatedAt
-  patient    User                    @relation(fields: [patientId], references: [id])
-  quotes     Quote[]
-  accessLogs PrescriptionAccessLog[]
+  id                           String                  @id @default(uuid())
+  patientId                    String
+  fileUrl                      String
+  status                       PrescriptionStatus      @default(PENDING)
+  kind                         PrescriptionKind        @default(HUMAN)
+  petId                        String?
+  prescriberName               String?
+  prescriberCrmv               String?
+  prescriberUf                 String?
+  vetDocumentType              VetDocumentType?
+  controlledNotificationNumber String?
+  createdAt                    DateTime                @default(now())
+  updatedAt                    DateTime                @updatedAt
+  patient                      User                    @relation(fields: [patientId], references: [id])
+  pet                          Animal?                 @relation(fields: [petId], references: [id])
+  quotes                       Quote[]
+  accessLogs                   PrescriptionAccessLog[]
 
   @@index([patientId, status])
+  @@index([kind, status])
 }
 
 model Quote {
-  id             String       @id @default(uuid())
-  prescriptionId String
-  pharmacyId     String
-  priceCents     Int
-  deliveryDays   Int?
-  notes          String?
-  status         QuoteStatus  @default(PENDING)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  prescription   Prescription @relation(fields: [prescriptionId], references: [id])
-  pharmacy       Pharmacy     @relation(fields: [pharmacyId], references: [id])
-  order          Order?
+  id                       String       @id @default(uuid())
+  prescriptionId           String
+  pharmacyId               String
+  priceCents               Int
+  deliveryDays             Int?
+  notes                    String?
+  pharmaceuticalForm       String?
+  flavoring                String?
+  estimatedPreparationDays Int?
+  status                   QuoteStatus  @default(PENDING)
+  createdAt                DateTime     @default(now())
+  updatedAt                DateTime     @updatedAt
+  prescription             Prescription @relation(fields: [prescriptionId], references: [id])
+  pharmacy                 Pharmacy     @relation(fields: [pharmacyId], references: [id])
+  order                    Order?
 
   @@unique([prescriptionId, pharmacyId])
   @@index([prescriptionId])
