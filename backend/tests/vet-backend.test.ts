@@ -418,7 +418,7 @@ describe('ETAPA V2 — Backend e Regras de Negócio Veterinárias', () => {
       expect(res.status).toBe(403);
     });
 
-    it('farmácia dual habilitada (humana + vet) vê ambos os murais', async () => {
+    it('farmácia dual habilitada (humana + vet) vê ambos os murais e consulta detalhe sanitizado por capacidade', async () => {
       const res = await request(app)
         .get('/api/prescriptions/pharmacy')
         .set('Authorization', `Bearer ${pharmDualToken}`);
@@ -426,6 +426,20 @@ describe('ETAPA V2 — Backend e Regras de Negócio Veterinárias', () => {
       expect(res.status).toBe(200);
       expect(res.body.some((p: any) => p.id === receitaHumanaId)).toBe(true);
       expect(res.body.some((p: any) => p.id === receitaVetId)).toBe(true);
+
+      // Farmácia veterinária acessa detalhe da receita vet (sanitizada sem fileUrl)
+      const detailVet = await request(app)
+        .get(`/api/prescriptions/${receitaVetId}`)
+        .set('Authorization', `Bearer ${pharmVetToken}`);
+      expect(detailVet.status).toBe(200);
+      expect(detailVet.body.fileUrl).toBeUndefined();
+
+      // Farmácia humana barrada ao tentar acessar detalhe de receita vet
+      const detailForbidden = await request(app)
+        .get(`/api/prescriptions/${receitaVetId}`)
+        .set('Authorization', `Bearer ${pharmHumanToken}`);
+      expect(detailForbidden.status).toBe(403);
+      expect(detailForbidden.body.error?.code).toBe('CAPABILITY_REQUIRED');
     });
   });
 

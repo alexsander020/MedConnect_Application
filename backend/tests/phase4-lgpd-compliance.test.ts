@@ -188,7 +188,88 @@ describe('FASE 4 — LGPD E CONFORMIDADE (TESTES TÉCNICOS)', () => {
   // 2. DIREITOS DO TITULAR: EXPORTAÇÃO E EXCLUSÃO / ANONIMIZAÇÃO
   // ─────────────────────────────────────────────────────────────
   describe('4.3 Direitos do Titular (LGPD Art. 18)', () => {
-    it('Exportação retorna todos os dados do titular em JSON e respeita estritamente o dono (Anti-IDOR)', async () => {
+    it('Consulta termos vigentes, status de consentimento e registra opt-in via API (/api/consent)', async () => {
+      // 1. Termos públicos
+      const termsRes = await request(app).get('/api/consent/terms');
+      expect(termsRes.status).toBe(200);
+      expect(termsRes.body.currentHealthConsent).toBeDefined();
+
+      // 2. Status inicial sem consentimento
+      const statusBefore = await request(app)
+        .get('/api/consent/status')
+        .set('Authorization', `Bearer ${patientAToken}`);
+      expect(statusBefore.status).toBe(200);
+      expect(statusBefore.body.hasActiveHealthConsent).toBe(false);
+
+      // 3. Registra consentimento explícito via POST /api/consent
+      const giveRes = await request(app)
+        .post('/api/consent')
+        .set('Authorization', `Bearer ${patientAToken}`)
+        .send({ consentType: 'HEALTH_DATA_PROCESSING' });
+      expect(giveRes.status).toBe(201);
+      expect(giveRes.body.success).toBe(true);
+
+      // 4. Status após opt-in
+      const statusAfter = await request(app)
+        .get('/api/consent/status')
+        .set('Authorization', `Bearer ${patientAToken}`);
+      expect(statusAfter.status).toBe(200);
+      expect(statusAfter.body.hasActiveHealthConsent).toBe(true);
+      expect(statusAfter.body.history.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('Exportação retorna todos os dados do titular em JSON (incluindo consentimentos, receitas, pedidos, avaliações e logs) e respeita Anti-IDOR', async () => {
+      // Prepara histórico rico para Paciente A
+      await ConsentService.recordConsent({
+        userId: patientAId,
+        userType: Role.PATIENT,
+        consentType: 'HEALTH_DATA_PROCESSING',
+        ipAddress: '127.0.0.1'
+      });
+
+      const presc = await prisma.prescription.create({
+        data: {
+          patientId: patientAId,
+          fileUrl: 'local://receita-export.pdf',
+          status: 'ACCEPTED'
+        }
+      });
+
+      const quote = await prisma.quote.create({
+        data: {
+          prescriptionId: presc.id,
+          pharmacyId,
+          priceCents: 9900,
+          status: 'ACCEPTED'
+        }
+      });
+
+      const order = await prisma.order.create({
+        data: {
+          quoteId: quote.id,
+          status: 'DELIVERED'
+        }
+      });
+
+      await prisma.review.create({
+        data: {
+          orderId: order.id,
+          patientId: patientAId,
+          pharmacyId,
+          rating: 5,
+          comment: 'Ótimo atendimento'
+        }
+      });
+
+      await prisma.prescriptionAccessLog.create({
+        data: {
+          prescriptionId: presc.id,
+          accessedById: pharmacyId,
+          accessedByType: Role.PHARMACY,
+          ipAddress: '127.0.0.1'
+        }
+      });
+
       // 1. Paciente A exporta seus próprios dados
       const exportRes = await request(app)
         .get('/api/lgpd/export')
@@ -201,6 +282,11 @@ describe('FASE 4 — LGPD E CONFORMIDADE (TESTES TÉCNICOS)', () => {
       expect(exportRes.body.perfil.telefone).toBe('11988887777');
       expect(exportRes.body.perfil.endereco).toBe('Rua das Acácias, 123 - Jardins, São Paulo - SP');
       expect(exportRes.body.perfil.cpfMascarado).toBe('***.***.***-35');
+      expect(exportRes.body.consentimentos.length).toBe(1);
+      expect(exportRes.body.receitasMedicas.length).toBe(1);
+      expect(exportRes.body.receitasMedicas[0].pedidosAssociados.length).toBe(1);
+      expect(exportRes.body.avaliacoes.length).toBe(1);
+      expect(exportRes.body.trilhaAcessosReceitas.length).toBe(1);
 
       // 2. Tentativa de IDOR: Paciente B tenta exportar dados do Paciente A
       const idorRes = await request(app)
@@ -209,15 +295,47 @@ describe('FASE 4 — LGPD E CONFORMIDADE (TESTES TÉCNICOS)', () => {
 
       expect(idorRes.status).toBe(403);
       expect(idorRes.body.error.code).toBe('FORBIDDEN');
+
+      // 3. Tentativa de IDOR na anonimização: Paciente B tenta excluir conta do Paciente A
+      const idorDeleteRes = await request(app)
+        .post('/api/lgpd/anonymize')
+        .set('Authorization', `Bearer ${patientBToken}`)
+        .send({ userId: patientAId });
+
+      expect(idorDeleteRes.status).toBe(403);
+      expect(idorDeleteRes.body.error.code).toBe('FORBIDDEN');
     });
 
     it('Exclusão / Anonimização remove identificadores diretos, revoga consentimento e preserva retenção mínima', async () => {
-      // Cria uma receita vinculada ao Paciente A
-      const presc = await prisma.prescription.create({
+      // Cria uma receita pendente sem pedido (deve ser expurgada)
+      const prescPending = await prisma.prescription.create({
         data: {
           patientId: patientAId,
           fileUrl: 'local://receita-para-anonimizar.pdf',
           status: 'PENDING'
+        }
+      });
+
+      // Cria uma receita com pedido dispensado (deve ser retida por dever sanitário)
+      const prescCompleted = await prisma.prescription.create({
+        data: {
+          patientId: patientAId,
+          fileUrl: 'local://receita-retida-anvisa.pdf',
+          status: 'ACCEPTED'
+        }
+      });
+      const quote = await prisma.quote.create({
+        data: {
+          prescriptionId: prescCompleted.id,
+          pharmacyId,
+          priceCents: 5000,
+          status: 'ACCEPTED'
+        }
+      });
+      await prisma.order.create({
+        data: {
+          quoteId: quote.id,
+          status: 'DELIVERED'
         }
       });
 
@@ -228,8 +346,17 @@ describe('FASE 4 — LGPD E CONFORMIDADE (TESTES TÉCNICOS)', () => {
 
       expect(deleteRes.status).toBe(200);
       expect(deleteRes.body.success).toBe(true);
+      expect(deleteRes.body.purgedFilesCount).toBe(1);
+      expect(deleteRes.body.retainedRegulatoryCount).toBe(1);
       expect(deleteRes.body.retencaoRegulatoria).toBeDefined();
       expect(deleteRes.body.retencaoRegulatoria.avisoJuridico).toMatch(/PENDENTE DE VALIDAÇÃO JURÍDICA/i);
+
+      // Segunda chamada para usuário já anonimizado retorna sucesso idempotente
+      const secondDeleteRes = await request(app)
+        .post('/api/lgpd/anonymize')
+        .set('Authorization', `Bearer ${patientAToken}`);
+      expect(secondDeleteRes.status).toBe(200);
+      expect(secondDeleteRes.body.success).toBe(true);
 
       // Verifica dados no banco de dados: identificadores diretos devem estar nulos/anonimizados
       const anonymizedUser = await prisma.user.findUnique({ where: { id: patientAId } });
@@ -244,9 +371,30 @@ describe('FASE 4 — LGPD E CONFORMIDADE (TESTES TÉCNICOS)', () => {
       expect(anonymizedUser?.anonymizedAt).not.toBeNull();
 
       // Receita sem pedido associado deve ter tido o ponteiro de arquivo limpo
-      const updatedPresc = await prisma.prescription.findUnique({ where: { id: presc.id } });
+      const updatedPresc = await prisma.prescription.findUnique({ where: { id: prescPending.id } });
       expect(updatedPresc?.status).toBe('CANCELLED');
       expect(updatedPresc?.fileUrl).toBe('ARQUIVO_EXPURGADO_EXCLUSAO_TITULAR');
+
+      // Receita com pedido dispensado deve permanecer preservada
+      const retainedPresc = await prisma.prescription.findUnique({ where: { id: prescCompleted.id } });
+      expect(retainedPresc?.fileUrl).toBe('local://receita-retida-anvisa.pdf');
+    });
+
+    it('Retorna erro 500 caso usuário do token não exista na base ao exportar ou anonimizar', async () => {
+      const ghostToken = jwt.sign(
+        { id: 'ghost-user-id', email: 'ghost@lgpd.test', role: 'PATIENT' },
+        env.JWT_SECRET
+      );
+
+      const exportGhost = await request(app)
+        .get('/api/lgpd/export')
+        .set('Authorization', `Bearer ${ghostToken}`);
+      expect(exportGhost.status).toBe(500);
+
+      const anonGhost = await request(app)
+        .post('/api/lgpd/anonymize')
+        .set('Authorization', `Bearer ${ghostToken}`);
+      expect(anonGhost.status).toBe(500);
     });
   });
 
@@ -267,9 +415,19 @@ describe('FASE 4 — LGPD E CONFORMIDADE (TESTES TÉCNICOS)', () => {
         ipAddress: '189.40.20.10'
       });
 
-      // 2. Consulta por ADMIN deve retornar 200 com a lista de logs
+      // 2. Consulta por ADMIN deve retornar 200 com a lista de logs e suportar filtros
       const adminRes = await request(app)
         .get('/api/admin/audit-logs')
+        .query({
+          actorId: pharmacyId,
+          action: 'VIEW_CONTACT_DATA',
+          resource: 'Order',
+          resourceId: 'order-123',
+          startDate: new Date(Date.now() - 60000).toISOString(),
+          endDate: new Date(Date.now() + 60000).toISOString(),
+          page: 1,
+          limit: 10
+        })
         .set('Authorization', `Bearer ${adminToken}`);
 
       expect(adminRes.status).toBe(200);
@@ -416,8 +574,8 @@ describe('FASE 4 — LGPD E CONFORMIDADE (TESTES TÉCNICOS)', () => {
       expect(result.reason).toMatch(/desativada por padrão/i);
     });
 
-    it('Quando habilitada programaticamente, expurga tokens de autenticação expirados', async () => {
-      const pastDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    it('Quando habilitada programaticamente, expurga tokens expirados e receitas canceladas antigas', async () => {
+      const pastDate = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000);
 
       // Insere token expirado no banco
       await prisma.refreshToken.create({
@@ -429,15 +587,35 @@ describe('FASE 4 — LGPD E CONFORMIDADE (TESTES TÉCNICOS)', () => {
         }
       });
 
-      // Executa expurgo pontual de tokens
-      const purged = await DataRetentionService.purgeExpiredTokens();
-      expect(purged.refresh).toBeGreaterThanOrEqual(1);
+      // Insere receita cancelada antiga sem pedido
+      const oldCancelledPresc = await prisma.prescription.create({
+        data: {
+          patientId: patientAId,
+          fileUrl: 'local://old-cancelled.pdf',
+          status: 'CANCELLED',
+          createdAt: pastDate
+        }
+      });
+
+      // Habilita temporariamente e executa ciclo completo de expurgo
+      process.env.RETENTION_PURGE_ENABLED = 'true';
+      const cycleResult = await DataRetentionService.runScheduledPurge();
+      process.env.RETENTION_PURGE_ENABLED = 'false';
+
+      expect(cycleResult.executed).toBe(true);
+      expect(cycleResult.report?.expiredRefreshTokensPurged).toBeGreaterThanOrEqual(1);
+      expect(cycleResult.report?.cancelledPrescriptionsPurged).toBeGreaterThanOrEqual(1);
 
       // Confirma remoção
-      const found = await prisma.refreshToken.findUnique({
+      const foundToken = await prisma.refreshToken.findUnique({
         where: { tokenHash: 'expired-token-hash-123' }
       });
-      expect(found).toBeNull();
+      expect(foundToken).toBeNull();
+
+      const foundPresc = await prisma.prescription.findUnique({
+        where: { id: oldCancelledPresc.id }
+      });
+      expect(foundPresc).toBeNull();
     });
   });
 });

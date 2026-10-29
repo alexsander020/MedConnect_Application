@@ -270,9 +270,25 @@ describe('TAREFA 3.1 — Cobertura Profunda de Serviços (Services >= 80%)', () 
       expect(result.detectedType).toBe('pdf');
     });
 
-    it('deve rejeitar arquivo sem buffer', async () => {
+    it('deve rejeitar arquivo sem buffer, com magic bytes inválidos ou com assinatura EICAR', async () => {
       await expect(processAndSavePrescriptionFile({} as any)).rejects.toMatchObject({
         code: 'MISSING_FILE'
+      });
+
+      await expect(
+        processAndSavePrescriptionFile({
+          buffer: Buffer.from('not-a-valid-file')
+        } as any)
+      ).rejects.toMatchObject({
+        code: 'INVALID_FILE_CONTENT'
+      });
+
+      await expect(
+        processAndSavePrescriptionFile({
+          buffer: Buffer.from('%PDF-1.4\nX5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*')
+        } as any)
+      ).rejects.toMatchObject({
+        code: 'MALWARE_DETECTED'
       });
     });
   });
