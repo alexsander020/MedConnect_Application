@@ -34,7 +34,15 @@ export class QuoteController {
         return;
       }
 
-      const { prescriptionId, price, deliveryDays, notes } = req.body;
+      const {
+        prescriptionId,
+        price,
+        deliveryDays,
+        notes,
+        pharmaceuticalForm,
+        flavoring,
+        estimatedPreparationDays
+      } = req.body;
 
       if (!prescriptionId) {
         res.status(400).json({ error: { code: 'MISSING_FIELD', message: 'ID da receita é obrigatório' } });
@@ -54,12 +62,52 @@ export class QuoteController {
           ? parseInt(String(deliveryDays), 10)
           : null;
 
+      const parsedPrepDays =
+        estimatedPreparationDays !== undefined &&
+        estimatedPreparationDays !== null &&
+        estimatedPreparationDays !== ''
+          ? parseInt(String(estimatedPreparationDays), 10)
+          : null;
+
       const prescription = await prisma.prescription.findUnique({
         where: { id: prescriptionId }
       });
 
       if (!prescription) {
         res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Receita não encontrada' } });
+        return;
+      }
+
+      // Validação de capacidade VERIFIED para o tipo de receita (HUMAN ou VETERINARY)
+      const requiredCapability =
+        prescription.kind === 'VETERINARY'
+          ? 'VETERINARY_COMPOUNDING'
+          : 'HUMAN_COMPOUNDING';
+
+      const allCaps = await prisma.pharmacyCapability.findMany({
+        where: { pharmacyId: req.user.id }
+      });
+
+      if (allCaps.length > 0) {
+        const hasValidCap = allCaps.some(
+          (c) => c.type === requiredCapability && c.status === 'VERIFIED'
+        );
+        if (!hasValidCap) {
+          res.status(403).json({
+            error: {
+              code: 'CAPABILITY_REQUIRED',
+              message: `A farmácia não possui capacidade ${prescription.kind === 'VETERINARY' ? 'veterinária' : 'humana'} verificada para cotar esta receita`
+            }
+          });
+          return;
+        }
+      } else if (prescription.kind === 'VETERINARY') {
+        res.status(403).json({
+          error: {
+            code: 'CAPABILITY_REQUIRED',
+            message: 'A farmácia não possui capacidade veterinária verificada para cotar esta receita'
+          }
+        });
         return;
       }
 
@@ -104,6 +152,9 @@ export class QuoteController {
           pharmacyId: req.user.id,
           priceCents,
           deliveryDays: parsedDays,
+          pharmaceuticalForm: pharmaceuticalForm ? String(pharmaceuticalForm).trim() : null,
+          flavoring: flavoring ? String(flavoring).trim() : null,
+          estimatedPreparationDays: parsedPrepDays,
           notes: notes ? String(notes).trim() : null,
           status: QuoteStatus.PENDING
         },

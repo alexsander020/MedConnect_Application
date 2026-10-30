@@ -1,14 +1,37 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../services/api';
+import { useToast } from '../../context/ToastContext';
 import { orderStatuses } from '../../constants/status';
-import { Clock, CheckCircle2, TrendingUp, AlertTriangle, ShieldCheck, Loader2, ArrowRight, Package, Building2 } from 'lucide-react';
+import {
+    Clock,
+    TrendingUp,
+    AlertTriangle,
+    ShieldCheck,
+    Loader2,
+    ArrowRight,
+    Package,
+    Upload
+} from 'lucide-react';
 
 export default function PharmacyDashboard() {
     const navigate = useNavigate();
+    const toast = useToast();
+    const queryClient = useQueryClient();
 
-    // 1. Estatísticas consolidadas da farmácia autenticada
+    const [showVetModal, setShowVetModal] = useState(false);
+    const [vetForm, setVetForm] = useState({
+        mapaRegistrationNumber: '',
+        crmvCompanyRegistration: '',
+        crmvCompanyUf: 'SP',
+        technicalResponsibleName: '',
+        technicalResponsibleCrf: '',
+        technicalResponsibleCrfUf: 'SP',
+        files: []
+    });
+
+    // 1. Estatísticas consolidadas da farmácia autenticada (inclui capabilities)
     const {
         data: stats = {},
         isLoading: isLoadingStats
@@ -52,11 +75,48 @@ export default function PharmacyDashboard() {
         }
     });
 
+    const requestVetMutation = useMutation({
+        mutationFn: async (formData) => {
+            const res = await api.post('/pharmacy/capabilities/veterinary', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            return res.data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['pharmacyStats'] });
+            toast.success('Solicitação de capacidade veterinária enviada para verificação do ADMIN!');
+            setShowVetModal(false);
+        },
+        onError: (err) => {
+            toast.error(err?.response?.data?.error?.message || 'Erro ao solicitar capacidade veterinária.');
+        }
+    });
+
+    const handleVetSubmit = (e) => {
+        e.preventDefault();
+        if (!vetForm.files || vetForm.files.length === 0) {
+            toast.error('Anexe pelo menos um documento de evidência (PDF, JPG ou PNG).');
+            return;
+        }
+        const fd = new FormData();
+        fd.append('mapaRegistrationNumber', vetForm.mapaRegistrationNumber);
+        fd.append('crmvCompanyRegistration', vetForm.crmvCompanyRegistration);
+        fd.append('crmvCompanyUf', vetForm.crmvCompanyUf);
+        fd.append('technicalResponsibleName', vetForm.technicalResponsibleName);
+        fd.append('technicalResponsibleCrf', vetForm.technicalResponsibleCrf);
+        fd.append('technicalResponsibleCrfUf', vetForm.technicalResponsibleCrfUf);
+        Array.from(vetForm.files).forEach((f) => fd.append('evidences', f));
+        requestVetMutation.mutate(fd);
+    };
+
     const isPendingVerification = stats.verificationStatus === 'PENDING_VERIFICATION';
     const isRejected = stats.verificationStatus === 'REJECTED';
 
+    const capabilities = Array.isArray(stats.capabilities) ? stats.capabilities : [];
+    const vetCapability = capabilities.find((c) => c.type === 'VETERINARY_COMPOUNDING');
+
     const pendingCount = stats.pendingQuotes ?? availablePrescriptions.length;
-    const inProductionCount = stats.inProgressOrders ?? pharmacyOrders.filter(o => o.status !== 'DELIVERED').length;
+    const inProductionCount = stats.inProgressOrders ?? pharmacyOrders.filter((o) => o.status !== 'DELIVERED').length;
     const revenueFormatted = stats.totalRevenue ? `R$ ${stats.totalRevenue}` : 'R$ 0,00';
     const ratingDisplay = stats.averageRating ? `${stats.averageRating}/5.0` : '5.0/5.0';
 
@@ -106,6 +166,45 @@ export default function PharmacyDashboard() {
                     </div>
                 </div>
             )}
+
+            {/* Card de Capacidade Veterinária (ETAPA V3) */}
+            <div className="glass-card" style={{
+                padding: '16px 20px',
+                marginBottom: '20px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '12px'
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <ShieldCheck size={24} color="var(--primary-600)" />
+                    <div>
+                        <h4 style={{ fontSize: '15px', fontWeight: 800, margin: '0 0 2px' }}>
+                            Capacidade de Manipulação Veterinária (MAPA / CRMV)
+                        </h4>
+                        <p style={{ fontSize: '13px', color: 'var(--gray-600)', margin: 0 }}>
+                            {!vetCapability
+                                ? 'Sua farmácia ainda não solicitou habilitação para atender receitas veterinárias.'
+                                : vetCapability.status === 'VERIFIED'
+                                    ? `Habilitada (MAPA: ${vetCapability.mapaRegistrationNumber} | CRMV/${vetCapability.crmvCompanyUf}: ${vetCapability.crmvCompanyRegistration})`
+                                    : vetCapability.status === 'PENDING_VERIFICATION'
+                                        ? 'Solicitação em análise pelo comitê regulatório (PENDING_VERIFICATION). Sua operação humana segue ativa.'
+                                        : `Status: ${vetCapability.status} — Motivo: ${vetCapability.rejectionReason || 'Verifique a documentação.'}`}
+                        </p>
+                    </div>
+                </div>
+
+                {(!vetCapability || vetCapability.status === 'REJECTED') && (
+                    <button
+                        className="btn btn-primary"
+                        style={{ fontSize: '13px', padding: '8px 16px' }}
+                        onClick={() => setShowVetModal(true)}
+                    >
+                        {vetCapability ? 'Reenviar Documentação Veterinária' : 'Solicitar Capacidade Veterinária'}
+                    </button>
+                )}
+            </div>
 
             {/* 1. Summary Section (KPIs) */}
             <div style={{
@@ -314,6 +413,145 @@ export default function PharmacyDashboard() {
                     )}
                 </div>
             </div>
+
+            {/* Modal de Solicitação de Capacidade Veterinária */}
+            {showVetModal && (
+                <div style={{
+                    position: 'fixed', inset: 0, zIndex: 9999,
+                    background: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
+                }}>
+                    <div className="glass-card animate-scale-in" style={{
+                        maxWidth: '540px', width: '100%', padding: '24px', background: 'white'
+                    }}>
+                        <h3 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '6px' }}>
+                            Solicitar Capacidade Veterinária (VETERINARY_COMPOUNDING)
+                        </h3>
+                        <p style={{ fontSize: '13px', color: 'var(--gray-600)', marginBottom: '16px' }}>
+                            Sua operação humana atual permanece ativa. Os documentos anexados serão armazenados de forma privada e conferidos pelo ADMIN.
+                        </p>
+
+                        <form onSubmit={handleVetSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            <div>
+                                <label style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '4px' }}>
+                                    Número de Registro no MAPA *
+                                </label>
+                                <input
+                                    type="text"
+                                    className="form-input"
+                                    placeholder="Ex.: SP-12345-6"
+                                    required
+                                    value={vetForm.mapaRegistrationNumber}
+                                    onChange={(e) => setVetForm((p) => ({ ...p, mapaRegistrationNumber: e.target.value }))}
+                                />
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '10px' }}>
+                                <div>
+                                    <label style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '4px' }}>
+                                        Registro da Empresa no CRMV *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className="form-input"
+                                        placeholder="Ex.: 54321"
+                                        required
+                                        value={vetForm.crmvCompanyRegistration}
+                                        onChange={(e) => setVetForm((p) => ({ ...p, crmvCompanyRegistration: e.target.value }))}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '4px' }}>
+                                        UF CRMV *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className="form-input"
+                                        maxLength={2}
+                                        required
+                                        value={vetForm.crmvCompanyUf}
+                                        onChange={(e) => setVetForm((p) => ({ ...p, crmvCompanyUf: e.target.value.toUpperCase() }))}
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '4px' }}>
+                                    Nome do Responsável Técnico (RT) *
+                                </label>
+                                <input
+                                    type="text"
+                                    className="form-input"
+                                    placeholder="Ex.: Dra. Camila Farmacêutica"
+                                    required
+                                    value={vetForm.technicalResponsibleName}
+                                    onChange={(e) => setVetForm((p) => ({ ...p, technicalResponsibleName: e.target.value }))}
+                                />
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '10px' }}>
+                                <div>
+                                    <label style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '4px' }}>
+                                        CRF do Responsável Técnico *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className="form-input"
+                                        placeholder="Ex.: 98765"
+                                        required
+                                        value={vetForm.technicalResponsibleCrf}
+                                        onChange={(e) => setVetForm((p) => ({ ...p, technicalResponsibleCrf: e.target.value }))}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '4px' }}>
+                                        UF CRF *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className="form-input"
+                                        maxLength={2}
+                                        required
+                                        value={vetForm.technicalResponsibleCrfUf}
+                                        onChange={(e) => setVetForm((p) => ({ ...p, technicalResponsibleCrfUf: e.target.value.toUpperCase() }))}
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '4px' }}>
+                                    Documentos de Evidência em Upload Privado (PDF/JPG/PNG) *
+                                </label>
+                                <input
+                                    type="file"
+                                    multiple
+                                    accept=".pdf,.jpg,.jpeg,.png"
+                                    className="form-input"
+                                    required
+                                    onChange={(e) => setVetForm((p) => ({ ...p, files: e.target.files }))}
+                                />
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
+                                <button
+                                    type="button"
+                                    className="btn btn-outline"
+                                    onClick={() => setShowVetModal(false)}
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="btn btn-primary"
+                                    disabled={requestVetMutation.isPending}
+                                >
+                                    <Upload size={15} /> Enviar para Verificação
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

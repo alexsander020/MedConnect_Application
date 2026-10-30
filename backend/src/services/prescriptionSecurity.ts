@@ -3,6 +3,7 @@ import { v2 as cloudinary } from 'cloudinary';
 import { env } from '../config/env';
 import { prisma } from '../lib/prisma';
 import { Role } from '@prisma/client';
+import { AuditLogService } from './auditLogService';
 
 export interface FileValidationResult {
   isValid: boolean;
@@ -190,6 +191,96 @@ export function verifyLocalSignedUrl(
   const expectedHmac = crypto
     .createHmac('sha256', secret)
     .update(`${prescriptionId}:${actorId}:${expiresTimestamp}`)
+    .digest('hex');
+
+  const tokenBuffer = Buffer.from(token);
+  const expectedBuffer = Buffer.from(expectedHmac);
+
+  if (tokenBuffer.length !== expectedBuffer.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(tokenBuffer, expectedBuffer);
+}
+
+/**
+ * Gera URL assinada de curta duração (300 segundos) para abertura de documento de evidência
+ * regulatória de capacidade da farmácia (exclusivo para ADMIN) e grava AuditLog imutável.
+ */
+export async function generateSignedCapabilityEvidenceUrl(
+  capability: { id: string; pharmacyId: string; type: string },
+  evidenceIndex: number,
+  evidenceKey: string,
+  actor: { id: string; email?: string; role: Role | string },
+  ipAddress?: string,
+  userAgent?: string
+): Promise<{ signedUrl: string; expiresInSeconds: number; evidenceIndex: number }> {
+  const expiresInSeconds = 300; // 5 minutos
+  const expiresAt = Math.floor(Date.now() / 1000) + expiresInSeconds;
+
+  await AuditLogService.log({
+    actorId: actor.id,
+    actorType: actor.role as Role,
+    actorEmail: actor.email,
+    action: 'VIEW_CAPABILITY_EVIDENCE',
+    resource: 'PharmacyCapability',
+    resourceId: capability.id,
+    reason: 'ADMIN_REGULATORY_EVIDENCE_REVIEW',
+    details: {
+      pharmacyId: capability.pharmacyId,
+      capabilityType: capability.type,
+      evidenceIndex,
+      evidenceKey
+    },
+    ipAddress: ipAddress || '127.0.0.1',
+    userAgent: userAgent || 'unknown'
+  });
+
+  const hasCloudinary = !!(
+    env.CLOUDINARY_CLOUD_NAME &&
+    env.CLOUDINARY_CLOUD_NAME !== 'demo' &&
+    env.CLOUDINARY_API_KEY &&
+    env.CLOUDINARY_API_SECRET
+  );
+
+  if (hasCloudinary && evidenceKey.startsWith('cloudinary://')) {
+    const publicId = evidenceKey.replace('cloudinary://', '');
+    const signedUrl = cloudinary.utils.url(publicId, {
+      type: 'authenticated',
+      sign_url: true,
+      expires_at: expiresAt
+    });
+    return { signedUrl, expiresInSeconds, evidenceIndex };
+  }
+
+  const secret = env.JWT_SECRET || 'secret';
+  const hmac = crypto
+    .createHmac('sha256', secret)
+    .update(`cap_evidence:${capability.id}:${evidenceIndex}:${expiresAt}`)
+    .digest('hex');
+
+  const signedUrl = `/api/admin/capabilities/${capability.id}/evidences/${evidenceIndex}/view?token=${hmac}&expires=${expiresAt}`;
+  return { signedUrl, expiresInSeconds, evidenceIndex };
+}
+
+/**
+ * Valida o token HMAC e expiração de uma URL assinada de evidência regulatória.
+ */
+export function verifySignedCapabilityEvidenceUrl(
+  capabilityId: string,
+  evidenceIndex: number,
+  token: string,
+  expiresTimestamp: number
+): boolean {
+  const now = Math.floor(Date.now() / 1000);
+  if (now > expiresTimestamp) {
+    return false;
+  }
+
+  const secret = env.JWT_SECRET || 'secret';
+  const expectedHmac = crypto
+    .createHmac('sha256', secret)
+    .update(`cap_evidence:${capabilityId}:${evidenceIndex}:${expiresTimestamp}`)
     .digest('hex');
 
   const tokenBuffer = Buffer.from(token);

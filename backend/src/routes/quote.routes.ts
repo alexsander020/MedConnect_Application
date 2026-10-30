@@ -12,7 +12,10 @@ const createQuoteSchema = {
     prescriptionId: z.string().min(1, 'ID da receita é obrigatório'),
     price: z.union([z.string().min(1), z.number().positive()]),
     deliveryDays: z.union([z.number().int().nonnegative(), z.string()]).optional(),
-    notes: z.string().optional()
+    notes: z.string().optional(),
+    pharmaceuticalForm: z.string().optional().nullable(),
+    flavoring: z.string().optional().nullable(),
+    estimatedPreparationDays: z.union([z.number().int().nonnegative(), z.string()]).optional().nullable()
   })
 };
 

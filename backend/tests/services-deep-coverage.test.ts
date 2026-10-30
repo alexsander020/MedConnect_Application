@@ -5,9 +5,13 @@ import {
   stripExifMetadata,
   malwareScanner,
   generateSignedPrescriptionUrl,
-  verifyLocalSignedUrl
+  verifyLocalSignedUrl,
+  generateSignedCapabilityEvidenceUrl,
+  verifySignedCapabilityEvidenceUrl
 } from '../src/services/prescriptionSecurity';
 import { processAndSavePrescriptionFile } from '../src/services/upload';
+import { AuditLogService } from '../src/services/auditLogService';
+import { SubjectRightsService } from '../src/services/subjectRightsService';
 import { prisma } from '../src/lib/prisma';
 import { cleanDatabase } from './helpers/dbCleanup';
 import nodemailer from 'nodemailer';
@@ -29,7 +33,6 @@ describe('TAREFA 3.1 — Cobertura Profunda de Serviços (Services >= 80%)', () 
     it('deve formatar resultado quando a BrasilAPI retorna sucesso', async () => {
       const lookup = new BrasilApiCnpjLookup();
 
-      // Mock global fetch
       const mockFetch = jest.spyOn(global, 'fetch').mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -169,7 +172,6 @@ describe('TAREFA 3.1 — Cobertura Profunda de Serviços (Services >= 80%)', () 
       expect(signed.signedUrl).toBeDefined();
       expect(signed.expiresInSeconds).toBe(300);
 
-      // Verificação de log de auditoria
       const accessLog = await prisma.prescriptionAccessLog.findFirst({
         where: { prescriptionId: presc.id }
       });
@@ -196,7 +198,6 @@ describe('TAREFA 3.1 — Cobertura Profunda de Serviços (Services >= 80%)', () 
     });
 
     it('deve remover metadados EXIF (segmento APP1) de imagens JPEG', () => {
-      // JPEG com SOI (0xFFD8) + APP1 (0xFFE1) com length 8 + SOS (0xFFDA)
       const jpegWithExif = Buffer.from([
         0xff, 0xd8,
         0xff, 0xe1,
@@ -270,11 +271,208 @@ describe('TAREFA 3.1 — Cobertura Profunda de Serviços (Services >= 80%)', () 
       expect(result.detectedType).toBe('pdf');
     });
 
-    it('deve rejeitar arquivo sem buffer', async () => {
+    it('deve rejeitar arquivo sem buffer, com magic bytes inválidos ou com assinatura EICAR', async () => {
       await expect(processAndSavePrescriptionFile({} as any)).rejects.toMatchObject({
         code: 'MISSING_FILE'
       });
+
+      await expect(
+        processAndSavePrescriptionFile({
+          buffer: Buffer.from('not-a-valid-file')
+        } as any)
+      ).rejects.toMatchObject({
+        code: 'INVALID_FILE_CONTENT'
+      });
+
+      await expect(
+        processAndSavePrescriptionFile({
+          buffer: Buffer.from('%PDF-1.4\nX5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*')
+        } as any)
+      ).rejects.toMatchObject({
+        code: 'MALWARE_DETECTED'
+      });
+    });
+  });
+
+  describe('5. AuditLogService & SubjectRightsService & Capability Signed URLs', () => {
+    it('deve filtrar logs por startDate/endDate e tratar falha de banco graciosamente em AuditLogService', async () => {
+      await AuditLogService.log({
+        actorId: 'admin-1',
+        actorType: 'ADMIN',
+        actorEmail: 'admin@test.com',
+        action: 'TEST_DATE_FILTER',
+        resource: 'System',
+        resourceId: 'sys-1',
+        reason: 'AUDIT_TEST',
+        details: { ok: true }
+      });
+
+      const list = await AuditLogService.listLogs({
+        actorId: 'admin-1',
+        action: 'TEST_DATE_FILTER',
+        resource: 'System',
+        resourceId: 'sys-1',
+        startDate: new Date(Date.now() - 60000).toISOString(),
+        endDate: new Date(Date.now() + 60000).toISOString(),
+        page: 1,
+        limit: 5
+      });
+      expect(list.total).toBeGreaterThanOrEqual(1);
+
+      const spyCreate = jest.spyOn(prisma.auditLog, 'create').mockRejectedValueOnce(new Error('DB write error'));
+      await expect(
+        AuditLogService.log({
+          actorId: 'admin-1',
+          actorType: 'ADMIN',
+          action: 'FAIL_LOG',
+          resource: 'System',
+          reason: 'TEST'
+        })
+      ).resolves.not.toThrow();
+      spyCreate.mockRestore();
+    });
+
+    it('deve cobrir exportData e anonymizeUser (incluindo pedidos concluídos e usuário já anonimizado) em SubjectRightsService', async () => {
+      await expect(SubjectRightsService.exportData('non-existent-user')).rejects.toThrow('Usuário não encontrado');
+      await expect(SubjectRightsService.anonymizeUser('non-existent-user')).rejects.toThrow('Usuário não encontrado');
+
+      const user = await prisma.user.create({
+        data: {
+          id: 'sr-user-1',
+          name: 'Titular Completo',
+          email: 'sr.user@test.com',
+          password: 'Password123!',
+          cpfLastDigits: '99',
+          role: 'PATIENT'
+        }
+      });
+
+      const pharm = await prisma.pharmacy.create({
+        data: {
+          id: 'sr-pharm-1',
+          name: 'Farmácia SR',
+          email: 'sr.pharm@test.com',
+          password: 'Password123!',
+          cnpj: '11222333000181',
+          verified: true,
+          verificationStatus: 'VERIFIED'
+        }
+      });
+
+      await prisma.consent.create({
+        data: {
+          userId: user.id,
+          userType: 'PATIENT',
+          consentType: 'HEALTH_DATA_PROCESSING',
+          purpose: 'Teste',
+          legalBasis: 'Art 11',
+          textVersion: '1.0',
+          textHash: 'hash',
+          ipAddress: '127.0.0.1'
+        }
+      });
+
+      const rxWithOrder = await prisma.prescription.create({
+        data: {
+          patientId: user.id,
+          fileUrl: 'local://rx-order.pdf',
+          status: 'ACCEPTED'
+        }
+      });
+
+      const rxPending = await prisma.prescription.create({
+        data: {
+          patientId: user.id,
+          fileUrl: 'local://rx-pending.pdf',
+          status: 'PENDING'
+        }
+      });
+
+      const quote = await prisma.quote.create({
+        data: {
+          prescriptionId: rxWithOrder.id,
+          pharmacyId: pharm.id,
+          priceCents: 5000,
+          deliveryDays: 1,
+          status: 'ACCEPTED'
+        }
+      });
+
+      const order = await prisma.order.create({
+        data: {
+          quoteId: quote.id,
+          status: 'DELIVERED'
+        }
+      });
+
+      await prisma.review.create({
+        data: {
+          orderId: order.id,
+          patientId: user.id,
+          pharmacyId: pharm.id,
+          rating: 5,
+          comment: 'Excelente'
+        }
+      });
+
+      await prisma.prescriptionAccessLog.create({
+        data: {
+          prescriptionId: rxWithOrder.id,
+          accessedById: user.id,
+          accessedByType: 'PATIENT',
+          ipAddress: '127.0.0.1'
+        }
+      });
+
+      const exported = await SubjectRightsService.exportData(user.id, '127.0.0.1', 'Jest');
+      expect(exported.consentimentos).toHaveLength(1);
+      expect(exported.receitasMedicas).toHaveLength(2);
+      expect(exported.avaliacoes).toHaveLength(1);
+      expect(exported.trilhaAcessosReceitas).toHaveLength(1);
+
+      const anon1 = await SubjectRightsService.anonymizeUser(user.id, '127.0.0.1', 'Jest');
+      expect(anon1.success).toBe(true);
+      expect(anon1.purgedFilesCount).toBe(1);
+      expect(anon1.retainedRegulatoryCount).toBe(1);
+
+      const anon2 = await SubjectRightsService.anonymizeUser(user.id, '127.0.0.1', 'Jest');
+      expect(anon2.success).toBe(true);
+      expect(anon2.message).toContain('já se encontra anonimizado');
+
+      const checkRx = await prisma.prescription.findUnique({ where: { id: rxPending.id } });
+      expect(checkRx?.status).toBe('CANCELLED');
+    });
+
+    it('deve cobrir URL assinada de evidência em Cloudinary e validação de tamanho de token HMAC', async () => {
+      const origName = env.CLOUDINARY_CLOUD_NAME;
+      const origKey = env.CLOUDINARY_API_KEY;
+      const origSec = env.CLOUDINARY_API_SECRET;
+      (env as any).CLOUDINARY_CLOUD_NAME = 'real-cloud-name';
+      (env as any).CLOUDINARY_API_KEY = 'real-key';
+      (env as any).CLOUDINARY_API_SECRET = 'real-secret';
+
+      const spyUrl = jest.spyOn(cloudinary.utils, 'url').mockReturnValue('https://res.cloudinary.com/cap-evid-signed');
+
+      const signed = await generateSignedCapabilityEvidenceUrl(
+        { id: 'cap-1', pharmacyId: 'pharm-1', type: 'VETERINARY_COMPOUNDING' },
+        0,
+        'cloudinary://evid-123',
+        { id: 'admin-1', email: 'admin@test.com', role: 'ADMIN' }
+      );
+      expect(signed.signedUrl).toBe('https://res.cloudinary.com/cap-evid-signed');
+
+      spyUrl.mockRestore();
+      (env as any).CLOUDINARY_CLOUD_NAME = origName;
+      (env as any).CLOUDINARY_API_KEY = origKey;
+      (env as any).CLOUDINARY_API_SECRET = origSec;
+
+      const invalidLen = verifySignedCapabilityEvidenceUrl(
+        'cap-1',
+        0,
+        'short-token',
+        Math.floor(Date.now() / 1000) + 300
+      );
+      expect(invalidLen).toBe(false);
     });
   });
 });
-

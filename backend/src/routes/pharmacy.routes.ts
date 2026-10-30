@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { PharmacyController } from '../controllers/pharmacy.controller';
 import { validateRequest } from '../middlewares/validateRequest.middleware';
 import { authMiddleware, roleMiddleware } from '../middlewares/auth.middleware';
+import { upload } from '../services/upload';
 
 const router = Router();
 const pharmacyController = new PharmacyController();
@@ -30,5 +31,21 @@ router.get('/', pharmacyController.getAll);
 
 // Métricas e estatísticas operacionais da farmácia autenticada
 router.get('/stats', authMiddleware, roleMiddleware(['PHARMACY']), pharmacyController.getStats);
+
+// Capacidades regulatórias da farmácia (Humana / Veterinária)
+router.get(
+  '/capabilities',
+  authMiddleware,
+  roleMiddleware(['PHARMACY']),
+  pharmacyController.getMyCapabilities.bind(pharmacyController)
+);
+
+router.post(
+  '/capabilities/veterinary',
+  authMiddleware,
+  roleMiddleware(['PHARMACY']),
+  upload.any(),
+  pharmacyController.requestVeterinaryCapability.bind(pharmacyController)
+);
 
 export default router;
