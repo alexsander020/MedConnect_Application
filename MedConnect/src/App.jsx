@@ -14,6 +14,7 @@ import Profile from './pages/Profile';
 // User pages
 import UserDashboard from './pages/user/Dashboard';
 import NewQuote from './pages/user/NewQuote';
+import MyPets from './pages/user/MyPets';
 import QuoteOffers from './pages/user/QuoteOffers';
 import OrderTracking from './pages/user/OrderTracking';
 import Orders from './pages/user/Orders';
@@ -57,6 +58,9 @@ function AppRoutes() {
       } />
       <Route path="/new-quote" element={
         <ProtectedRoute requiredType="PATIENT"><NewQuote /></ProtectedRoute>
+      } />
+      <Route path="/my-pets" element={
+        <ProtectedRoute requiredType="PATIENT"><MyPets /></ProtectedRoute>
       } />
       <Route path="/quote-offers" element={
         <ProtectedRoute requiredType="PATIENT"><QuoteOffers /></ProtectedRoute>

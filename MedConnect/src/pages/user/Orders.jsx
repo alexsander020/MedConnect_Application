@@ -5,7 +5,7 @@ import BottomNav from '../../components/BottomNav';
 import ErrorState from '../../components/ErrorState';
 import LoadingState from '../../components/LoadingState';
 import EmptyState from '../../components/EmptyState';
-import { Search, Filter } from 'lucide-react';
+import { Search, Filter, PawPrint } from 'lucide-react';
 import { api } from '../../services/api';
 
 const statusConfig = {
@@ -35,20 +35,26 @@ export default function Orders() {
         api.get('/orders/my')
             .then(res => {
                 if (Array.isArray(res.data)) {
-                    const formatted = res.data.map(o => ({
-                        id: o.id.slice(0, 8).toUpperCase(),
-                        rawId: o.id,
-                        status: o.status,
-                        createdAt: new Date(o.createdAt).toLocaleDateString('pt-BR'),
-                        price: o.quote?.price || 0,
-                        pharmacy: o.quote?.pharmacy ? {
-                            name: o.quote.pharmacy.name,
-                            initials: o.quote.pharmacy.name.substring(0, 2).toUpperCase()
-                        } : null,
-                        medications: o.quote?.prescription?.notes
-                            ? [o.quote.prescription.notes]
-                            : ['Receita Médica Anexada']
-                    }));
+                    const formatted = res.data.map(o => {
+                        const isVet = o.quote?.prescription?.kind === 'VETERINARY';
+                        const pet = o.quote?.prescription?.pet;
+                        return {
+                            id: o.id.slice(0, 8).toUpperCase(),
+                            rawId: o.id,
+                            status: o.status,
+                            createdAt: new Date(o.createdAt).toLocaleDateString('pt-BR'),
+                            price: o.quote?.price || 0,
+                            isVet,
+                            pet,
+                            pharmacy: o.quote?.pharmacy ? {
+                                name: o.quote.pharmacy.name,
+                                initials: o.quote.pharmacy.name.substring(0, 2).toUpperCase()
+                            } : null,
+                            medications: o.quote?.prescription?.notes
+                                ? [o.quote.prescription.notes]
+                                : [isVet ? 'Receita Veterinária Anexada' : 'Receita Médica Anexada']
+                        };
+                    });
                     setOrders(formatted);
                 } else {
                     setOrders([]);
@@ -135,8 +141,20 @@ export default function Orders() {
                                 >
                                     <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-3)' }}>
                                         <div>
-                                            <h4 className="font-semibold text-sm">{order.id}</h4>
-                                            <p className="text-xs text-gray mt-1">{order.createdAt}</p>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <h4 className="font-semibold text-sm">{order.id}</h4>
+                                                {order.isVet && (
+                                                    <span className="badge badge-success" style={{ fontSize: '10px', padding: '1px 6px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                        <PawPrint size={10} /> Vet
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="text-xs text-gray mt-1">
+                                                {order.createdAt}
+                                                {order.isVet && order.pet && (
+                                                    <span> • Pet: <strong>{order.pet.name}</strong></span>
+                                                )}
+                                            </p>
                                         </div>
                                         <span className={`badge badge-dot badge-${status.color}`}>
                                             {status.label}

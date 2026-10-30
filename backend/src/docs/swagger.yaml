@@ -954,6 +954,27 @@ paths:
                 items:
                   $ref: '#/components/schemas/PharmacyResponse'
 
+  /api/config:
+    get:
+      summary: Configuração pública de funcionalidades (feature flags da vertical veterinária) consumida pelo frontend
+      description: Endpoint público, sem autenticação e sem segredos. Retorna apenas booleanos. Com vetEnabled=false o frontend oculta menus, telas e rotas veterinárias.
+      tags:
+        - Configuração
+      responses:
+        '200':
+          description: Flags atuais
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  vetEnabled:
+                    type: boolean
+                  vetAllowFoodProducing:
+                    type: boolean
+                  vetControlledEnabled:
+                    type: boolean
+
   /api/animals:
     post:
       summary: Cadastro de novo animal de estimação sob guarda do tutor autenticado (Requer VET_ENABLED = true; caso contrário 404)

@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Header from '../../components/Header';
 import BottomNav from '../../components/BottomNav';
 import StarRating from '../../components/StarRating';
-import { MapPin, Clock, Check, ArrowRight, Loader2, Award, ShieldCheck, AlertCircle, Package } from 'lucide-react';
+import { MapPin, Clock, Check, ArrowRight, Loader2, Award, ShieldCheck, AlertCircle, Package, PawPrint } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 
@@ -63,7 +63,9 @@ export default function QuoteOffers() {
                     offers.push({
                         ...q,
                         prescriptionId: presc.id,
-                        medicationsText: presc.notes || 'Receita médica enviada',
+                        isVet: presc.kind === 'VETERINARY',
+                        pet: presc.pet,
+                        medicationsText: presc.notes || (presc.kind === 'VETERINARY' ? 'Receita veterinária enviada' : 'Receita médica enviada'),
                         pharmacyName: q.pharmacy?.name || 'Farmácia Parceira',
                         deliveryDaysText: q.deliveryDays ? `${q.deliveryDays} dias úteis` : '2 dias úteis',
                         priceFormatted: q.price || (q.priceCents ? (q.priceCents / 100).toFixed(2) : '0.00'),
@@ -171,9 +173,21 @@ export default function QuoteOffers() {
 
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                                             <div>
-                                                <h3 style={{ fontSize: '16px', fontWeight: 800, margin: '0 0 4px', color: 'var(--gray-900)' }}>
-                                                    {quote.pharmacyName}
-                                                </h3>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                                    <h3 style={{ fontSize: '16px', fontWeight: 800, margin: 0, color: 'var(--gray-900)' }}>
+                                                        {quote.pharmacyName}
+                                                    </h3>
+                                                    {quote.isVet && (
+                                                        <span className="badge badge-success" style={{ fontSize: '10px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                            <PawPrint size={10} /> Veterinário
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {quote.isVet && quote.pet && (
+                                                    <p style={{ fontSize: '12px', color: 'var(--primary-700)', fontWeight: 600, margin: '0 0 4px' }}>
+                                                        Animal: {quote.pet.name} ({quote.pet.species} • {(quote.pet.weightGrams / 1000).toFixed(1)} kg)
+                                                    </p>
+                                                )}
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                                     <StarRating rating={5} size={12} />
                                                     <span style={{ fontSize: '12px', fontWeight: 700 }}>5.0</span>

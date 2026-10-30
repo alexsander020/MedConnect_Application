@@ -47,23 +47,32 @@ describe('AdminDashboard Component (Testing Library)', () => {
     jest.clearAllMocks();
   });
 
-  it('deve exibir lista de farmácias pendentes quando API responder com sucesso', async () => {
-    api.get.mockResolvedValueOnce({
-      data: [
-        {
-          id: 'pharm-1',
-          name: 'Drogaria Esperança',
-          email: 'contato@esperanca.com',
-          cnpj: '11222333000181',
-          phone: '(11) 98888-7777',
-          address: 'Rua das Flores, 123',
-          verificationStatus: 'PENDING_VERIFICATION',
-          createdAt: new Date().toISOString(),
-        },
-      ],
+  it('deve exibir lista de farmácias pendentes ao navegar para a aba correspondente', async () => {
+    api.get.mockImplementation((url) => {
+      if (url.includes('/admin/pharmacies')) {
+        return Promise.resolve({
+          data: [
+            {
+              id: 'pharm-1',
+              name: 'Drogaria Esperança',
+              email: 'contato@esperanca.com',
+              cnpj: '11222333000181',
+              phone: '(11) 98888-7777',
+              address: 'Rua das Flores, 123',
+              verificationStatus: 'PENDING_VERIFICATION',
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        });
+      }
+      return Promise.resolve({ data: [] });
     });
 
     renderWithProviders(<AdminDashboard />);
+
+    // Clica na aba de Farmácias Pendentes
+    const tabBtn = await screen.findByRole('button', { name: /Farmácias Pendentes/i });
+    fireEvent.click(tabBtn);
 
     await waitFor(() => {
       expect(screen.getByText('Drogaria Esperança')).toBeInTheDocument();
@@ -74,21 +83,29 @@ describe('AdminDashboard Component (Testing Library)', () => {
   });
 
   it('deve aprovar credenciamento da farmácia ao clicar em Aprovar', async () => {
-    api.get.mockResolvedValueOnce({
-      data: [
-        {
-          id: 'pharm-1',
-          name: 'Drogaria Esperança',
-          cnpj: '11222333000181',
-          verificationStatus: 'PENDING_VERIFICATION',
-        },
-      ],
+    api.get.mockImplementation((url) => {
+      if (url.includes('/admin/pharmacies')) {
+        return Promise.resolve({
+          data: [
+            {
+              id: 'pharm-1',
+              name: 'Drogaria Esperança',
+              cnpj: '11222333000181',
+              verificationStatus: 'PENDING_VERIFICATION',
+            },
+          ],
+        });
+      }
+      return Promise.resolve({ data: [] });
     });
     api.patch.mockResolvedValueOnce({
       data: { id: 'pharm-1', verified: true, verificationStatus: 'VERIFIED' },
     });
 
     renderWithProviders(<AdminDashboard />);
+
+    const tabBtn = await screen.findByRole('button', { name: /Farmácias Pendentes/i });
+    fireEvent.click(tabBtn);
 
     await waitFor(() => {
       expect(screen.getByText('Drogaria Esperança')).toBeInTheDocument();
@@ -115,17 +132,20 @@ describe('AdminDashboard Component (Testing Library)', () => {
   });
 
   it('deve exibir mensagem de estado vazio quando não houver farmácias pendentes', async () => {
-    api.get.mockResolvedValueOnce({ data: [] });
+    api.get.mockResolvedValue({ data: [] });
 
     renderWithProviders(<AdminDashboard />);
+
+    const tabBtn = await screen.findByRole('button', { name: /Farmácias Pendentes/i });
+    fireEvent.click(tabBtn);
 
     await waitFor(() => {
       expect(screen.getByText(/nenhuma farmácia pendente/i)).toBeInTheDocument();
     });
   });
 
-  it('deve exibir estado de erro na tela quando a requisição falhar', async () => {
-    api.get.mockRejectedValueOnce(new Error('Erro interno ao buscar farmácias'));
+  it('deve exibir estado de erro na tela quando a requisição de capacidades falhar', async () => {
+    api.get.mockRejectedValue(new Error('Erro interno ao buscar solicitações'));
 
     renderWithProviders(<AdminDashboard />);
 

@@ -28,7 +28,8 @@ export class SubjectRightsService {
           }
         },
         reviews: true,
-        consents: true
+        consents: true,
+        animals: true
       }
     });
 
@@ -100,6 +101,17 @@ export class SubjectRightsService {
         nota: r.rating,
         comentario: r.comment,
         data: r.createdAt
+      })),
+      animais: user.animals.map((a) => ({
+        id: a.id,
+        nome: a.name,
+        especie: a.species,
+        raca: a.breed,
+        pesoGramas: a.weightGrams,
+        dataNascimento: a.birthDate,
+        destinadoProducaoAlimentar: a.isFoodProducing,
+        removidoEm: a.deletedAt,
+        dataCadastro: a.createdAt
       })),
       trilhaAcessosReceitas: accessLogs.map((log) => ({
         receitaId: log.prescriptionId,
@@ -190,6 +202,17 @@ export class SubjectRightsService {
       }
     }
 
+    // 3.1 Animais do tutor (vertical veterinária): anonimiza identificadores livres e aplica exclusão lógica.
+    // Os registros mínimos necessários a receitas/pedidos já existentes permanecem vinculados (espécie e peso).
+    await prisma.animal.updateMany({
+      where: { tutorId: userId },
+      data: { name: 'Animal Anonimizado', breed: null, notes: null, birthDate: null }
+    });
+    const animalsRemoved = await prisma.animal.updateMany({
+      where: { tutorId: userId, deletedAt: null },
+      data: { deletedAt: now }
+    });
+
     // 4. Registrar o evento na trilha de auditoria
     await AuditLogService.log({
       actorId: userId,
@@ -201,6 +224,7 @@ export class SubjectRightsService {
       reason: 'TITULAR_RIGHT_DELETION_ART18',
       details: {
         purgedFilesCount,
+        animalsAnonymizedCount: animalsRemoved.count,
         retainedRegulatoryCount,
         retencaoMinimaAviso: '[PENDENTE DE VALIDAÇÃO JURÍDICA: Retenção mínima obrigatória de receitas dispensadas conforme RDC ANVISA 44/2009 e Portaria 344/1998]'
       },
@@ -213,6 +237,7 @@ export class SubjectRightsService {
       anonymizedAt: now,
       purgedFilesCount,
       retainedRegulatoryCount,
+      animalsAnonymizedCount: animalsRemoved.count,
       mensagem: 'Dados pessoais anonimizados e excluídos com sucesso.',
       retencaoRegulatoria: {
         status: 'MINIMA_PRESERVADA',
