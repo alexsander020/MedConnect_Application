@@ -734,6 +734,30 @@ describe('ETAPA V3 — Verificação por Capacidade (VETERINARY_COMPOUNDING & Pa
         .get(`/api/admin/capabilities/${capabilityId}/evidences/99/view-url`)
         .set('Authorization', `Bearer ${adminToken}`);
       expect(notFoundEvid.status).toBe(404);
+
+      const notFoundCapEvid = await request(app)
+        .get('/api/admin/capabilities/cap-inexistente/evidences/0/view-url')
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(notFoundCapEvid.status).toBe(404);
+
+      const missingTokenView = await request(app)
+        .get(`/api/admin/capabilities/${capabilityId}/evidences/0/view`);
+      expect(missingTokenView.status).toBe(400);
+
+      const notFoundCnpj = await request(app)
+        .get('/api/admin/pharmacies/farm-inexistente/cnpj-lookup')
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(notFoundCnpj.status).toBe(404);
+
+      const forbiddenCnpj = await request(app)
+        .get(`/api/admin/pharmacies/${otherPharmacyId}/cnpj-lookup`)
+        .set('Authorization', `Bearer ${tutorToken}`);
+      expect(forbiddenCnpj.status).toBe(403);
+
+      const forbiddenOrders = await request(app)
+        .get('/api/admin/orders')
+        .set('Authorization', `Bearer ${tutorToken}`);
+      expect(forbiddenOrders.status).toBe(403);
     });
   });
 });
