@@ -140,6 +140,53 @@ function validarPesoGramas(pesoGrams, min = 10, max = 1500000) {
   return num >= min && num <= max;
 }
 
+/**
+ * Validação de FORMATO do CRF (Conselho Regional de Farmácia).
+ * AVISO REGULATÓRIO: Valida apenas o formato sintático (1 a 7 dígitos + UF brasileira válida).
+ * NÃO consulta bases externas do CFF/CRF. A conferência documental cabe ao ADMIN.
+ */
+function validarCrf(crf, uf) {
+  if (!crf) return false;
+  const str = String(crf).trim().toUpperCase();
+
+  let ufDetectada = uf ? String(uf).trim().toUpperCase() : null;
+  if (!ufDetectada) {
+    const ufMatch = str.match(/\b([A-Z]{2})\b/);
+    if (ufMatch && UFS_BRASIL.includes(ufMatch[1])) {
+      ufDetectada = ufMatch[1];
+    }
+  }
+
+  if (!ufDetectada || !UFS_BRASIL.includes(ufDetectada)) {
+    return false;
+  }
+
+  const cleanNum = str
+    .replace(/^CRF[\s\/-]*/i, '')
+    .replace(new RegExp(`[\\s\\/-]*${ufDetectada}[\\s\\/-]*`, 'gi'), '')
+    .replace(/[^\d]+/g, '');
+
+  if (!cleanNum || cleanNum.length < 1 || cleanNum.length > 7) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Validação de FORMATO do número de registro no MAPA (Ministério da Agricultura e Pecuária).
+ * AVISO REGULATÓRIO: Valida apenas o formato sintático (ex.: "SP-12345", "MAPA 00123-4", contendo dígitos).
+ * NÃO consulta sistemas do MAPA/SIPEAGRO. A conferência documental cabe ao ADMIN.
+ */
+function validarRegistroMapa(registro) {
+  if (!registro) return false;
+  const str = String(registro).trim();
+  if (str.length < 3 || str.length > 40) return false;
+  if (!/^[A-Za-z0-9\s.\-\/]+$/.test(str)) return false;
+  const digits = str.replace(/[^\d]/g, '');
+  return digits.length >= 2 && digits.length <= 20;
+}
+
 module.exports = {
   ehEmailValido,
   ehCPFValido,
@@ -148,5 +195,7 @@ module.exports = {
   UFS_BRASIL,
   ESPECIES_ANIMAIS,
   validarCrmv,
-  validarPesoGramas
+  validarPesoGramas,
+  validarCrf,
+  validarRegistroMapa
 };
