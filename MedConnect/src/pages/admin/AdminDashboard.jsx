@@ -14,7 +14,12 @@ import {
     Loader2,
     Ban,
     Search,
-    Package
+    Package,
+    BarChart3,
+    Clock,
+    TrendingUp,
+    ShoppingBag,
+    Zap
 } from 'lucide-react';
 
 export default function AdminDashboard() {
@@ -22,7 +27,7 @@ export default function AdminDashboard() {
     const queryClient = useQueryClient();
 
     // Abas do painel administrativo
-    const [activeTab, setActiveTab] = useState('capabilities'); // 'capabilities' | 'pharmacies' | 'orders'
+    const [activeTab, setActiveTab] = useState('capabilities'); // 'capabilities' | 'pharmacies' | 'orders' | 'pilot'
 
     // Filtros da aba de Capacidades
     const [filterType, setFilterType] = useState('VETERINARY_COMPOUNDING');
@@ -87,6 +92,21 @@ export default function AdminDashboard() {
             return res.data;
         },
         enabled: activeTab === 'orders'
+    });
+
+    // 4. Query: Métricas do Piloto (Fase 5)
+    const {
+        data: pilotData,
+        isLoading: isPilotLoading,
+        isError: isPilotError,
+        refetch: refetchPilot
+    } = useQuery({
+        queryKey: ['adminPilotMetrics'],
+        queryFn: async () => {
+            const res = await api.get('/admin/pilot-metrics');
+            return res.data;
+        },
+        enabled: activeTab === 'pilot'
     });
 
     // Mutação: Aprovar / Recusar / Suspender Capacidade
@@ -197,7 +217,7 @@ export default function AdminDashboard() {
             });
             return res.data;
         },
-        onSuccess: (data, variables) => {
+        onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ['adminPendingPharmacies'] });
             if (variables.approved) {
                 toast.success('Farmácia aprovada e credenciada com sucesso!');
@@ -266,22 +286,34 @@ export default function AdminDashboard() {
                     {/* Navegação por Abas */}
                     <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
                         <button
+                            type="button"
                             className={`btn ${activeTab === 'capabilities' ? 'btn-primary' : 'btn-outline'}`}
                             onClick={() => setActiveTab('capabilities')}
                         >
                             Capacidades (MAPA / CRMV)
                         </button>
                         <button
+                            type="button"
                             className={`btn ${activeTab === 'pharmacies' ? 'btn-primary' : 'btn-outline'}`}
                             onClick={() => setActiveTab('pharmacies')}
                         >
                             Farmácias Pendentes ({pendingPharmacies.length})
                         </button>
                         <button
+                            type="button"
                             className={`btn ${activeTab === 'orders' ? 'btn-primary' : 'btn-outline'}`}
                             onClick={() => setActiveTab('orders')}
                         >
                             Pedidos Existentes
+                        </button>
+                        <button
+                            type="button"
+                            className={`btn ${activeTab === 'pilot' ? 'btn-primary' : 'btn-outline'}`}
+                            onClick={() => setActiveTab('pilot')}
+                            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                        >
+                            <BarChart3 size={16} />
+                            Métricas do Piloto (Fase 5)
                         </button>
                     </div>
 
@@ -618,6 +650,155 @@ export default function AdminDashboard() {
                                         </div>
                                     ))}
                                 </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ABA 4: MÉTRICAS DO PILOTO (FASE 5) */}
+                    {activeTab === 'pilot' && (
+                        <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                            <div className="glass-card" style={{
+                                padding: 'var(--space-6)',
+                                background: 'linear-gradient(135deg, rgba(238, 242, 255, 0.9) 0%, rgba(255, 255, 255, 0.95) 100%)',
+                                border: '1px solid rgba(99, 102, 241, 0.25)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 'var(--space-4)'
+                            }}>
+                                <div style={{
+                                    width: 52, height: 52, borderRadius: 14,
+                                    background: 'rgba(99, 102, 241, 0.15)',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                }}>
+                                    <BarChart3 size={28} color="var(--primary-600)" />
+                                </div>
+                                <div>
+                                    <h2 style={{ fontSize: 'var(--font-xl)', fontWeight: 800, margin: '0 0 4px', color: 'var(--gray-900)' }}>
+                                        Painel de Validação do Piloto (4 Semanas)
+                                    </h2>
+                                    <p style={{ margin: 0, fontSize: 'var(--font-sm)', color: 'var(--gray-600)' }}>
+                                        Telemetria de negócio agregada e anonimizada (Privacy-by-Design, sem PII de pacientes ou receitas).
+                                    </p>
+                                </div>
+                            </div>
+
+                            {isPilotLoading ? (
+                                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '200px' }}>
+                                    <Loader2 className="animate-spin" size={40} color="var(--primary-600)" />
+                                </div>
+                            ) : isPilotError ? (
+                                <div className="glass-card" style={{ padding: 'var(--space-6)', textAlign: 'center' }}>
+                                    <AlertCircle size={32} color="var(--error)" style={{ margin: '0 auto 8px' }} />
+                                    <p style={{ color: 'var(--gray-700)' }}>Não foi possível carregar as métricas do piloto.</p>
+                                    <button className="btn btn-primary" onClick={() => refetchPilot()}>Recarregar</button>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Grid de KPIs do Piloto */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-4)' }}>
+                                        <div className="glass-card" style={{ padding: 'var(--space-4)', borderLeft: '4px solid var(--primary-600)' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--gray-600)', textTransform: 'uppercase' }}>TTFQ Médio</span>
+                                                <Clock size={16} color="var(--primary-600)" />
+                                            </div>
+                                            <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--gray-900)' }}>
+                                                {pilotData?.metrics?.avgTtfqMinutes || 0} min
+                                            </div>
+                                            <div style={{ fontSize: '11px', color: 'var(--gray-500)', marginTop: 4 }}>
+                                                Meta: ≤ {pilotData?.targets?.ttfqMinutesMax} min
+                                            </div>
+                                        </div>
+
+                                        <div className="glass-card" style={{ padding: 'var(--space-4)', borderLeft: '4px solid #10b981' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--gray-600)', textTransform: 'uppercase' }}>Cotações / Receita</span>
+                                                <Zap size={16} color="#10b981" />
+                                            </div>
+                                            <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--gray-900)' }}>
+                                                {pilotData?.metrics?.quotesPerPrescription || 0}
+                                            </div>
+                                            <div style={{ fontSize: '11px', color: 'var(--gray-500)', marginTop: 4 }}>
+                                                Meta: ≥ {pilotData?.targets?.quotesPerPrescriptionMin}
+                                            </div>
+                                        </div>
+
+                                        <div className="glass-card" style={{ padding: 'var(--space-4)', borderLeft: '4px solid #f59e0b' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--gray-600)', textTransform: 'uppercase' }}>Taxa de Aceitação</span>
+                                                <TrendingUp size={16} color="#f59e0b" />
+                                            </div>
+                                            <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--gray-900)' }}>
+                                                {pilotData?.metrics?.acceptanceRate || 0}%
+                                            </div>
+                                            <div style={{ fontSize: '11px', color: 'var(--gray-500)', marginTop: 4 }}>
+                                                Meta: ≥ {pilotData?.targets?.acceptanceRateMin}%
+                                            </div>
+                                        </div>
+
+                                        <div className="glass-card" style={{ padding: 'var(--space-4)', borderLeft: '4px solid #8b5cf6' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--gray-600)', textTransform: 'uppercase' }}>Pedidos Entregues</span>
+                                                <ShoppingBag size={16} color="#8b5cf6" />
+                                            </div>
+                                            <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--gray-900)' }}>
+                                                {pilotData?.metrics?.deliveredOrders || 0} / {pilotData?.metrics?.totalOrders || 0}
+                                            </div>
+                                            <div style={{ fontSize: '11px', color: 'var(--gray-500)', marginTop: 4 }}>
+                                                Farmácias ativas: {pilotData?.metrics?.activePharmacies || 0}
+                                            </div>
+                                        </div>
+
+                                        <div className="glass-card" style={{ padding: 'var(--space-4)', borderLeft: '4px solid #ef4444' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--gray-600)', textTransform: 'uppercase' }}>Vazamento Estimado</span>
+                                                <AlertCircle size={16} color="#ef4444" />
+                                            </div>
+                                            <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--gray-900)' }}>
+                                                {pilotData?.metrics?.leakageEstimatePercent || 0}%
+                                            </div>
+                                            <div style={{ fontSize: '11px', color: 'var(--gray-500)', marginTop: 4 }}>
+                                                Meta de segurança: ≤ {pilotData?.targets?.leakageMax}%
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Amostra de Eventos Anonimizados (Privacy-by-Design) */}
+                                    <div className="glass-card" style={{ padding: 'var(--space-5)' }}>
+                                        <h3 style={{ fontSize: 'var(--font-base)', fontWeight: 800, marginBottom: 'var(--space-3)', color: 'var(--gray-900)' }}>
+                                            Últimos Eventos de Telemetria (Sem Dados Pessoais)
+                                        </h3>
+                                        {(!pilotData?.anonymizedEvents || pilotData.anonymizedEvents.length === 0) ? (
+                                            <p style={{ color: 'var(--gray-500)', fontSize: 'var(--font-sm)', margin: 0 }}>
+                                                Nenhum evento registrado ainda na região do piloto.
+                                            </p>
+                                        ) : (
+                                            <div style={{ overflowX: 'auto' }}>
+                                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                                                    <thead>
+                                                        <tr style={{ borderBottom: '1px solid var(--gray-200)', textAlign: 'left', color: 'var(--gray-600)' }}>
+                                                            <th style={{ padding: '8px' }}>Evento</th>
+                                                            <th style={{ padding: '8px' }}>ID Opaco</th>
+                                                            <th style={{ padding: '8px' }}>Tempo Resposta</th>
+                                                            <th style={{ padding: '8px' }}>Valor (R$)</th>
+                                                            <th style={{ padding: '8px' }}>Data/Hora</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {pilotData.anonymizedEvents.map((evt, idx) => (
+                                                            <tr key={idx} style={{ borderBottom: '1px solid var(--gray-100)' }}>
+                                                                <td style={{ padding: '8px', fontWeight: 700, color: 'var(--primary-700)' }}>{evt.event}</td>
+                                                                <td style={{ padding: '8px', fontFamily: 'monospace', color: 'var(--gray-600)' }}>{evt.anonymousId}</td>
+                                                                <td style={{ padding: '8px' }}>{evt.timeToQuoteMinutes ? `${evt.timeToQuoteMinutes} min` : '-'}</td>
+                                                                <td style={{ padding: '8px' }}>{evt.priceCents ? `R$ ${(evt.priceCents / 100).toFixed(2)}` : '-'}</td>
+                                                                <td style={{ padding: '8px', color: 'var(--gray-500)' }}>{new Date(evt.timestamp).toLocaleString('pt-BR')}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
                             )}
                         </div>
                     )}

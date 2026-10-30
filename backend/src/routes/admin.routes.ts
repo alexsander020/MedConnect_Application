@@ -47,6 +47,9 @@ router.get('/pharmacies/pending', adminController.getPendingPharmacies.bind(admi
 // Consulta de situação cadastral do CNPJ (reutilizando CnpjLookup da Fase 2.2)
 router.get('/pharmacies/:id/cnpj-lookup', adminController.lookupPharmacyCnpj.bind(adminController));
 
+// Métricas de validação do piloto (Fase 5 - Analytics agregados sem dados pessoais)
+router.get('/pilot-metrics', adminController.getPilotMetrics.bind(adminController));
+
 // Aprovação ou rejeição de credenciamento sanitário da farmácia
 router.patch(
   '/pharmacies/:id/verify',

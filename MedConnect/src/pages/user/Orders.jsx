@@ -55,8 +55,9 @@ export default function Orders() {
                 }
             })
             .catch(err => {
-                console.error('Erro ao carregar pedidos:', err);
-                setError(err?.response?.data?.error || 'Não foi possível carregar os pedidos. Verifique sua conexão.');
+                const errData = err?.response?.data?.error;
+                const msg = (typeof errData === 'string' ? errData : errData?.message) || 'Não foi possível carregar os pedidos. Verifique sua conexão.';
+                setError(msg);
                 setOrders([]);
             })
             .finally(() => setLoading(false));
