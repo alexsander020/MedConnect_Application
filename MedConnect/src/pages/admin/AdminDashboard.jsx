@@ -533,6 +533,18 @@ export default function AdminDashboard() {
                                                         Motivo Registrado: {cap.rejectionReason}
                                                     </div>
                                                 )}
+
+                                                {cap.status === 'VERIFIED' && cap.verifiedAt && (
+                                                    <div style={{ marginTop: '8px', fontSize: '11px', color: '#15803d', fontWeight: 600 }}>
+                                                        Aprovada em {new Date(cap.verifiedAt).toLocaleString('pt-BR')} pelo ADMIN {cap.verifiedByAdminId ? `(ID: ${cap.verifiedByAdminId})` : ''}
+                                                    </div>
+                                                )}
+
+                                                {cap.status !== 'PENDING_VERIFICATION' && cap.status !== 'VERIFIED' && cap.updatedAt && (
+                                                    <div style={{ marginTop: '8px', fontSize: '11px', color: 'var(--gray-600)' }}>
+                                                        Última ação em {new Date(cap.updatedAt).toLocaleString('pt-BR')}
+                                                    </div>
+                                                )}
                                             </div>
                                         );
                                     })}
