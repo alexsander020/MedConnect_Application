@@ -27,6 +27,7 @@ import Requests from './pages/pharmacy/Requests';
 import SendQuote from './pages/pharmacy/SendQuote';
 import OrderManagement from './pages/pharmacy/OrderManagement';
 import Reviews from './pages/pharmacy/Reviews';
+import VeterinaryCapability from './pages/pharmacy/VeterinaryCapability';
 
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -84,6 +85,7 @@ function AppRoutes() {
         <Route path="send-quote/:id" element={<SendQuote />} />
         <Route path="orders" element={<OrderManagement />} />
         <Route path="reviews" element={<Reviews />} />
+        <Route path="veterinary-capability" element={<VeterinaryCapability />} />
       </Route>
 
       {/* Admin routes */}

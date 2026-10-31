@@ -1,23 +1,33 @@
 import { useState } from 'react';
 import { Outlet, useNavigate, useLocation, NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { usePublicConfig } from '../hooks/usePublicConfig';
 import BottomNav from './BottomNav';
 
 export default function PharmacyLayout() {
     const navigate = useNavigate();
     const location = useLocation();
     const { currentUser, logout } = useAuth();
+    const { vetEnabled } = usePublicConfig();
     const [search, setSearch] = useState('');
 
     const displayName = currentUser?.name || currentUser?.email?.split('@')[0] || 'HealthLink Pharmacy';
 
-    const menuItems = [
+    const baseMenuItems = [
         { path: '/pharmacy', icon: 'dashboard', label: 'Dashboard', exact: true },
         { path: '/pharmacy/requests', icon: 'request_quote', label: 'Quotes' },
         { path: '/pharmacy/orders', icon: 'factory', label: 'Production' },
         { path: '/pharmacy/reviews', icon: 'star', label: 'Reviews' },
         { path: '/profile', icon: 'person', label: 'Profile' },
     ];
+
+    const menuItems = vetEnabled
+        ? [
+            ...baseMenuItems.slice(0, 3),
+            { path: '/pharmacy/veterinary-capability', icon: 'pets', label: 'Habilitação Vet' },
+            ...baseMenuItems.slice(3),
+        ]
+        : baseMenuItems;
 
     return (
         <div className="flex h-screen overflow-hidden bg-surface text-on-surface">

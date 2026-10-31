@@ -279,7 +279,8 @@ export class OrderController {
               include: {
                 prescription: {
                   include: {
-                    patient: { select: { id: true, name: true, phone: true, address: true } }
+                    patient: { select: { id: true, name: true, phone: true, address: true } },
+                    pet: true
                   }
                 }
               }
