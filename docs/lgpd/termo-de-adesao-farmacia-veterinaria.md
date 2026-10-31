@@ -75,3 +75,4 @@ A MEDCONNECT reserva-se o direito de auditar a qualquer momento a regularidade d
 
 6.3. **Efeito da Suspensão com Preservação de Direitos**:
 A suspensão da capacidade veterinária impede novas cotações e bloqueia a visualização do mural de receitas veterinárias, **mas obriga a FARMÁCIA a concluir com zelo e perfeição todos os pedidos já aceitos e em manipulação**, salvo determinação contrária emanada de autoridade sanitária.
+

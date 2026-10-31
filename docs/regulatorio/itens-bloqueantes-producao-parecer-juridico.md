@@ -59,3 +59,4 @@
 
 > [!WARNING]
 > A equipe de engenharia de software concluiu a implementação técnica completa com arquitetura resiliente e fail-closed. No entanto, por prudência regulatória e governança corporativa, **NENHUMA das três feature flags veterinárias (`VET_ENABLED`, `VET_CONTROLLED_ENABLED`, `VET_ALLOW_FOOD_PRODUCING`) deve ser ligada no ambiente de Produção** sem que a assessoria jurídica emita **Parecer Escrito e Assinado** liberando expressamente as operações e homologando as minutas contratuais elaboradas.
+
