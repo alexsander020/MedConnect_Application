@@ -11,6 +11,7 @@ import { ConsentService } from '../services/consentService';
 import { AuditLogService } from '../services/auditLogService';
 import { getFeatureFlags } from '../config/featureFlags';
 import { validarCrmv } from '@medconnect/validation';
+import { vetObservabilityService } from '../services/vetObservabilityService';
 
 export class PrescriptionController {
   async create(req: AuthRequest, res: Response): Promise<void> {
@@ -72,6 +73,7 @@ export class PrescriptionController {
 
         // Regra MAPA: animal de produção/consumo
         if (animal.isFoodProducing && !VET_ALLOW_FOOD_PRODUCING) {
+          vetObservabilityService.recordErrorCode('ANIMAL_FOOD_PRODUCING_NOT_SUPPORTED');
           res.status(422).json({
             error: {
               code: 'ANIMAL_FOOD_PRODUCING_NOT_SUPPORTED',
@@ -106,6 +108,7 @@ export class PrescriptionController {
         const docType = vetDocumentType || 'MAGISTRAL';
         if (docType === 'CONTROLLED_NOTIFICATION') {
           if (!VET_CONTROLLED_ENABLED) {
+            vetObservabilityService.recordErrorCode('CONTROLLED_NOT_SUPPORTED');
             res.status(422).json({
               error: {
                 code: 'CONTROLLED_NOT_SUPPORTED',
@@ -201,6 +204,8 @@ export class PrescriptionController {
           ipAddress: (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1',
           userAgent: req.headers['user-agent']
         });
+
+        vetObservabilityService.recordPrescriptionCreated({ species: animal.species, vetDocumentType: docType });
 
         res.status(201).json({
           ...prescription,

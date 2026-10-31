@@ -1,3 +1,4 @@
+import { vetObservabilityService } from '../services/vetObservabilityService';
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middlewares/auth.middleware';
@@ -188,6 +189,10 @@ export class QuoteController {
         });
       } catch (e) {
         // Ignora erros de websocket em teste ou sem clientes conectados
+      }
+
+      if (prescription.kind === 'VETERINARY') {
+        vetObservabilityService.recordQuoteCreated({ pharmaceuticalForm: pharmaceuticalForm || undefined, deliveryDays: parsedDays || undefined });
       }
 
       res.status(201).json({
