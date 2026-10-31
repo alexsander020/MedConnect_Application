@@ -40,3 +40,4 @@ A vertical de manipulação veterinária no MedConnect atende a um regime regula
   - Conformidade com os princípios de resiliência e fail-safe do MedConnect.
 - **Trade-offs**:
   - Exige manter suítes de testes parametrizadas testando o sistema em ambos os estados (flag ligada e desligada).
+

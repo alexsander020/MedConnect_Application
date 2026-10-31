@@ -39,3 +39,4 @@ O modelo legado do MedConnect tratava a farmácia com um único campo booleano `
 - Aderência estrita à legislação sanitária agropecuária brasileira.
 - Eliminação do risco de farmácias sem autorização do MAPA manipularem fórmulas veterinárias.
 - Proteção da saúde pública e bem-estar animal.
+

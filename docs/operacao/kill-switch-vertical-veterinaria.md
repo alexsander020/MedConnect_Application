@@ -84,3 +84,4 @@ Após a resolução do incidente ou liberação regulatória:
 1. Reconfigure `VET_ENABLED=true` nas variáveis de ambiente.
 2. Salve as alterações.
 3. A vertical veterinária volta a funcionar imediatamente com todos os cadastros e dados históricos preservados.
+

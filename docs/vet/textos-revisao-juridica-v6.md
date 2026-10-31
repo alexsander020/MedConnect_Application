@@ -51,3 +51,4 @@ A vertical veterinária do MedConnect opera na intersecção de múltiplas esfer
 - **Situação Atual**: Aviso explícito na tela de cotação de que o MedConnect é uma plataforma de conexão e tecnologia e não substitui o diagnóstico, prognóstico ou orientação do médico veterinário.
 - **Ponto para Validação**:
   - Redação da cláusula de não-interferência no ato médico-veterinário e exclusão de responsabilidade por posologia ou indicação terapêutica prescrita pelo profissional.
+
