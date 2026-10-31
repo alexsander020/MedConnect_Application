@@ -5,11 +5,13 @@ import Header from '../../components/Header';
 import BottomNav from '../../components/BottomNav';
 import StarRating from '../../components/StarRating';
 import { orderStatuses } from '../../constants/status';
-import { Plus, ArrowRight, MapPin, TrendingUp, Loader2, Package, Sparkles } from 'lucide-react';
+import { Plus, ArrowRight, MapPin, TrendingUp, Loader2, Package, Sparkles, PawPrint, User } from 'lucide-react';
+import { usePublicConfig } from '../../hooks/usePublicConfig';
 import { api } from '../../services/api';
 
 export default function Dashboard() {
     const navigate = useNavigate();
+    const { vetEnabled } = usePublicConfig();
 
     const {
         data: orders = [],
@@ -56,37 +58,86 @@ export default function Dashboard() {
 
             <div className="page">
                 {/* Quick action card */}
-                <div
-                    className="card-gradient animate-slide-up"
-                    style={{ marginBottom: 'var(--space-5)', cursor: 'pointer' }}
-                    onClick={() => navigate('/new-quote')}
-                >
-                    <div style={{ position: 'relative', zIndex: 1 }}>
-                        <h3 style={{ fontSize: 'var(--font-lg)', fontWeight: 700, marginBottom: 'var(--space-1)' }}>
-                            Precisa de um medicamento?
-                        </h3>
-                        <p style={{ fontSize: 'var(--font-sm)', opacity: 0.85, marginBottom: 'var(--space-4)' }}>
-                            Envie sua receita e receba cotações das melhores farmácias de manipulação
-                        </p>
+                {vetEnabled ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)', marginBottom: 'var(--space-5)' }}>
                         <div
-                            className="btn"
-                            style={{
-                                background: 'rgba(255,255,255,0.2)',
-                                color: 'white',
-                                backdropFilter: 'blur(10px)',
-                                padding: 'var(--space-2) var(--space-4)',
-                                borderRadius: 'var(--radius-lg)',
-                                fontSize: 'var(--font-sm)',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '6px'
-                            }}
+                            className="card-gradient animate-slide-up"
+                            style={{ cursor: 'pointer', padding: 'var(--space-4)' }}
+                            onClick={() => navigate('/new-quote', { state: { kind: 'HUMAN' } })}
                         >
-                            <Plus size={16} />
-                            Nova Cotação
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                <User size={20} color="white" />
+                                <h3 style={{ fontSize: 'var(--font-base)', fontWeight: 700, margin: 0, color: 'white' }}>
+                                    Para Mim
+                                </h3>
+                            </div>
+                            <p style={{ fontSize: '11px', opacity: 0.9, color: 'white', margin: '0 0 10px', lineHeight: 1.4 }}>
+                                Receitas médicas e fórmulas humanas
+                            </p>
+                            <span className="btn" style={{ background: 'rgba(255,255,255,0.25)', color: 'white', padding: '4px 10px', fontSize: '11px', borderRadius: '8px' }}>
+                                <Plus size={12} /> Cotação Humana
+                            </span>
+                        </div>
+
+                        <div
+                            className="animate-slide-up"
+                            style={{
+                                cursor: 'pointer',
+                                padding: 'var(--space-4)',
+                                borderRadius: 'var(--radius-xl)',
+                                background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
+                                color: 'white',
+                                boxShadow: '0 8px 24px rgba(16, 185, 129, 0.25)'
+                            }}
+                            onClick={() => navigate('/new-quote', { state: { kind: 'VETERINARY' } })}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                <PawPrint size={20} color="white" />
+                                <h3 style={{ fontSize: 'var(--font-base)', fontWeight: 700, margin: 0, color: 'white' }}>
+                                    Para Meu Pet
+                                </h3>
+                            </div>
+                            <p style={{ fontSize: '11px', opacity: 0.9, color: 'white', margin: '0 0 10px', lineHeight: 1.4 }}>
+                                Manipulação veterinária com MAPA
+                            </p>
+                            <span className="btn" style={{ background: 'rgba(255,255,255,0.25)', color: 'white', padding: '4px 10px', fontSize: '11px', borderRadius: '8px' }}>
+                                <Plus size={12} /> Cotação Pet
+                            </span>
                         </div>
                     </div>
-                </div>
+                ) : (
+                    <div
+                        className="card-gradient animate-slide-up"
+                        style={{ marginBottom: 'var(--space-5)', cursor: 'pointer' }}
+                        onClick={() => navigate('/new-quote')}
+                    >
+                        <div style={{ position: 'relative', zIndex: 1 }}>
+                            <h3 style={{ fontSize: 'var(--font-lg)', fontWeight: 700, marginBottom: 'var(--space-1)' }}>
+                                Precisa de um medicamento?
+                            </h3>
+                            <p style={{ fontSize: 'var(--font-sm)', opacity: 0.85, marginBottom: 'var(--space-4)' }}>
+                                Envie sua receita e receba cotações das melhores farmácias de manipulação
+                            </p>
+                            <div
+                                className="btn"
+                                style={{
+                                    background: 'rgba(255,255,255,0.2)',
+                                    color: 'white',
+                                    backdropFilter: 'blur(10px)',
+                                    padding: 'var(--space-2) var(--space-4)',
+                                    borderRadius: 'var(--radius-lg)',
+                                    fontSize: 'var(--font-sm)',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                }}
+                            >
+                                <Plus size={16} />
+                                Nova Cotação
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Real Metrics Stats */}
                 <div

@@ -298,7 +298,26 @@ export class OrderController {
           include: {
             quote: {
               include: {
-                pharmacy: { select: { id: true, name: true, phone: true, address: true } }
+                pharmacy: { select: { id: true, name: true, phone: true, address: true } },
+                prescription: {
+                  select: {
+                    id: true,
+                    kind: true,
+                    status: true,
+                    vetDocumentType: true,
+                    pet: {
+                      select: {
+                        id: true,
+                        name: true,
+                        species: true,
+                        breed: true,
+                        weightGrams: true,
+                        birthDate: true,
+                        isFoodProducing: true
+                      }
+                    }
+                  }
+                }
               }
             },
             history: { orderBy: { createdAt: 'desc' } }

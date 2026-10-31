@@ -27,6 +27,7 @@ import healthRoutes from './routes/health.routes';
 import consentRoutes from './routes/consent.routes';
 import lgpdRoutes from './routes/lgpd.routes';
 import animalRoutes from './routes/animal.routes';
+import configRoutes from './routes/config.routes';
 
 // Inicializa Sentry se SENTRY_DSN estiver configurado
 initSentry();
@@ -99,6 +100,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/consent', consentRoutes);
 app.use('/api/lgpd', lgpdRoutes);
 app.use('/api/animals', animalRoutes);
+app.use('/api/config', configRoutes);
 
 // Bloqueio explícito de mutação em trilhas de auditoria (Imutabilidade LGPD)
 app.use('/api/audit-logs', (req, res) => {

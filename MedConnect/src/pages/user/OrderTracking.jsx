@@ -5,7 +5,7 @@ import Header from '../../components/Header';
 import BottomNav from '../../components/BottomNav';
 import StarRating from '../../components/StarRating';
 import { orderStatuses } from '../../constants/status';
-import { Check, Clock, Phone, MessageCircle, MapPin, Package, Loader2, Sparkles, ShieldCheck, FileText, Star, AlertCircle } from 'lucide-react';
+import { Check, Clock, Phone, MessageCircle, MapPin, Package, Loader2, Sparkles, ShieldCheck, FileText, Star, AlertCircle, PawPrint } from 'lucide-react';
 import { api } from '../../services/api';
 
 export default function OrderTracking() {
@@ -99,9 +99,16 @@ export default function OrderTracking() {
                     }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
                             <div>
-                                <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                                    Pedido de Manipulação
-                                </span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                                        {orderData.animal ? 'Pedido de Manipulação Veterinária' : 'Pedido de Manipulação'}
+                                    </span>
+                                    {orderData.animal && (
+                                        <span className="badge badge-success" style={{ fontSize: '10px', padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                            <PawPrint size={10} /> Pet: {orderData.animal.name}
+                                        </span>
+                                    )}
+                                </div>
                                 <h2 style={{ fontSize: '22px', fontWeight: 800, color: 'white', margin: '4px 0 0' }}>
                                     #{orderData.id.slice(0, 8).toUpperCase()}
                                 </h2>

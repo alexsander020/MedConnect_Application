@@ -70,6 +70,19 @@ test.describe('MedConnect E2E - Fluxo Completo Ponta a Ponta', () => {
           });
         }
 
+        // Configuração pública do sistema
+        if (path === '/config') {
+          return route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              vetEnabled: false,
+              vetAllowFoodProducing: false,
+              vetControlledEnabled: false,
+            }),
+          });
+        }
+
         // Login
         if (path === '/auth/login' && method === 'POST') {
           const body = req.postDataJSON() || {};
@@ -363,7 +376,7 @@ test.describe('MedConnect E2E - Fluxo Completo Ponta a Ponta', () => {
     await expect(
       patientPage.locator('text=Farmácia Arte & Manipulação')
     ).toBeVisible();
-    await expect(patientPage.locator('text=/R\\$\\s*45/')).toBeVisible();
+    await expect(patientPage.getByText(/R\$\s*45/)).toBeVisible();
 
     // Paciente aprova a proposta
     await patientPage.click('button:has-text("Aprovar Cotação e Fazer Pedido")');
@@ -387,14 +400,14 @@ test.describe('MedConnect E2E - Fluxo Completo Ponta a Ponta', () => {
     await pharmacyPage.click('button:has-text("Confirmar Entrega")');
 
     // Pedido agora deve estar na aba de Concluídos
-    await pharmacyPage.click('button:has-text("Concluídos")');
+    await pharmacyPage.getByRole('button', { name: /Concluídos/i }).click();
     await expect(pharmacyPage.locator('.badge:has-text("Finalizado")')).toBeVisible();
 
     // ─────────────────────────────────────────────────────────────
     // PASSO 5: Paciente verifica pedido finalizado em sua conta
     // ─────────────────────────────────────────────────────────────
     await patientPage.goto('/MedConnect_Application/orders');
-    await patientPage.click('button:has-text("Concluídos")');
+    await patientPage.getByRole('button', { name: /Concluídos/i }).click();
     await expect(patientPage.locator('.badge:has-text("Finalizado")')).toBeVisible();
 
     // Fecha contextos

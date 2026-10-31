@@ -1,18 +1,20 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { usePublicConfig } from '../hooks/usePublicConfig';
 import Header from '../components/Header';
 import BottomNav from '../components/BottomNav';
 import {
     User, Mail, Phone, MapPin, Shield, Bell, HelpCircle,
     FileText, LogOut, ChevronRight, Building2, Star,
-    Download, Trash2, AlertTriangle, CheckCircle, RefreshCw
+    Download, Trash2, AlertTriangle, CheckCircle, RefreshCw, PawPrint
 } from 'lucide-react';
 import { api } from '../services/api';
 
 export default function Profile() {
     const navigate = useNavigate();
     const { currentUser, userType, logout } = useAuth();
+    const { data: publicConfig } = usePublicConfig();
 
     const [consentStatus, setConsentStatus] = useState(null);
     const [lgpdLoading, setLgpdLoading] = useState(false);
@@ -95,6 +97,12 @@ export default function Profile() {
     };
 
     const menuItems = [
+        ...(publicConfig?.vetEnabled && userType === 'patient' ? [{
+            icon: <PawPrint size={20} />,
+            label: 'Meus Pets',
+            color: '#0d9488',
+            onClick: () => navigate('/my-pets')
+        }] : []),
         { icon: <User size={20} />, label: 'Editar Perfil', color: 'var(--primary-500)' },
         { icon: <Bell size={20} />, label: 'Notificações', color: 'var(--info)' },
         { icon: <Shield size={20} />, label: 'Privacidade & Termos', color: 'var(--success)' },
@@ -207,6 +215,7 @@ export default function Profile() {
                     {menuItems.map((item, i) => (
                         <button
                             key={i}
+                            onClick={item.onClick}
                             className="animate-slide-up"
                             style={{
                                 width: '100%', display: 'flex', alignItems: 'center',
@@ -256,7 +265,7 @@ export default function Profile() {
                                 Privacidade e Seus Dados (LGPD)
                             </h3>
                             <p style={{ fontSize: 'var(--font-xs)', color: 'var(--gray-500)', margin: 0 }}>
-                                Gerencie seus consentimentos e direitos de titular
+                                Gerencie seus consentimentos e direitos de titular (incluindo dados dos seus pets)
                             </p>
                         </div>
                     </div>
