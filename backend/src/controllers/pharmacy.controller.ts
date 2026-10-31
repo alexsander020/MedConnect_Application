@@ -1,3 +1,4 @@
+import { vetObservabilityService } from '../services/vetObservabilityService';
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import bcrypt from 'bcrypt';

@@ -110,3 +110,4 @@ Este documento descreve o procedimento passo a passo para conferência manual da
    - Acesse `/quote-offers` e verifique as propostas recebidas identificadas com selo **"Veterinário"**, forma farmacêutica e sabor ofertado pela farmácia.
 4. **Aprovação e Pedido**:
    - Clique em "Aprovar Cotação". O pedido é criado mantendo o fluxo e liberando o endereço de entrega para a farmácia manipuladora.
+

@@ -160,8 +160,15 @@ jobs:
       - name: Build Frontend for Preview Server
         run: npm run build:frontend
 
-      - name: Run Playwright E2E Flow
-        run: npx playwright test
+      - name: Run Playwright E2E Flow (Humano)
+        run: npx playwright test e2e/medconnect-flow.spec.ts
+
+      - name: Run Playwright E2E Flow (Veterinário com VET_ENABLED=true)
+        env:
+          VET_ENABLED: 'true'
+          VET_ALLOW_FOOD_PRODUCING: 'false'
+          VET_CONTROLLED_ENABLED: 'true'
+        run: npx playwright test e2e/medconnect-vet-flow.spec.ts
 
   build:
     name: Build Frontend & Backend

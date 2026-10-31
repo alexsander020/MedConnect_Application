@@ -70,3 +70,4 @@ A **Etapa V5** entregou a experiência frontend completa para a **Farmácia** e 
 - **E2E Multi-Contexto (Playwright)**:
   - `medconnect-vet-flow.spec.ts`: Fluxo ponta a ponta simulando tutor e farmácia em contextos isolados.
 - **Fluxo Humano**: 100% verde e inalterado.
+

@@ -294,6 +294,57 @@ npm run lint
 
 ---
 
+---
+
+## 🐾 Vertical Veterinária (Regulação MAPA, CRMV e CFMV)
+
+O MedConnect conta com suporte completo para a **manipulação de medicamentos veterinários**, atendendo aos requisitos sanitários do Ministério da Agricultura e Pecuária (MAPA) e conselhos profissionais (CRMV/CFMV).
+
+### 1. Principais Recursos
+- **Gestão de Animais/Pets (`/my-pets`)**: Cadastro de cães, gatos, aves, equinos, etc., com peso rigorosamente validado em gramas (`weightGrams > 0`) e controle de animais destinados à produção/alimentação humana.
+- **Receita Veterinária com Validação Sanitária**: Exigência de CRMV e UF do médico veterinário prescritor, suporte a receitas magistrais e notificações de controle especial do MAPA.
+- **Habilitação de Farmácias por Capacidade (`PharmacyCapability`)**: Separação estrita entre manipulação humana (`HUMAN_COMPOUNDING`) e veterinária (`VETERINARY_COMPOUNDING`), exigindo registro no MAPA, CRMV da empresa e RT farmacêutico/veterinário com upload privado de evidências.
+- **Painel ADMIN de Compliance**: Checklist documental humano obrigatório, visualização de documentos por URL assinada de curta duração e registro imutável em `AuditLog`.
+- **Regra de Suspensão Segura**: A suspensão da capacidade veterinária bloqueia novas cotações e o mural de receitas, preservando integralmente pedidos já contratados.
+- **Privacidade por Design (LGPD)**: Ocultamento compulsório dos dados de contato do tutor no mural de cotações da farmácia até a aceitação da proposta.
+
+### 2. Variáveis de Ambiente e Feature Flags
+No arquivo `backend/.env`:
+```env
+# Flag mestra da vertical veterinária (true para ligar, false para modo puramente humano)
+VET_ENABLED=true
+
+# Permissão para manipulação em animais de corte/produção de alimentos (default: false)
+VET_ALLOW_FOOD_PRODUCING=false
+
+# Suporte a receitas de controle especial veterinário - MAPA SIPEAGRO (default: true)
+VET_CONTROLLED_ENABLED=true
+```
+
+### 3. Como Ligar em Desenvolvimento e Staging
+1. Configure as variáveis acima no `backend/.env` ou no painel de ambiente do Render/Kubernetes.
+2. Execute as migrations e popule o banco sintético:
+   ```bash
+   npm run db:migrate && npm run db:seed
+   ```
+   *(O seed cria automaticamente um tutor com 2 animais, uma farmácia com capacidade dupla e uma farmácia puramente humana).*
+3. Inicie o sistema:
+   ```bash
+   npm run dev
+   ```
+
+### 4. Kill Switch de Emergência
+Para desativar imediatamente a vertical sem redeploy:
+- Altere `VET_ENABLED=false` nas variáveis de ambiente e reinicie o backend.
+- A API passa a responder `404 Not Found` em todos os endpoints veterinários (fail-closed) e a interface retorna ao modo 100% humano sem mocks.
+- Guia operacional detalhado: [`docs/operacao/kill-switch-vertical-veterinaria.md`](./docs/operacao/kill-switch-vertical-veterinaria.md).
+
+### 5. Decisões Arquiteturais (ADRs)
+- [`ADR 018: Vertical Veterinária — Modelo de Dados e Capacidades`](./docs/decisoes/018-vertical-veterinaria-modelo-de-dados-e-capacidades.md)
+- [`ADR 019: Isolamento por Feature Flags e Kill Switch`](./docs/decisoes/019-isolamento-por-feature-flags-e-kill-switch.md)
+- [`ADR 020: Privacidade LGPD e Segurança na Vertical Veterinária`](./docs/decisoes/020-privacidade-lgpd-e-seguranca-na-vertical-veterinaria.md)
+- [`ADR 021: Governança de Capacidades e Auditoria MAPA`](./docs/decisoes/021-governanca-de-capacidades-farmaceuticas-e-auditoria-mapa.md)
+
 ## 👤 Autor
 
 **Alexsander Sudario Abreu**

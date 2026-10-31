@@ -1,3 +1,4 @@
+import { vetObservabilityService } from '../services/vetObservabilityService';
 import { Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middlewares/auth.middleware';
@@ -114,6 +115,9 @@ export class OrderController {
             data: { status: PrescriptionStatus.ACCEPTED }
           });
 
+          if (quote.prescription.kind === 'VETERINARY') {
+            vetObservabilityService.recordQuoteAccepted({ orderId: createdOrder.id });
+          }
           return createdOrder;
         },
         {

@@ -1,3 +1,4 @@
+import { vetObservabilityService } from '../services/vetObservabilityService';
 import { Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
@@ -463,6 +464,7 @@ export class AdminController {
         userAgent: req.headers['user-agent']
       });
 
+      vetObservabilityService.recordCapabilityStatus('VERIFIED');
       try {
         await createAndSendNotification({
           pharmacyId: updated.pharmacyId,
@@ -562,6 +564,7 @@ export class AdminController {
         userAgent: req.headers['user-agent']
       });
 
+      vetObservabilityService.recordCapabilityStatus('REJECTED');
       try {
         await createAndSendNotification({
           pharmacyId: updated.pharmacyId,
@@ -670,6 +673,7 @@ export class AdminController {
         userAgent: req.headers['user-agent']
       });
 
+      vetObservabilityService.recordCapabilityStatus('SUSPENDED');
       try {
         await createAndSendNotification({
           pharmacyId: updated.pharmacyId,
