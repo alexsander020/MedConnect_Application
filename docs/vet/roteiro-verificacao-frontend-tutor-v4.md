@@ -101,3 +101,4 @@
 2. No card de **Privacidade e Seus Dados (LGPD Art. 18)**:
    - Clique em **"Exportar Meus Dados"**: confirme no JSON gerado a presença da chave `animais` com a lista dos pets cadastrados.
    - Em caso de solicitação de exclusão/anonimização, confirme que os registros de animais são anonimizados (`name: "Animal Anonimizado"`) e marcados com `deletedAt`.
+

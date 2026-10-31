@@ -326,7 +326,8 @@ test.describe('MedConnect E2E - Fluxo Veterinário Ponta a Ponta (Tutor & Farmá
     await tutorPage.click('button:has-text("Para meu pet")');
 
     // Seleciona o pet recém-cadastrado
-    await tutorPage.selectOption('select:has-text("Selecione o animal paciente")', { label: /Thor/ });
+    await expect(tutorPage.locator('#pet-select option:has-text("Thor")')).toBeAttached();
+    await tutorPage.locator('#pet-select').selectOption({ label: /Thor/ });
 
     // Preenche médico veterinário e CRMV
     await tutorPage.fill('input[placeholder*="Mariana Costa"]', 'Dra. Camila Nogueira');
@@ -379,7 +380,7 @@ test.describe('MedConnect E2E - Fluxo Veterinário Ponta a Ponta (Tutor & Farmá
     // Verifica selo "Veterinário" e dados do pet
     await expect(tutorPage.locator('text=Veterinário')).toBeVisible();
     await expect(tutorPage.locator('text=Farmácia VetCare Manipulação')).toBeVisible();
-    await expect(tutorPage.locator('text=/R\\$\\s*65/')).toBeVisible();
+    await expect(tutorPage.getByText(/R\$\s*65/)).toBeVisible();
 
     // Tutor aprova a proposta
     await tutorPage.click('button:has-text("Aprovar Cotação e Fazer Pedido")');
@@ -392,3 +393,4 @@ test.describe('MedConnect E2E - Fluxo Veterinário Ponta a Ponta (Tutor & Farmá
     await pharmacyContext.close();
   });
 });
+

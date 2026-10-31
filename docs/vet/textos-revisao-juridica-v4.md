@@ -45,3 +45,4 @@
   > *"Aviso Crítico: Deseja solicitar a exclusão e anonimização definitiva da sua conta? Registros regulatórios mínimos exigidos por lei sanitária serão preservados."*
 - **Ponto para Análise Jurídica**:
   - Confirmar se a extensão dos direitos de portabilidade (JSON) e anonimização aos registros veterinários (com preservação de rastreabilidade de lotes manipulados exigida por normas sanitárias) está devidamente fundamentada no Art. 16 da LGPD.
+
