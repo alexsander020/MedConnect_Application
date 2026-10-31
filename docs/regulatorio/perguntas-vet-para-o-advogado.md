@@ -93,3 +93,4 @@
 1. O enquadramento dos dados de receitas veterinárias e do animal de estimação deve se dar formalmente sob qual base legal da LGPD: Execução de Contrato (Art. 7º, V) ou Consentimento Específico (Art. 11, I) por equiparação reflexa a dados de saúde humana?
 2. Em caso de solicitação de exclusão de dados pelo tutor (LGPD Art. 18, VI), qual é o prazo que a plataforma e a farmácia têm o dever de manter as receitas veterinárias armazenadas para fins de fiscalização do MAPA (Art. 16, I da LGPD)?
 3. A sistemática adotada de ocultar telefone, e-mail e endereço do tutor no mural até que a cotação seja formalmente aceita atende satisfatoriamente aos princípios de necessidade, minimização e segurança da LGPD?
+

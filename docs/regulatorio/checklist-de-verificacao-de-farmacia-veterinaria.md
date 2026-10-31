@@ -100,3 +100,4 @@ Antes de habilitar o botão de aprovação, o analista deve marcar e confirmar o
    - Algumas farmácias magistrais possuem liminares judiciais dispensando a inscrição no CRMV quando já registradas no CRF e no MAPA. O analista NÃO deve aprovar nem recusar tais casos sem prévio parecer da assessoria jurídica da MedConnect.
 2. **Receitas Emitidas por Veterinários de Outra UF**:
    - Definição pelo jurídico se a farmácia de uma determinada UF pode cotar e aviar receitas emitidas por médico veterinário registrado em outro estado sem necessidade de visto provisório do CRMV.
+
