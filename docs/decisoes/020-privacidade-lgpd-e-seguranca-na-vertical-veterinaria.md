@@ -38,3 +38,4 @@ Na vertical veterinária, embora o animal não seja titular de dados pessoais pe
 ## Consequências
 - Conformidade total com a LGPD e resoluções do CFMV/MAPA.
 - Minimização de riscos de vazamento de dados e fraudes contra tutores.
+

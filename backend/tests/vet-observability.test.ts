@@ -78,3 +78,4 @@ describe('VetObservabilityService - Métricas e Logs Estruturados sem PII (ETAPA
     consoleSpy.mockRestore();
   });
 });
+

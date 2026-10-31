@@ -93,3 +93,4 @@ A **Etapa V6** consolidou a robustez, conformidade, segurança e documentação 
 - **ESLint**: 0 erros, 0 avisos.
 - **Frontend Tests (React Testing Library)**: 12 suítes, 63 testes passados, 100% verde.
 - **Testes Unitários da Observabilidade**: 4/4 testes passados.
+
