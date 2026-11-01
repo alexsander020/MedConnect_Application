@@ -364,7 +364,7 @@ test.describe('MedConnect E2E - Fluxo Completo Ponta a Ponta', () => {
       'Matéria-prima pura com laudo e controle de qualidade.'
     );
 
-    await pharmacyPage.click('button:has-text("Enviar Proposta ao Paciente")');
+    await pharmacyPage.click('button:has-text("Enviar Proposta")');
     await expect(pharmacyPage.locator('text=Proposta Enviada!')).toBeVisible();
 
     // ─────────────────────────────────────────────────────────────

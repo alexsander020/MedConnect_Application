@@ -383,6 +383,7 @@ export default function SendQuote() {
                       min="1"
                       max="30"
                       className="form-input"
+                      id="prep-days-input"
                       placeholder="Ex: 2"
                       value={estimatedPreparationDays}
                       onChange={(e) => setEstimatedPreparationDays(e.target.value)}
@@ -422,6 +423,7 @@ export default function SendQuote() {
                   min="1"
                   max="30"
                   className="form-input"
+                  id="delivery-days-input"
                   placeholder="Ex: 2"
                   value={days}
                   onChange={(e) => setDays(e.target.value)}

@@ -1,5 +1,9 @@
 import { BrasilApiCnpjLookup } from '../src/services/cnpj/brasilApiCnpjLookup';
 import { SmtpEmailSender } from '../src/services/email/smtpEmailSender';
+import { ConsoleEmailSender } from '../src/services/email/consoleEmailSender';
+import { MockCnpjLookup } from '../src/services/cnpj/mockCnpjLookup';
+import { createAndSendNotification } from '../src/services/notificationService';
+import { DataRetentionService } from '../src/services/dataRetentionService';
 import {
   validateMagicBytes,
   stripExifMetadata,

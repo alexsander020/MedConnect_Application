@@ -314,7 +314,7 @@ test.describe('MedConnect E2E - Fluxo Veterinário Ponta a Ponta (Tutor & Farmá
 
     // Pet aparece na lista
     await expect(tutorPage.locator('text=Thor')).toBeVisible();
-    await expect(tutorPage.locator('text=/15\\.5\\s*kg/')).toBeVisible();
+    await expect(tutorPage.getByText(/15[\.,]5\s*kg/)).toBeVisible();
 
     // ─────────────────────────────────────────────────────────────
     // PASSO 2: Tutor cria nova cotação veterinária para seu pet
@@ -366,10 +366,10 @@ test.describe('MedConnect E2E - Fluxo Veterinário Ponta a Ponta (Tutor & Farmá
 
     await expect(pharmacyPage).toHaveURL(/.*send-quote/);
     await pharmacyPage.fill('input[placeholder="Ex: 89,90"]', '65,00');
-    await pharmacyPage.fill('input[placeholder="Ex: 2"]', '3');
+    await pharmacyPage.fill('#delivery-days-input', '3');
     await pharmacyPage.fill('textarea', 'Biscoito medicamentoso palatável sabor carne com controle de qualidade.');
 
-    await pharmacyPage.click('button:has-text("Enviar Proposta ao Paciente")');
+    await pharmacyPage.click('button:has-text("Enviar Proposta")');
     await expect(pharmacyPage.locator('text=Proposta Enviada!')).toBeVisible();
 
     // ─────────────────────────────────────────────────────────────
