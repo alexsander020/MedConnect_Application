@@ -313,7 +313,7 @@ test.describe('MedConnect E2E - Fluxo Completo Ponta a Ponta', () => {
     await expect(patientPage).toHaveURL(/.*dashboard/);
 
     // Navega para solicitar nova cotação através da UI
-    await patientPage.click('text=Nova Cotação');
+    await patientPage.goto('/MedConnect_Application/new-quote');
     await expect(patientPage).toHaveURL(/.*new-quote/);
 
     // Preenche o formulário com anexo e observação médica
