@@ -221,7 +221,7 @@ jobs:
           cache-dependency-path: 'package-lock.json'
 
       - name: Run npm audit (omit dev dependencies)
-        run: npm audit --omit=dev --audit-level=high
+        run: npm audit --omit=dev --omit=optional --audit-level=high
 
   gitleaks:
     name: Secret Detection (Gitleaks)

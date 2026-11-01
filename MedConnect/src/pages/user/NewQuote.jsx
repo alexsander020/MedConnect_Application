@@ -380,6 +380,7 @@ export default function NewQuote() {
                   </div>
                 ) : (
                   <select
+                    id="pet-select"
                     className="glass-input"
                     style={{ width: '100%', marginBottom: '14px' }}
                     value={selectedPetId}

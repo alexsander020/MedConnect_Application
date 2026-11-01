@@ -14,14 +14,16 @@ export const upload = multer({
   }
 });
 
-const hasCloudinary = !!(
+export function isCloudinaryConfigured(): boolean {
+  return !!(
   env.CLOUDINARY_CLOUD_NAME &&
   env.CLOUDINARY_CLOUD_NAME !== 'demo' &&
   env.CLOUDINARY_API_KEY &&
   env.CLOUDINARY_API_SECRET
-);
+  );
+}
 
-if (hasCloudinary) {
+if (isCloudinaryConfigured()) {
   cloudinary.config({
     cloud_name: env.CLOUDINARY_CLOUD_NAME,
     api_key: env.CLOUDINARY_API_KEY,
@@ -77,7 +79,8 @@ export async function processAndSavePrescriptionFile(
   const ext = validation.detectedType === 'pdf' ? '.pdf' : validation.detectedType === 'png' ? '.png' : '.jpg';
 
   // 5. Armazenamento Seguro
-  if (hasCloudinary) {
+  if (isCloudinaryConfigured()) {
+    cloudinary.config({ cloud_name: env.CLOUDINARY_CLOUD_NAME, api_key: env.CLOUDINARY_API_KEY, api_secret: env.CLOUDINARY_API_SECRET });
     return new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {

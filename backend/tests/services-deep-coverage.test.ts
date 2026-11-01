@@ -292,6 +292,55 @@ describe('TAREFA 3.1 — Cobertura Profunda de Serviços (Services >= 80%)', () 
         code: 'MALWARE_DETECTED'
       });
     });
+    it('deve fazer upload para Cloudinary com sucesso quando configurado', async () => {
+      const origName = env.CLOUDINARY_CLOUD_NAME;
+      const origKey = env.CLOUDINARY_API_KEY;
+      const origSec = env.CLOUDINARY_API_SECRET;
+      (env as any).CLOUDINARY_CLOUD_NAME = 'real-cld';
+      (env as any).CLOUDINARY_API_KEY = 'real-key';
+      (env as any).CLOUDINARY_API_SECRET = 'real-secret';
+
+      const mockUploadStream = jest.spyOn(cloudinary.uploader, 'upload_stream').mockImplementation(((options: any, callback: any) => {
+        return {
+          end: jest.fn().mockImplementation(() => {
+            callback(null, { public_id: 'cld-presc-uuid-123' });
+          })
+        };
+      }) as any);
+
+      const file: Express.Multer.File = {
+        fieldname: 'file',
+        originalname: 'receita.pdf',
+        encoding: '7bit',
+        mimetype: 'application/pdf',
+        size: 50,
+        buffer: Buffer.from('%PDF-1.4\nconteudo de teste'),
+        destination: '',
+        filename: '',
+        path: '',
+        stream: null as any
+      };
+
+      const result = await processAndSavePrescriptionFile(file);
+      expect(result.fileIdentifier).toBe('cloudinary://cld-presc-uuid-123');
+
+      mockUploadStream.mockImplementationOnce(((options: any, callback: any) => {
+        return {
+          end: jest.fn().mockImplementation(() => {
+            callback(new Error('Cloudinary stream failed'), null);
+          })
+        };
+      }) as any);
+
+      await expect(processAndSavePrescriptionFile(file)).rejects.toMatchObject({
+        code: 'UPLOAD_FAILED'
+      });
+
+      mockUploadStream.mockRestore();
+      (env as any).CLOUDINARY_CLOUD_NAME = origName;
+      (env as any).CLOUDINARY_API_KEY = origKey;
+      (env as any).CLOUDINARY_API_SECRET = origSec;
+    });
   });
 
   describe('5. AuditLogService & SubjectRightsService & Capability Signed URLs', () => {
@@ -424,10 +473,20 @@ describe('TAREFA 3.1 — Cobertura Profunda de Serviços (Services >= 80%)', () 
         }
       });
 
+
+      await prisma.animal.create({
+        data: {
+          tutorId: user.id,
+          name: 'Rex',
+          species: 'DOG',
+          weightGrams: 15000,
+        }
+      });
       const exported = await SubjectRightsService.exportData(user.id, '127.0.0.1', 'Jest');
       expect(exported.consentimentos).toHaveLength(1);
       expect(exported.receitasMedicas).toHaveLength(2);
       expect(exported.avaliacoes).toHaveLength(1);
+      expect(exported.animais).toHaveLength(1);
       expect(exported.trilhaAcessosReceitas).toHaveLength(1);
 
       const anon1 = await SubjectRightsService.anonymizeUser(user.id, '127.0.0.1', 'Jest');
