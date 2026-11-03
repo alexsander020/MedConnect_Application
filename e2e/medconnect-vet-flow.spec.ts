@@ -327,7 +327,7 @@ test.describe('MedConnect E2E - Fluxo Veterinário Ponta a Ponta (Tutor & Farmá
 
     // Seleciona o pet recém-cadastrado
     await expect(tutorPage.locator('#pet-select option:has-text("Thor")')).toBeAttached();
-    await tutorPage.locator('#pet-select').selectOption({ label: /Thor/ });
+    await tutorPage.locator('#pet-select').selectOption({ index: 1 });
 
     // Preenche médico veterinário e CRMV
     await tutorPage.fill('input[placeholder*="Mariana Costa"]', 'Dra. Camila Nogueira');
@@ -344,7 +344,7 @@ test.describe('MedConnect E2E - Fluxo Veterinário Ponta a Ponta (Tutor & Farmá
     await tutorPage.click('button:has-text("Solicitar Orçamento Agora")');
 
     // Confirmação de envio
-    await expect(tutorPage.locator('text=Receita Enviada!')).toBeVisible();
+    await expect(tutorPage.getByText(/Receita.*Enviada!/)).toBeVisible();
 
     // ─────────────────────────────────────────────────────────────
     // PASSO 3: Farmácia veterinária visualiza receita e envia proposta

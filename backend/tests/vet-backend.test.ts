@@ -81,6 +81,7 @@ describe('ETAPA V2 — Backend e Regras de Negócio Veterinárias', () => {
 
   afterAll(() => {
     setFeatureFlagsOverrideForTesting(null);
+    return cleanDatabase(prisma).catch(() => {});
   });
 
   describe('1. Comportamento com Feature Flag Desligada (VET_ENABLED = false)', () => {

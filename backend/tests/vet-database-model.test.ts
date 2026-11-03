@@ -260,6 +260,7 @@ describe('ETAPA V1 — Testes do Modelo de Dados, Constraints e Migração Veter
   });
 
   describe('4. Modelo Quote com Campos Veterinários', () => {
+    afterAll(() => cleanDatabase(prisma).catch(() => {}));
     it('deve registrar cotação com forma farmacêutica, sabor e prazo estimado mantendo preço em centavos', async () => {
       const animal = await (prisma as any).animal.create({
         data: {

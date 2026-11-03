@@ -92,6 +92,7 @@ describe('ETAPA V6.3 — Validação Automatizada de Migrações, Backfill e Con
   });
 
   describe('2. Validação das Constraints Sanitárias e Regulatórias', () => {
+    afterAll(() => cleanDatabase(prisma).catch(() => {}));
     test('Constraint animal_weight_positive_check: peso zero ou negativo é rejeitado', async () => {
       try {
         await expect(

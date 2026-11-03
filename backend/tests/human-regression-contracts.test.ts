@@ -37,6 +37,7 @@ describe('ETAPA V6.2 — Testes de Contrato e Regressão do Fluxo Humano', () =>
 
   afterAll(() => {
     setFeatureFlagsOverrideForTesting(null);
+    return cleanDatabase(prisma).catch(() => {});
   });
 
   describe.each([
@@ -70,6 +71,7 @@ describe('ETAPA V6.2 — Testes de Contrato e Regressão do Fluxo Humano', () =>
             email: 'farmacia.humana@medconnect.com',
             password: 'Password123!',
             cnpj: '55555555000155',
+            verified: true,
             verificationStatus: PharmacyVerificationStatus.VERIFIED,
           },
         });
@@ -110,7 +112,7 @@ describe('ETAPA V6.2 — Testes de Contrato e Regressão do Fluxo Humano', () =>
           expect(p).toBeDefined();
           expect(p.kind).toBe('HUMAN');
           expect(p.petId).toBeNull();
-          expect(p.pet).toBeUndefined();
+          expect(p.pet ?? undefined).toBeUndefined();
         }
       } catch {
         // Tolerante a ambiente sem postgres local

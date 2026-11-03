@@ -1,8 +1,11 @@
 import { vetObservabilityService } from '../src/services/vetObservabilityService';
+import { prisma } from '../src/lib/prisma';
+import { cleanDatabase } from './helpers/dbCleanup';
 
 describe('VetObservabilityService - Métricas e Logs Estruturados sem PII (ETAPA V6)', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vetObservabilityService.resetMetricsForTesting();
+    await cleanDatabase(prisma).catch(() => {});
   });
 
   it('deve registrar eventos e métricas de receitas, cotações e aceites', async () => {
