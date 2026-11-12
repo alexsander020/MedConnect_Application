@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BadgeCheck, ChevronRight, FileText, MailWarning, Package, Save, ShieldCheck, Star, UserRound } from 'lucide-react';
+import { BadgeCheck, ChevronRight, FileText, MailWarning, Package, PawPrint, Save, ShieldCheck, Star, UserRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -17,6 +17,7 @@ import LoadingState from '@/components/LoadingState';
 import { FadeUp, Stagger, StaggerItem } from '@/components/motion';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
+import { usePublicConfig } from '@/hooks/usePublicConfig';
 import { patientApi } from '@/services/endpoints';
 import { formatDate, formatDateTime, formatNumber, initials } from '@/lib/format';
 import { friendlyError, maskPhone } from './user/components/patient-utils';
@@ -167,6 +168,7 @@ function ProfileForm({ profile }) {
 }
 
 function AccountSummary({ profile }) {
+  const { vetEnabled } = usePublicConfig();
   const counts = profile.counts || {};
   const items = [
     { icon: FileText, label: 'Receitas', value: counts.prescriptions },
@@ -207,6 +209,19 @@ function AccountSummary({ profile }) {
             <dd className="num text-right text-foreground">{profile.lastLoginAt ? formatDateTime(profile.lastLoginAt) : '—'}</dd>
           </div>
         </dl>
+        {vetEnabled && (
+          <Link
+            to="/my-pets"
+            className="flex items-center gap-3 rounded-xl border border-border p-3 text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <PawPrint className="size-5 shrink-0 text-primary" aria-hidden="true" />
+            <span className="min-w-0 flex-1">
+              <span className="block font-medium text-foreground">Meus pets</span>
+              <span className="block text-xs text-muted-foreground">Animais cadastrados para receitas veterinárias</span>
+            </span>
+            <ChevronRight className="size-4 text-muted-foreground" aria-hidden="true" />
+          </Link>
+        )}
         <Link
           to="/privacy-center"
           className="flex items-center gap-3 rounded-xl border border-border p-3 text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -214,7 +229,9 @@ function AccountSummary({ profile }) {
           <ShieldCheck className="size-5 shrink-0 text-primary" aria-hidden="true" />
           <span className="min-w-0 flex-1">
             <span className="block font-medium text-foreground">Privacidade e dados</span>
-            <span className="block text-xs text-muted-foreground">Consentimentos, exportação e exclusão da conta</span>
+            <span className="block text-xs text-muted-foreground">
+              Consentimentos, exportação e exclusão da conta{vetEnabled ? ' (inclui os dados dos seus pets)' : ''}
+            </span>
           </span>
           <ChevronRight className="size-4 text-muted-foreground" aria-hidden="true" />
         </Link>

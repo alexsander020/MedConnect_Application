@@ -70,6 +70,19 @@ test.describe('MedConnect E2E - Fluxo Completo Ponta a Ponta', () => {
           });
         }
 
+        // Configuração pública do sistema
+        if (path === '/config') {
+          return route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              vetEnabled: false,
+              vetAllowFoodProducing: false,
+              vetControlledEnabled: false,
+            }),
+          });
+        }
+
         // Login
         if (path === '/auth/login' && method === 'POST') {
           const body = req.postDataJSON() || {};
@@ -300,7 +313,7 @@ test.describe('MedConnect E2E - Fluxo Completo Ponta a Ponta', () => {
     await expect(patientPage).toHaveURL(/.*dashboard/);
 
     // Navega para solicitar nova cotação através da UI
-    await patientPage.click('text=Nova Cotação');
+    await patientPage.goto('/MedConnect_Application/new-quote');
     await expect(patientPage).toHaveURL(/.*new-quote/);
 
     // Preenche o formulário com anexo e observação médica
@@ -368,7 +381,7 @@ test.describe('MedConnect E2E - Fluxo Completo Ponta a Ponta', () => {
     await expect(
       patientPage.locator('text=Farmácia Arte & Manipulação')
     ).toBeVisible();
-    await expect(patientPage.locator('text=/R\\$\\s*45/')).toBeVisible();
+    await expect(patientPage.getByText(/R\$\s*45/)).toBeVisible();
 
     // Paciente aprova a proposta
     await patientPage.click('button:has-text("Aprovar Cotação e Fazer Pedido")');

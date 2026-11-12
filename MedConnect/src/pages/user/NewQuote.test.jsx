@@ -108,3 +108,153 @@ describe('NewQuote (envio de receita)', () => {
     expect(screen.queryByRole('heading', { name: 'Receita enviada!' })).toBeNull();
   });
 });
+
+describe('NewQuote — vertical veterinária (VET_ENABLED)', () => {
+  const PETS = [{ id: 'pet-1', name: 'Thor', species: 'DOG', breed: 'Labrador', weightGrams: 15000 }];
+  const consentStatus = { hasActiveHealthConsent: false, isRevoked: false, history: [] };
+  const vetRoutes = (config = {}, pets = PETS) => ({
+    '/consent/terms': TERMS,
+    '/consent/status': consentStatus,
+    '/config': { vetEnabled: true, vetAllowFoodProducing: false, vetControlledEnabled: false, ...config },
+    '/animals': pets,
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  async function switchToPet() {
+    fireEvent.click(await screen.findByRole('button', { name: /Para meu pet/i }));
+    return screen.findByRole('combobox', { name: /Animal/i });
+  }
+
+  it('com a vertical desligada, não mostra o seletor "Para mim / Para meu pet" nem campos veterinários', async () => {
+    routeGet(api, { '/consent/terms': TERMS, '/consent/status': consentStatus, '/config': { vetEnabled: false } });
+    renderPage(<NewQuote />);
+    expect(await screen.findByText(/Autorizo expressamente a plataforma MedConnect/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Para meu pet/i })).toBeNull();
+    expect(screen.queryByLabelText(/CRMV do prescritor/i)).toBeNull();
+    expect(screen.getByRole('heading', { name: /Receita médica/i })).toBeInTheDocument();
+  });
+
+  it('com a vertical ligada, mostra o seletor e mantém "Para mim" como padrão', async () => {
+    routeGet(api, vetRoutes());
+    renderPage(<NewQuote />);
+    expect(await screen.findByRole('button', { name: /Para mim/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /Para meu pet/i })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByLabelText(/CRMV do prescritor/i)).toBeNull();
+  });
+
+  it('"Para meu pet" mostra o animal, os dados do prescritor e o aviso regulatório', async () => {
+    routeGet(api, vetRoutes());
+    renderPage(<NewQuote />);
+    const petSelect = await switchToPet();
+
+    expect(await screen.findByRole('option', { name: /Thor · Cão · 15 kg/ })).toBeInTheDocument();
+    expect(petSelect).toHaveAttribute('id', 'pet-select');
+    expect(screen.getByPlaceholderText(/Mariana Costa/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/CRMV do prescritor/i)).toBeInTheDocument();
+    expect(screen.getByText(/não substitui a orientação do médico veterinário/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Receita veterinária/i })).toBeInTheDocument();
+    // Sem a flag de controlados, só a receita magistral fica disponível
+    expect(screen.queryByRole('option', { name: /Notificação de receita controlada/i })).toBeNull();
+  });
+
+  it('abre direto em "Para meu pet" quando a navegação pede a cotação veterinária', async () => {
+    routeGet(api, vetRoutes());
+    renderPage(<NewQuote />, { route: { pathname: '/new-quote', state: { kind: 'VETERINARY' } } });
+    expect(await screen.findByRole('button', { name: /Para meu pet/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(await screen.findByLabelText(/CRMV do prescritor/i)).toBeInTheDocument();
+  });
+
+  it('bloqueia o envio com CRMV inválido e não chama a API', async () => {
+    routeGet(api, vetRoutes());
+    const { container } = renderPage(<NewQuote />);
+    const petSelect = await switchToPet();
+    await screen.findByRole('option', { name: /Thor/ });
+
+    fireEvent.change(petSelect, { target: { value: 'pet-1' } });
+    fireEvent.change(screen.getByLabelText(/Nome do médico veterinário/i), { target: { value: 'Dr. Roberto Santos' } });
+    fireEvent.change(screen.getByLabelText(/CRMV do prescritor/i), { target: { value: 'CRMV-INVALIDO' } });
+    fireEvent.change(screen.getByLabelText(/UF do CRMV/i), { target: { value: 'SP' } });
+    selectFile(container, pngFile());
+    fireEvent.click(screen.getByRole('checkbox', { name: /Autorizo o tratamento dos dados desta receita veterinária/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Solicitar orçamento agora/i }));
+
+    expect(await screen.findByText(/Informe um CRMV válido para a UF selecionada/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/CRMV do prescritor/i)).toHaveAttribute('aria-invalid', 'true');
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('exige animal, prescritor e UF antes de enviar', async () => {
+    routeGet(api, vetRoutes());
+    const { container } = renderPage(<NewQuote />);
+    await switchToPet();
+    await screen.findByRole('option', { name: /Thor/ });
+    selectFile(container, pngFile());
+    fireEvent.click(screen.getByRole('checkbox', { name: /Autorizo o tratamento dos dados desta receita veterinária/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Solicitar orçamento agora/i }));
+
+    expect(await screen.findByText(/Selecione para qual animal é a receita/i)).toBeInTheDocument();
+    expect(screen.getByText(/Informe o nome do médico veterinário/i)).toBeInTheDocument();
+    expect(screen.getByText(/Selecione a UF do CRMV/i)).toBeInTheDocument();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('envia a receita veterinária com kind, animal, prescritor e preferências nas observações', async () => {
+    routeGet(api, vetRoutes());
+    api.post.mockResolvedValueOnce({ data: { id: 'p-vet', status: 'PENDING', kind: 'VETERINARY' } });
+    const { container } = renderPage(<NewQuote />);
+    const petSelect = await switchToPet();
+    await screen.findByRole('option', { name: /Thor/ });
+
+    fireEvent.change(petSelect, { target: { value: 'pet-1' } });
+    fireEvent.change(screen.getByLabelText(/Nome do médico veterinário/i), { target: { value: 'Dra. Camila Nogueira' } });
+    fireEvent.change(screen.getByLabelText(/CRMV do prescritor/i), { target: { value: '54321' } });
+    fireEvent.change(screen.getByLabelText(/UF do CRMV/i), { target: { value: 'SP' } });
+    fireEvent.change(screen.getByLabelText(/Forma farmacêutica/i), { target: { value: 'BISCOITO_MEDICAMENTOSO' } });
+    fireEvent.change(screen.getByLabelText(/Sabor ou aromatização/i), { target: { value: 'carne' } });
+    fireEvent.change(screen.getByRole('textbox', { name: /Observações/i }), { target: { value: 'Dar após a refeição' } });
+    selectFile(container, pngFile());
+    fireEvent.click(screen.getByRole('checkbox', { name: /Autorizo o tratamento dos dados desta receita veterinária/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Solicitar orçamento agora/i }));
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+    const [url, body] = api.post.mock.calls[0];
+    expect(url).toBe('/prescriptions');
+    expect(body.get('kind')).toBe('VETERINARY');
+    expect(body.get('petId')).toBe('pet-1');
+    expect(body.get('prescriberName')).toBe('Dra. Camila Nogueira');
+    expect(body.get('prescriberCrmv')).toBe('54321');
+    expect(body.get('prescriberUf')).toBe('SP');
+    expect(body.get('vetDocumentType')).toBe('MAGISTRAL');
+    expect(body.get('controlledNotificationNumber')).toBeNull();
+    expect(body.get('consent')).toBe('true');
+    expect(body.get('notes')).toBe('Dar após a refeição\nForma farmacêutica preferida: Biscoito medicamentoso\nSabor/aromatização: carne');
+    expect(await screen.findByRole('heading', { name: 'Receita enviada!' })).toBeInTheDocument();
+  });
+
+  it('com controlados habilitados, exige o número da notificação de receita', async () => {
+    routeGet(api, vetRoutes({ vetControlledEnabled: true }));
+    renderPage(<NewQuote />);
+    await switchToPet();
+    await screen.findByRole('option', { name: /Thor/ });
+
+    fireEvent.change(screen.getByLabelText(/Tipo de receita/i), { target: { value: 'CONTROLLED_NOTIFICATION' } });
+    const numberField = await screen.findByLabelText(/Número da notificação de receita/i);
+    expect(numberField).toHaveAttribute('placeholder', 'Ex.: NOT-2026-98765');
+
+    fireEvent.click(screen.getByRole('button', { name: /Solicitar orçamento agora/i }));
+    expect(await screen.findByText(/Informe o número da notificação de receita/i)).toBeInTheDocument();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('sem pets cadastrados, leva o tutor ao cadastro', async () => {
+    routeGet(api, vetRoutes({}, []));
+    renderPage(<NewQuote />);
+    fireEvent.click(await screen.findByRole('button', { name: /Para meu pet/i }));
+    expect(await screen.findByText(/Você ainda não cadastrou nenhum pet/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Cadastrar pet/i })).toHaveAttribute('href', '/my-pets');
+  });
+});
+

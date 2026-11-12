@@ -27,6 +27,13 @@ export const AUDIT_ACTIONS = {
   EXPORT_DATA: 'Exportação de dados (LGPD)',
   ANONYMIZE_DATA: 'Anonimização de conta (LGPD)',
   DATA_RETENTION_PURGE_CYCLE: 'Ciclo de retenção de dados',
+  REQUEST_VETERINARY_CAPABILITY: 'Farmácia solicitou habilitação veterinária',
+  APPROVE_PHARMACY_CAPABILITY: 'Admin aprovou habilitação da farmácia',
+  REJECT_PHARMACY_CAPABILITY: 'Admin recusou habilitação da farmácia',
+  SUSPEND_PHARMACY_CAPABILITY: 'Admin suspendeu habilitação da farmácia',
+  VIEW_CAPABILITY_EVIDENCE: 'Admin gerou link de documento de habilitação',
+  OPEN_CAPABILITY_EVIDENCE_FILE: 'Admin abriu documento de habilitação',
+  UPLOAD_VET_PRESCRIPTION: 'Tutor enviou receita veterinária',
 };
 
 export const AUDIT_RESOURCES = {
@@ -36,6 +43,7 @@ export const AUDIT_RESOURCES = {
   Order: 'Pedido',
   Consent: 'Consentimento',
   SupportTicket: 'Chamado de suporte',
+  PharmacyCapability: 'Habilitação da farmácia',
   System: 'Sistema',
 };
 

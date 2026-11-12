@@ -147,3 +147,116 @@ describe('SendQuote (farmácia)', () => {
     expect(screen.queryByPlaceholderText('Ex: 89,90')).toBeNull();
   });
 });
+
+// Receita veterinária para a farmácia (GET /prescriptions/:id com VET_ENABLED): animal e prescritor, sem contato do tutor
+const VET_PRESCRIPTION = {
+  id: 'rx-vet-test-1',
+  kind: 'VETERINARY',
+  status: 'PENDING',
+  notes: 'Fórmula de gabapentina 50mg palatável',
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+  contactReleased: false,
+  vetDocumentType: 'CONTROLLED_NOTIFICATION',
+  requiresManualDocumentCheck: true,
+  controlledNotificationNumber: null,
+  patient: { anonymousId: 'Paciente #TUT01' },
+  animal: { name: 'Bidu', species: 'DOG', breed: 'Schnauzer', weightGrams: 8500 },
+  prescriber: { name: 'Dr. Fernando Dias', crmv: '9876', uf: 'MG' },
+  quotes: [],
+};
+
+function mockVetGets(prescription = VET_PRESCRIPTION) {
+  api.get.mockImplementation((url) => {
+    if (url === `/prescriptions/${prescription.id}`) return Promise.resolve({ data: prescription });
+    if (url === '/pharmacy/me') return Promise.resolve({ data: ME });
+    if (url === '/pharmacy/stats') return Promise.resolve({ data: { reviewsCount: 0, averageRating: 5 } });
+    return Promise.reject(new Error(`unexpected GET ${url}`));
+  });
+}
+
+const renderVetPage = (prescription = VET_PRESCRIPTION) =>
+  renderRoute(<SendQuote />, { url: `/pharmacy/send-quote/${prescription.id}`, path: '/pharmacy/send-quote/:id' });
+
+describe('SendQuote — receita veterinária', () => {
+  it('exibe o animal, o prescritor, o alerta de documento controlado e os campos veterinários', async () => {
+    mockVetGets();
+    renderVetPage();
+
+    expect(await screen.findByText('Bidu')).toBeInTheDocument();
+    expect(screen.getAllByText('Veterinário').length).toBeGreaterThan(0);
+    expect(screen.getByText('8,5 kg')).toBeInTheDocument();
+    expect(screen.getByText('Dr. Fernando Dias · CRMV-MG 9876')).toBeInTheDocument();
+    expect(screen.getByText(/Conferir documento: Notificação de Receita Veterinária/)).toBeInTheDocument();
+    expect(screen.getByText('A receita completa e o contato do tutor são liberados após o aceite da sua proposta.')).toBeInTheDocument();
+
+    expect(screen.getByLabelText('Forma farmacêutica')).toBeInTheDocument();
+    expect(screen.getByLabelText('Aromatização')).toBeInTheDocument();
+    expect(screen.getByLabelText('Tempo de manipulação')).toBeInTheDocument();
+  });
+
+  it('envia valor, prazo e especificações galênicas após a confirmação', async () => {
+    mockVetGets();
+    api.post.mockResolvedValueOnce({
+      data: { id: 'quote-123', priceCents: 7500, price: '75.00', deliveryDays: 3, status: 'PENDING', pharmaceuticalForm: 'Biscoito medicamentoso', flavoring: 'Carne', estimatedPreparationDays: 2 },
+    });
+    renderVetPage();
+
+    fireEvent.change(await screen.findByPlaceholderText('Ex: 89,90'), { target: { value: '75,00' } });
+    fireEvent.change(screen.getByPlaceholderText('Ex: 2'), { target: { value: '3' } });
+    fireEvent.change(screen.getByLabelText('Forma farmacêutica'), { target: { value: 'Biscoito medicamentoso' } });
+    fireEvent.change(screen.getByLabelText('Aromatização'), { target: { value: 'Carne' } });
+    fireEvent.change(screen.getByLabelText('Tempo de manipulação'), { target: { value: '2' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /Enviar proposta ao tutor/ }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(within(dialog).getByText('Biscoito medicamentoso')).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: /Confirmar e enviar/ }));
+
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith('/quotes', {
+        prescriptionId: 'rx-vet-test-1',
+        price: 75,
+        deliveryDays: 3,
+        pharmaceuticalForm: 'Biscoito medicamentoso',
+        flavoring: 'Carne',
+        estimatedPreparationDays: 2,
+      })
+    );
+    expect(await screen.findByRole('heading', { name: 'Proposta enviada!' })).toBeInTheDocument();
+  });
+
+  it('não aceita tempo de manipulação maior que o prazo total', async () => {
+    mockVetGets();
+    renderVetPage();
+    fireEvent.change(await screen.findByPlaceholderText('Ex: 89,90'), { target: { value: '75,00' } });
+    fireEvent.change(screen.getByPlaceholderText('Ex: 2'), { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText('Tempo de manipulação'), { target: { value: '5' } });
+    fireEvent.click(screen.getByRole('button', { name: /Enviar proposta ao tutor/ }));
+    expect(await screen.findByText('O tempo de manipulação não pode passar do prazo total.')).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  it('403 CAPABILITY_REQUIRED: explica a habilitação veterinária em vez do formulário', async () => {
+    api.get.mockImplementation((url) => {
+      if (url.startsWith('/prescriptions/')) {
+        return Promise.reject(apiError(403, 'CAPABILITY_REQUIRED', 'Farmácia não possui a capacidade veterinária verificada.'));
+      }
+      if (url === '/pharmacy/me') return Promise.resolve({ data: ME });
+      return Promise.resolve({ data: {} });
+    });
+    renderVetPage();
+    expect(await screen.findByText('Sua farmácia não está habilitada para esta receita')).toBeInTheDocument();
+    expect(screen.getByText('Farmácia não possui a capacidade veterinária verificada.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Ver habilitação veterinária/ })).toHaveAttribute('href', '/pharmacy/veterinary-capability');
+    expect(screen.queryByPlaceholderText('Ex: 89,90')).toBeNull();
+  });
+
+  it('receita humana não mostra os campos veterinários', async () => {
+    mockGets();
+    renderPage();
+    await screen.findByPlaceholderText('Ex: 89,90');
+    expect(screen.queryByLabelText('Forma farmacêutica')).toBeNull();
+    expect(screen.getByRole('button', { name: /Enviar proposta ao paciente/ })).toBeInTheDocument();
+  });
+});

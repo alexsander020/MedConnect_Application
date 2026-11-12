@@ -1,23 +1,30 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'motion/react';
 import {
-  AlertTriangle, Camera, EyeOff, FileText, FolderOpen, Lock, RefreshCw, Send, ShieldCheck, Upload, X,
+  AlertTriangle, Camera, EyeOff, FileText, FolderOpen, Info, Lock, PawPrint, Plus, RefreshCw, Send, ShieldCheck, Upload,
+  User, X,
 } from 'lucide-react';
+import { UFS_BRASIL, validarCrmv } from '@medconnect/validation';
 import { cn } from 'cn';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Spinner } from '@/components/ui/spinner';
 import PageHeader from '@/components/shared/PageHeader';
 import { EASE_OUT, Stagger, StaggerItem } from '@/components/motion';
 import { api } from '@/services/api';
-import { privacyApi, publicApi } from '@/services/endpoints';
+import { petsApi, privacyApi, publicApi } from '@/services/endpoints';
+import { usePublicConfig } from '@/hooks/usePublicConfig';
+import { formatWeight, speciesLabel, VET_DOCUMENT_LABELS } from '@/lib/vet';
 import { formatDate } from '@/lib/format';
 import { errorCode, errorStatus, friendlyError } from './components/patient-utils';
+import { NativeSelect } from './components/vet-ui';
+import { PHARMACEUTICAL_FORM_LABELS } from './components/vet-format';
 
 /** Mesmas regras do servidor (multer 10 MB + magic bytes PDF/JPEG/PNG) */
 const ACCEPTED_MIME = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
@@ -25,6 +32,7 @@ const ACCEPTED_EXT = /\.(pdf|jpe?g|png)$/i;
 const ACCEPT_ATTR = 'application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png';
 const MAX_BYTES = 10 * 1024 * 1024;
 const NOTES_MAX = 500;
+const FLAVORING_MAX = 60;
 
 function formatSize(bytes) {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -77,13 +85,15 @@ function SuccessCheck() {
   );
 }
 
-function SuccessPanel({ onReset }) {
+function SuccessPanel({ onReset, vet = false }) {
   const headingRef = useRef(null);
   useEffect(() => {
     headingRef.current?.focus();
   }, []);
   const next = [
-    { title: 'Análise pelas farmácias', text: 'Farmácias de manipulação credenciadas avaliam a fórmula e preparam a cotação.' },
+    vet
+      ? { title: 'Análise pelas farmácias', text: 'Farmácias habilitadas para manipulação veterinária avaliam a fórmula e preparam a cotação.' }
+      : { title: 'Análise pelas farmácias', text: 'Farmácias de manipulação credenciadas avaliam a fórmula e preparam a cotação.' },
     { title: 'Cotações para comparar', text: 'Avisamos nas notificações quando chegar cada proposta, com preço e prazo.' },
     { title: 'Você escolhe', text: 'Aprove a cotação que preferir e acompanhe a manipulação até a entrega.' },
   ];
@@ -102,7 +112,9 @@ function SuccessPanel({ onReset }) {
         Receita enviada!
       </h2>
       <p className="mt-2 max-w-md text-[0.9375rem] leading-relaxed text-muted-foreground">
-        Sua receita já está disponível para as farmácias credenciadas. Você será avisado assim que chegar a primeira cotação.
+        {vet
+          ? 'A receita do seu pet já está disponível para as farmácias habilitadas. Você será avisado assim que chegar a primeira cotação.'
+          : 'Sua receita já está disponível para as farmácias credenciadas. Você será avisado assim que chegar a primeira cotação.'}
       </p>
       <Stagger as="ol" step={0.12} delay={0.3} inView={false} className="mt-8 w-full space-y-3 text-left">
         {next.map((s, i) => (
@@ -200,7 +212,7 @@ function UploadProgress({ value }) {
   );
 }
 
-function ConsentBlock({ terms, checked, onChange, error, revokedAt, checkboxRef }) {
+function ConsentBlock({ terms, checked, onChange, error, revokedAt, checkboxRef, vet = false }) {
   const term = terms?.activeVersions?.PRESCRIPTION_UPLOAD || terms?.currentHealthConsent || null;
   return (
     <fieldset
@@ -222,7 +234,9 @@ function ConsentBlock({ terms, checked, onChange, error, revokedAt, checkboxRef 
         />
         <div className="min-w-0 flex-1 space-y-2">
           <Label htmlFor="consent-health" className="block cursor-pointer text-sm leading-snug font-medium">
-            Autorizo o tratamento dos dados de saúde desta receita para cotação, manipulação e entrega (LGPD, art. 11, I).
+            {vet
+              ? 'Autorizo o tratamento dos dados desta receita veterinária, do animal e dos meus dados de tutor para cotação, verificação regulatória, manipulação e entrega (LGPD, art. 11, I).'
+              : 'Autorizo o tratamento dos dados de saúde desta receita para cotação, manipulação e entrega (LGPD, art. 11, I).'}
           </Label>
           <p id="consent-help" className="text-xs leading-relaxed text-muted-foreground">
             {term?.version ? <>Termo vigente <span className="num">{term.version}</span>. </> : null}
@@ -261,12 +275,103 @@ function ConsentBlock({ terms, checked, onChange, error, revokedAt, checkboxRef 
   );
 }
 
-/** Nova cotação: envio da receita (PDF/JPG/PNG até 10 MB) com consentimento versionado */
+function FieldError({ id, children }) {
+  if (!children) return null;
+  return (
+    <p id={id} role="alert" className="text-sm font-medium text-[hsl(4_62%_42%)]">
+      {children}
+    </p>
+  );
+}
+
+/** Seletor "Para mim" / "Para meu pet" (só aparece com a vertical veterinária ligada) */
+function KindSelector({ kind, onChange, disabled }) {
+  const options = [
+    { value: 'HUMAN', label: 'Para mim', icon: User },
+    { value: 'VETERINARY', label: 'Para meu pet', icon: PawPrint },
+  ];
+  return (
+    <div role="group" aria-label="Para quem é a receita" className="mb-6 grid grid-cols-2 gap-1.5 rounded-2xl border border-border bg-card p-1.5 sm:max-w-md">
+      {options.map(({ value, label, icon: Icon }) => {
+        const active = kind === value;
+        return (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={active}
+            disabled={disabled}
+            onClick={() => onChange(value)}
+            className={cn(
+              'flex h-11 items-center justify-center gap-2 rounded-xl text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60',
+              active ? 'bg-primary text-primary-foreground shadow-xs' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+            )}
+          >
+            <Icon className="size-4" aria-hidden="true" /> {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Preferências do tutor (forma e sabor) seguem para as farmácias junto com as observações */
+function composeNotes(notes, { isVet, pharmaceuticalForm, flavoring }) {
+  const parts = [notes.trim()];
+  if (isVet) {
+    if (pharmaceuticalForm) parts.push(`Forma farmacêutica preferida: ${PHARMACEUTICAL_FORM_LABELS[pharmaceuticalForm] || pharmaceuticalForm}`);
+    if (flavoring.trim()) parts.push(`Sabor/aromatização: ${flavoring.trim()}`);
+  }
+  return parts.filter(Boolean).join('\n');
+}
+
+const EMPTY_VET = {
+  petId: '',
+  prescriberName: '',
+  prescriberCrmv: '',
+  prescriberUf: '',
+  vetDocumentType: 'MAGISTRAL',
+  controlledNotificationNumber: '',
+  pharmaceuticalForm: '',
+  flavoring: '',
+};
+
+function validateVet(vet, { controlledEnabled }) {
+  const errors = {};
+  if (!vet.petId) errors.petId = 'Selecione para qual animal é a receita.';
+  if (!vet.prescriberName.trim()) errors.prescriberName = 'Informe o nome do médico veterinário que assinou a receita.';
+  if (!vet.prescriberUf) errors.prescriberUf = 'Selecione a UF do CRMV.';
+  if (!vet.prescriberCrmv.trim()) errors.prescriberCrmv = 'Informe o número do CRMV do prescritor.';
+  else if (vet.prescriberUf && !validarCrmv(vet.prescriberCrmv, vet.prescriberUf)) {
+    errors.prescriberCrmv = 'Informe um CRMV válido para a UF selecionada (apenas números, até 7 dígitos).';
+  }
+  if (vet.vetDocumentType === 'CONTROLLED_NOTIFICATION') {
+    if (!controlledEnabled) errors.vetDocumentType = 'Receitas de controle especial veterinário não estão habilitadas no momento.';
+    else if (!vet.controlledNotificationNumber.trim()) errors.controlledNotificationNumber = 'Informe o número da notificação de receita.';
+  }
+  return errors;
+}
+
+const VET_FIELD_ORDER = ['petId', 'prescriberName', 'prescriberCrmv', 'prescriberUf', 'vetDocumentType', 'controlledNotificationNumber'];
+const VET_FIELD_IDS = {
+  petId: 'pet-select',
+  prescriberName: 'prescriber-name',
+  prescriberCrmv: 'prescriber-crmv',
+  prescriberUf: 'prescriber-uf',
+  vetDocumentType: 'vet-document-type',
+  controlledNotificationNumber: 'controlled-notification-number',
+};
+
+/** Nova cotação: envio da receita (PDF/JPG/PNG até 10 MB) com consentimento versionado — humana ou veterinária */
 export default function NewQuote() {
   const queryClient = useQueryClient();
+  const location = useLocation();
+  const { vetEnabled, vetControlledEnabled } = usePublicConfig();
+  const [kindChoice, setKindChoice] = useState(location.state?.kind === 'VETERINARY' ? 'VETERINARY' : 'HUMAN');
   const [file, setFile] = useState(null);
   const [fileError, setFileError] = useState('');
   const [notes, setNotes] = useState('');
+  const [vet, setVet] = useState(EMPTY_VET);
+  const [vetErrors, setVetErrors] = useState({});
   const [consent, setConsent] = useState(false);
   const [consentError, setConsentError] = useState('');
   const [revokedFlag, setRevokedFlag] = useState(false);
@@ -276,11 +381,23 @@ export default function NewQuote() {
   const [done, setDone] = useState(false);
   const consentRef = useRef(null);
   const fileZoneRef = useRef(null);
+  const formRef = useRef(null);
+
+  // Sem a flag, o fluxo é sempre o humano (mesmo que a navegação peça "Para meu pet")
+  const kind = vetEnabled ? kindChoice : 'HUMAN';
+  const isVet = kind === 'VETERINARY';
 
   const termsQ = useQuery({ queryKey: ['consentTerms'], queryFn: publicApi.consentTerms, staleTime: 60 * 60 * 1000, retry: 0 });
   const consentQ = useQuery({ queryKey: ['consentStatus'], queryFn: privacyApi.consentStatus, retry: 0 });
+  const petsQ = useQuery({ queryKey: ['myPets'], queryFn: petsApi.list, enabled: isVet, retry: 0 });
+  const pets = Array.isArray(petsQ.data) ? petsQ.data : [];
   const isRevoked = revokedFlag || consentQ.data?.isRevoked === true;
   const revokedAt = isRevoked ? consentQ.data?.latestConsent?.revokedAt || null : undefined;
+
+  const setVetField = (field, value) => {
+    setVet((v) => ({ ...v, [field]: value }));
+    setVetErrors((e) => (e[field] ? { ...e, [field]: undefined } : e));
+  };
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -289,7 +406,19 @@ export default function NewQuote() {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('consent', 'true');
-      if (notes.trim()) formData.append('notes', notes.trim());
+      const finalNotes = composeNotes(notes, { isVet, ...vet });
+      if (finalNotes) formData.append('notes', finalNotes);
+      if (isVet) {
+        formData.append('kind', 'VETERINARY');
+        formData.append('petId', vet.petId);
+        formData.append('prescriberName', vet.prescriberName.trim());
+        formData.append('prescriberCrmv', vet.prescriberCrmv.trim());
+        formData.append('prescriberUf', vet.prescriberUf);
+        formData.append('vetDocumentType', vet.vetDocumentType);
+        if (vet.vetDocumentType === 'CONTROLLED_NOTIFICATION') {
+          formData.append('controlledNotificationNumber', vet.controlledNotificationNumber.trim());
+        }
+      }
       setProgress(0);
       return uploadPrescription(formData, setProgress);
     },
@@ -316,6 +445,13 @@ export default function NewQuote() {
       } else if (errorStatus(err) === 413 || code === 'LIMIT_FILE_SIZE') {
         setFileError('O arquivo passa do limite de 10 MB.');
         fileZoneRef.current?.focus();
+      } else if (code === 'INVALID_PRESCRIBER_CRMV') {
+        setVetErrors({ prescriberCrmv: 'O CRMV informado não tem um formato válido para a UF selecionada.' });
+      } else if (code === 'ANIMAL_FOOD_PRODUCING_NOT_SUPPORTED') {
+        setVetErrors({ petId: 'Ainda não atendemos manipulação para animais destinados à produção de alimentos.' });
+      } else if (code === 'ANIMAL_NOT_FOUND') {
+        setVetErrors({ petId: 'Este animal não foi encontrado. Atualize a lista em "Meus pets" e tente novamente.' });
+        queryClient.invalidateQueries({ queryKey: ['myPets'] });
       } else {
         setSubmitError(friendlyError(err, 'Não foi possível enviar sua receita agora. Verifique sua conexão e tente novamente.'));
       }
@@ -348,30 +484,52 @@ export default function NewQuote() {
     pickFile(e.dataTransfer?.files?.[0]);
   };
 
+  const focusField = (id) => formRef.current?.querySelector(`#${id}`)?.focus();
+
   const handleSubmit = (e) => {
     e.preventDefault();
     setSubmitError('');
     let ok = true;
-    const problem = file ? validatePrescriptionFile(file) : 'Anexe o arquivo da sua receita médica.';
+    let firstInvalid = null;
+
+    if (isVet) {
+      const errors = validateVet(vet, { controlledEnabled: vetControlledEnabled });
+      setVetErrors(errors);
+      const first = VET_FIELD_ORDER.find((f) => errors[f]);
+      if (first) {
+        ok = false;
+        firstInvalid = () => focusField(VET_FIELD_IDS[first]);
+      }
+    }
+    const problem = file ? validatePrescriptionFile(file) : `Anexe o arquivo da ${isVet ? 'receita veterinária' : 'sua receita médica'}.`;
     if (problem) {
       setFileError(problem);
       ok = false;
+      firstInvalid ||= () => fileZoneRef.current?.focus();
     }
     if (!consent) {
       setConsentError('Para enviar a receita, marque a autorização de uso dos dados de saúde.');
       ok = false;
+      firstInvalid ||= () => consentRef.current?.focus();
     }
     if (!ok) {
-      if (problem) fileZoneRef.current?.focus();
-      else consentRef.current?.focus();
+      firstInvalid?.();
       return;
     }
     mutation.mutate();
   };
 
+  const changeKind = (value) => {
+    setKindChoice(value);
+    setVetErrors({});
+    setSubmitError('');
+  };
+
   const reset = () => {
     setFile(null);
     setNotes('');
+    setVet(EMPTY_VET);
+    setVetErrors({});
     setConsent(false);
     setConsentError('');
     setFileError('');
@@ -381,18 +539,30 @@ export default function NewQuote() {
   };
 
   const uploading = mutation.isPending;
+  let step = 0;
+  const nextStep = () => {
+    step += 1;
+    return step;
+  };
+  const describedBy = (field, extra) => [extra, vetErrors[field] && `${VET_FIELD_IDS[field]}-error`].filter(Boolean).join(' ') || undefined;
 
   return (
     <>
       <PageHeader
-        eyebrow="Minha saúde"
+        eyebrow={isVet ? 'Saúde do meu pet' : 'Minha saúde'}
         title="Nova cotação"
-        description="Envie a receita da sua fórmula manipulada. Farmácias credenciadas respondem com preço e prazo, sem compromisso."
+        description={
+          isVet
+            ? 'Envie a receita veterinária do seu pet. Farmácias habilitadas para manipulação veterinária respondem com preço e prazo, sem compromisso.'
+            : 'Envie a receita da sua fórmula manipulada. Farmácias credenciadas respondem com preço e prazo, sem compromisso.'
+        }
       />
+
+      {vetEnabled && !done && <KindSelector kind={kind} onChange={changeKind} disabled={uploading} />}
 
       <AnimatePresence mode="wait" initial={false}>
         {done ? (
-          <SuccessPanel key="success" onReset={reset} />
+          <SuccessPanel key="success" onReset={reset} vet={isVet} />
         ) : (
           <motion.div
             key="form"
@@ -403,10 +573,177 @@ export default function NewQuote() {
           >
             <Card className="gap-0 py-0">
               <CardContent className="p-4 sm:p-6">
-                <form onSubmit={handleSubmit} noValidate className="space-y-6" aria-busy={uploading}>
+                <form ref={formRef} onSubmit={handleSubmit} noValidate className="space-y-6" aria-busy={uploading}>
+                  {/* Animal e prescritor (vertical veterinária) */}
+                  {isVet && (
+                    <fieldset className="space-y-4" disabled={uploading}>
+                      <legend className="sr-only">Animal e médico veterinário prescritor</legend>
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <h2 className="font-heading text-base font-semibold text-foreground">{nextStep()}. Animal e prescritor</h2>
+                        <Link to="/my-pets" className="inline-flex items-center gap-1 text-sm font-medium text-primary underline-offset-2 hover:underline">
+                          <PawPrint className="size-3.5" aria-hidden="true" /> Gerenciar pets
+                        </Link>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="pet-select">Animal *</Label>
+                        {petsQ.isLoading ? (
+                          <p className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Carregando seus animais…</p>
+                        ) : petsQ.isError ? (
+                          <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl border border-[color-mix(in_oklab,var(--coral)_35%,var(--border))] bg-coral-wash/60 px-4 py-3 text-sm">
+                            <span className="flex-1">Não foi possível carregar seus animais.</span>
+                            <Button type="button" size="sm" variant="outline" onClick={() => petsQ.refetch()}>Tentar novamente</Button>
+                          </div>
+                        ) : pets.length === 0 ? (
+                          <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed border-border bg-mint-wash/50 p-4 sm:flex-row sm:items-center">
+                            <p className="flex-1 text-sm text-foreground">Você ainda não cadastrou nenhum pet. Cadastre o animal para enviar a receita dele.</p>
+                            <Button asChild size="sm">
+                              <Link to="/my-pets"><Plus aria-hidden="true" /> Cadastrar pet</Link>
+                            </Button>
+                          </div>
+                        ) : (
+                          <NativeSelect
+                            id="pet-select"
+                            value={vet.petId}
+                            onChange={(e) => setVetField('petId', e.target.value)}
+                            aria-invalid={!!vetErrors.petId}
+                            aria-describedby={describedBy('petId')}
+                          >
+                            <option value="">Selecione o animal…</option>
+                            {pets.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {[p.name, speciesLabel(p.species), formatWeight(p.weightGrams)].filter(Boolean).join(' · ')}
+                              </option>
+                            ))}
+                          </NativeSelect>
+                        )}
+                        <FieldError id="pet-select-error">{vetErrors.petId}</FieldError>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="prescriber-name">Nome do médico veterinário *</Label>
+                        <Input
+                          id="prescriber-name"
+                          value={vet.prescriberName}
+                          onChange={(e) => setVetField('prescriberName', e.target.value)}
+                          placeholder="Ex.: Dra. Mariana Costa"
+                          autoComplete="off"
+                          className="h-11 rounded-lg bg-background"
+                          aria-invalid={!!vetErrors.prescriberName}
+                          aria-describedby={describedBy('prescriberName')}
+                        />
+                        <FieldError id="prescriber-name-error">{vetErrors.prescriberName}</FieldError>
+                      </div>
+
+                      <div className="grid gap-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+                        <div className="space-y-2">
+                          <Label htmlFor="prescriber-crmv">CRMV do prescritor *</Label>
+                          <Input
+                            id="prescriber-crmv"
+                            value={vet.prescriberCrmv}
+                            onChange={(e) => setVetField('prescriberCrmv', e.target.value)}
+                            placeholder="Ex.: 12345"
+                            inputMode="numeric"
+                            autoComplete="off"
+                            className="h-11 rounded-lg bg-background"
+                            aria-invalid={!!vetErrors.prescriberCrmv}
+                            aria-describedby={describedBy('prescriberCrmv', 'prescriber-crmv-help')}
+                          />
+                          <p id="prescriber-crmv-help" className="text-xs text-muted-foreground">Número que aparece no carimbo da receita.</p>
+                          <FieldError id="prescriber-crmv-error">{vetErrors.prescriberCrmv}</FieldError>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="prescriber-uf">UF do CRMV *</Label>
+                          <NativeSelect
+                            id="prescriber-uf"
+                            value={vet.prescriberUf}
+                            onChange={(e) => setVetField('prescriberUf', e.target.value)}
+                            aria-invalid={!!vetErrors.prescriberUf}
+                            aria-describedby={describedBy('prescriberUf')}
+                          >
+                            <option value="">UF</option>
+                            {UFS_BRASIL.map((uf) => (
+                              <option key={uf} value={uf}>{uf}</option>
+                            ))}
+                          </NativeSelect>
+                          <FieldError id="prescriber-uf-error">{vetErrors.prescriberUf}</FieldError>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="vet-document-type">Tipo de receita</Label>
+                        <NativeSelect
+                          id="vet-document-type"
+                          value={vet.vetDocumentType}
+                          onChange={(e) => setVetField('vetDocumentType', e.target.value)}
+                          aria-invalid={!!vetErrors.vetDocumentType}
+                          aria-describedby={describedBy('vetDocumentType')}
+                        >
+                          <option value="MAGISTRAL">{VET_DOCUMENT_LABELS.MAGISTRAL}</option>
+                          {vetControlledEnabled && <option value="CONTROLLED_NOTIFICATION">{VET_DOCUMENT_LABELS.CONTROLLED_NOTIFICATION}</option>}
+                        </NativeSelect>
+                        <FieldError id="vet-document-type-error">{vetErrors.vetDocumentType}</FieldError>
+                      </div>
+
+                      {vet.vetDocumentType === 'CONTROLLED_NOTIFICATION' && vetControlledEnabled && (
+                        <div className="space-y-2">
+                          <Label htmlFor="controlled-notification-number">Número da notificação de receita *</Label>
+                          <Input
+                            id="controlled-notification-number"
+                            value={vet.controlledNotificationNumber}
+                            onChange={(e) => setVetField('controlledNotificationNumber', e.target.value)}
+                            placeholder="Ex.: NOT-2026-98765"
+                            autoComplete="off"
+                            className="h-11 rounded-lg bg-background"
+                            aria-invalid={!!vetErrors.controlledNotificationNumber}
+                            aria-describedby={describedBy('controlledNotificationNumber', 'controlled-help')}
+                          />
+                          <p id="controlled-help" className="text-xs text-muted-foreground">
+                            A farmácia confere a notificação manualmente e pode pedir a via original na entrega.
+                          </p>
+                          <FieldError id="controlled-notification-number-error">{vetErrors.controlledNotificationNumber}</FieldError>
+                        </div>
+                      )}
+
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="pharmaceutical-form">Forma farmacêutica <span className="font-normal text-muted-foreground">(opcional)</span></Label>
+                          <NativeSelect
+                            id="pharmaceutical-form"
+                            value={vet.pharmaceuticalForm}
+                            onChange={(e) => setVetField('pharmaceuticalForm', e.target.value)}
+                          >
+                            <option value="">A critério da farmácia</option>
+                            {Object.entries(PHARMACEUTICAL_FORM_LABELS).map(([value, label]) => (
+                              <option key={value} value={value}>{label}</option>
+                            ))}
+                          </NativeSelect>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="flavoring">Sabor ou aromatização <span className="font-normal text-muted-foreground">(opcional)</span></Label>
+                          <Input
+                            id="flavoring"
+                            value={vet.flavoring}
+                            onChange={(e) => setVetField('flavoring', e.target.value.slice(0, FLAVORING_MAX))}
+                            maxLength={FLAVORING_MAX}
+                            placeholder="Ex.: carne, frango, peixe"
+                            className="h-11 rounded-lg bg-background"
+                          />
+                        </div>
+                      </div>
+
+                      <p className="flex items-start gap-2 rounded-xl border border-border bg-mint-wash/60 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
+                        <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+                        <span>
+                          <span className="font-medium text-foreground">Importante:</span> a farmácia credenciada confere a receita e a plataforma não substitui a orientação do médico veterinário.
+                        </span>
+                      </p>
+                    </fieldset>
+                  )}
+
                   {/* Arquivo */}
                   <div className="space-y-2">
-                    <h2 className="font-heading text-base font-semibold text-foreground">1. Receita médica</h2>
+                    <h2 className="font-heading text-base font-semibold text-foreground">{nextStep()}. {isVet ? 'Receita veterinária' : 'Receita médica'}</h2>
                     <input
                       id="gallery-upload"
                       type="file"
@@ -482,7 +819,9 @@ export default function NewQuote() {
                     </label>
 
                     <p id="file-rules" className="text-xs leading-relaxed text-muted-foreground">
-                      A receita precisa estar legível e completa: nome do medicamento, dosagem, assinatura e carimbo do médico.
+                      {isVet
+                        ? 'A receita precisa estar legível e completa: medicamento, dosagem, identificação do animal, assinatura e carimbo com o CRMV do veterinário.'
+                        : 'A receita precisa estar legível e completa: nome do medicamento, dosagem, assinatura e carimbo do médico.'}
                     </p>
                     {fileError && (
                       <p id="file-error" role="alert" className="flex items-start gap-1.5 text-sm font-medium text-[hsl(4_62%_42%)]">
@@ -494,7 +833,7 @@ export default function NewQuote() {
                   {/* Observações */}
                   <div className="space-y-2">
                     <div className="flex items-baseline justify-between gap-3">
-                      <Label htmlFor="quote-notes" className="font-heading text-base font-semibold">2. Observações <span className="font-sans text-sm font-normal text-muted-foreground">(opcional)</span></Label>
+                      <Label htmlFor="quote-notes" className="font-heading text-base font-semibold">{nextStep()}. Observações <span className="font-sans text-sm font-normal text-muted-foreground">(opcional)</span></Label>
                       <span id="notes-count" className="num text-xs text-muted-foreground" aria-live="polite">
                         {notes.length}/{NOTES_MAX}
                       </span>
@@ -506,7 +845,7 @@ export default function NewQuote() {
                       maxLength={NOTES_MAX}
                       rows={3}
                       disabled={uploading}
-                      placeholder="Ex.: prefiro cápsula vegetal, sem corante."
+                      placeholder={isVet ? 'Ex.: o pet aceita melhor petiscos; evitar corantes.' : 'Ex.: prefiro cápsula vegetal, sem corante.'}
                       aria-describedby="notes-help notes-count"
                       className="min-h-24 resize-y"
                     />
@@ -517,7 +856,7 @@ export default function NewQuote() {
 
                   {/* Consentimento */}
                   <div className="space-y-2">
-                    <h2 className="font-heading text-base font-semibold text-foreground">3. Autorização</h2>
+                    <h2 className="font-heading text-base font-semibold text-foreground">{nextStep()}. Autorização</h2>
                     <ConsentBlock
                       terms={termsQ.data}
                       checked={consent}
@@ -528,6 +867,7 @@ export default function NewQuote() {
                       error={consentError}
                       revokedAt={revokedAt}
                       checkboxRef={consentRef}
+                      vet={isVet}
                     />
                   </div>
 
@@ -554,7 +894,7 @@ export default function NewQuote() {
                 <Stagger as="ol" step={0.12} inView={false} className="space-y-4">
                   {[
                     ['Envie a receita', 'Foto nítida ou PDF, em poucos segundos.'],
-                    ['Receba cotações', 'Farmácias credenciadas respondem com preço e prazo.'],
+                    ['Receba cotações', isVet ? 'Farmácias habilitadas para uso veterinário respondem com preço e prazo.' : 'Farmácias credenciadas respondem com preço e prazo.'],
                     ['Escolha e acompanhe', 'Aprove a melhor proposta e siga a manipulação.'],
                   ].map(([title, text], i) => (
                     <StaggerItem as="li" key={title} y={8} className="flex gap-3">

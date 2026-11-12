@@ -2,7 +2,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { useQuery } from '@tanstack/react-query';
 import {
   Home, FileUp, Tags, Package, Bell, LifeBuoy, User, ShieldCheck, LayoutDashboard, Inbox, Star, Settings,
-  Building2, Users, FileText, ScrollText, BarChart3, LogOut, ChevronsUpDown, ExternalLink,
+  Building2, Users, FileText, ScrollText, BarChart3, LogOut, ChevronsUpDown, ExternalLink, PawPrint,
 } from 'lucide-react';
 import { cn } from 'cn';
 import Logo, { LogoMark } from '@/components/brand/Logo';
@@ -24,8 +24,12 @@ import { useAuth } from '@/context/AuthContext';
 import { adminApi, notificationsApi, pharmacyApi } from '@/services/endpoints';
 import { initials } from '@/lib/format';
 import { roleLabels } from '@/constants/status';
+import { usePublicConfig } from '@/hooks/usePublicConfig';
 
-/** Navegação por papel. `badge` é uma chave resolvida em useNavBadges. */
+/**
+ * Navegação por papel. `badge` é uma chave resolvida em useNavBadges; `flag` esconde o item quando a
+ * funcionalidade está desligada (ex.: vertical veterinária com VET_ENABLED=false).
+ */
 export const NAV = {
   PATIENT: [
     {
@@ -33,6 +37,7 @@ export const NAV = {
       items: [
         { to: '/dashboard', label: 'Início', icon: Home, end: true },
         { to: '/new-quote', label: 'Nova cotação', icon: FileUp },
+        { to: '/my-pets', label: 'Meus pets', icon: PawPrint, flag: 'vetEnabled' },
         { to: '/quote-offers', label: 'Cotações recebidas', icon: Tags },
         { to: '/orders', label: 'Meus pedidos', icon: Package },
       ],
@@ -55,6 +60,7 @@ export const NAV = {
         { to: '/pharmacy/requests', label: 'Solicitações', icon: Inbox },
         { to: '/pharmacy/orders', label: 'Pedidos', icon: Package },
         { to: '/pharmacy/reviews', label: 'Avaliações', icon: Star },
+        { to: '/pharmacy/veterinary-capability', label: 'Habilitação veterinária', icon: PawPrint, flag: 'vetEnabled' },
       ],
     },
     {
@@ -105,6 +111,7 @@ function useNavBadges(role) {
 
 function SidebarNav({ role }) {
   const badges = useNavBadges(role);
+  const flags = usePublicConfig();
   const { isMobile, setOpenMobile } = useSidebar();
   const location = useLocation();
   return (
@@ -114,7 +121,7 @@ function SidebarNav({ role }) {
           <SidebarGroupLabel className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em]">{group.label}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {group.items.map((item) => {
+              {group.items.filter((item) => !item.flag || flags[item.flag]).map((item) => {
                 const active = item.end ? location.pathname === item.to : location.pathname.startsWith(item.to);
                 const count = item.badge ? badges[item.badge] : 0;
                 return (

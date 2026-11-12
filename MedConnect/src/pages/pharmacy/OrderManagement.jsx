@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, CalendarClock, ChevronRight, FlaskConical, Package, PackageCheck, Truck, XCircle } from 'lucide-react';
+import { AlertTriangle, CalendarClock, ChevronRight, FlaskConical, Package, PackageCheck, PawPrint, Truck, XCircle } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { cn } from 'cn';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -17,10 +17,23 @@ import ErrorState from '@/components/ErrorState';
 import LoadingState from '@/components/LoadingState';
 import { EASE_OUT } from '@/components/motion';
 import { useToast } from '@/context/ToastContext';
+import { usePublicConfig } from '@/hooks/usePublicConfig';
 import { pharmacyApi } from '@/services/endpoints';
 import { firstName, formatDate, formatRelative, initials } from '@/lib/format';
 import OrderDetailSheet from './components/OrderDetailSheet';
+import { formatWeight, speciesLabel } from '@/lib/vet';
 import { deliveryDaysLabel, orderDeadline, orderPatient, orderPriceLabel, serverMessage, shortId } from './components/utils';
+import { KindBadge } from './components/vet';
+
+const orderPrescription = (order) => order?.quote?.prescription || order?.prescription || {};
+const isVetOrder = (order) => orderPrescription(order).kind === 'VETERINARY';
+const orderPet = (order) => orderPrescription(order).pet || orderPrescription(order).animal || order?.pet || null;
+
+/** Nome exibido: o animal (pedido veterinário) ou o primeiro nome do paciente */
+function orderTitle(order) {
+  if (isVetOrder(order)) return orderPet(order)?.name || 'Animal';
+  return firstName(orderPatient(order)?.name) || 'Paciente';
+}
 
 const TABS = [
   { value: 'production', label: 'Em produção', statuses: ['PRODUCTION'] },
@@ -68,9 +81,13 @@ function TransitionButtons({ order, pendingStatus, onTransition, size = 'sm' }) 
   });
 }
 
-function OrderCard({ order, pendingStatus, onTransition, onOpen }) {
+function OrderCard({ order, pendingStatus, onTransition, onOpen, showKind }) {
   const patient = orderPatient(order);
-  const name = firstName(patient?.name) || 'Paciente';
+  const vet = isVetOrder(order);
+  const pet = vet ? orderPet(order) : null;
+  const name = orderTitle(order);
+  const tutor = firstName(patient?.name);
+  const specs = vet ? [order.quote?.pharmaceuticalForm, order.quote?.flavoring].filter(Boolean) : [];
   const deadline = orderDeadline(order);
   const finishedAt = (order.history || []).find((h) => h.toStatus === order.status && order.status !== 'PRODUCTION')?.createdAt;
   const done = order.status === 'DELIVERED' || order.status === 'CANCELLED';
@@ -86,16 +103,20 @@ function OrderCard({ order, pendingStatus, onTransition, onOpen }) {
       <div className="flex flex-wrap items-start gap-x-6 gap-y-4 lg:flex-nowrap lg:items-center">
         <div className="flex min-w-0 flex-1 items-start gap-3 lg:w-64 lg:flex-none">
           <Avatar className="size-10">
-            <AvatarFallback className="bg-accent text-xs font-semibold text-primary">{initials(name)}</AvatarFallback>
+            <AvatarFallback className={cn('text-xs font-semibold', vet ? 'bg-info-wash text-info' : 'bg-accent text-primary')}>
+              {vet ? <PawPrint className="size-4" aria-hidden="true" /> : initials(name)}
+            </AvatarFallback>
           </Avatar>
           <div className="min-w-0">
             <h3 id={`order-${order.id}`} className="truncate font-heading text-[0.9375rem] font-medium text-foreground">{name}</h3>
             <p className="text-xs text-muted-foreground">
               <span className="num">#{shortId(order.id)}</span> · aprovado {formatRelative(order.createdAt)}
+              {vet && tutor ? <> · tutor: {tutor}</> : null}
             </p>
           </div>
         </div>
-        <div className="lg:order-last lg:w-40 lg:text-right">
+        <div className="flex flex-wrap items-center gap-1.5 lg:order-last lg:w-40 lg:justify-end">
+          {(showKind || vet) && <KindBadge kind={vet ? 'VETERINARY' : 'HUMAN'} />}
           <StatusBadge kind="order" status={order.status} />
         </div>
         <dl className="grid w-full grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:w-auto lg:flex-1">
@@ -126,6 +147,27 @@ function OrderCard({ order, pendingStatus, onTransition, onOpen }) {
         </dl>
       </div>
 
+      {vet && (
+        <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 rounded-xl border border-border bg-info-wash/40 px-3 py-2.5 text-sm sm:grid-cols-3">
+          <div className="min-w-0">
+            <dt className="text-xs text-muted-foreground">Espécie / raça</dt>
+            <dd className="truncate text-foreground">
+              <span className="font-medium">{speciesLabel(pet?.species) || 'Não informada'}</span> · {pet?.breed || 'SRD'}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs text-muted-foreground">Peso</dt>
+            <dd className="num font-medium text-foreground">{formatWeight(pet?.weightGrams) || 'Não informado'}</dd>
+          </div>
+          {specs.length > 0 && (
+            <div className="col-span-2 min-w-0 sm:col-span-1">
+              <dt className="text-xs text-muted-foreground">Formulação</dt>
+              <dd className="truncate text-foreground">{specs.join(' · ')}</dd>
+            </div>
+          )}
+        </dl>
+      )}
+
       <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-4">
         <TransitionButtons order={order} pendingStatus={pendingStatus} onTransition={onTransition} />
         <Button variant="ghost" size="sm" className="ml-auto" onClick={() => onOpen(order)} aria-label={`Ver detalhes do pedido ${shortId(order.id)}`}>
@@ -140,6 +182,7 @@ function OrderCard({ order, pendingStatus, onTransition, onOpen }) {
 export default function OrderManagement() {
   const toast = useToast();
   const queryClient = useQueryClient();
+  const { vetEnabled } = usePublicConfig();
   const [params, setParams] = useSearchParams();
   const tab = TABS.some((t) => t.value === params.get('tab')) ? params.get('tab') : 'production';
   const setTab = (value) => setParams((p) => {
@@ -221,7 +264,13 @@ export default function OrderManagement() {
     const term = search.trim().toLowerCase().replace(/^#/, '');
     return orders
       .filter((o) => current.statuses.includes(o.status))
-      .filter((o) => !term || o.id.toLowerCase().includes(term) || (orderPatient(o)?.name || '').toLowerCase().includes(term))
+      .filter(
+        (o) =>
+          !term ||
+          o.id.toLowerCase().includes(term) ||
+          (orderPatient(o)?.name || '').toLowerCase().includes(term) ||
+          (orderPet(o)?.name || '').toLowerCase().includes(term)
+      )
       .sort((a, b) => {
         if (tab === 'done') return new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt);
         const da = orderDeadline(a)?.date?.getTime() ?? Infinity;
@@ -259,7 +308,13 @@ export default function OrderManagement() {
               exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.18 } }}
               className="min-w-0"
             >
-              <OrderCard order={order} pendingStatus={pending[order.id]} onTransition={handleTransition} onOpen={(o) => setSelectedId(o.id)} />
+              <OrderCard
+                order={order}
+                pendingStatus={pending[order.id]}
+                onTransition={handleTransition}
+                onOpen={(o) => setSelectedId(o.id)}
+                showKind={vetEnabled}
+              />
             </motion.li>
           ))}
         </AnimatePresence>
@@ -272,7 +327,7 @@ export default function OrderManagement() {
       <PageHeader
         eyebrow="Operação"
         title="Pedidos"
-        description="Acompanhe a manipulação, despache para entrega e confirme o recebimento. O paciente é avisado a cada mudança."
+        description={`Acompanhe a manipulação, despache para entrega e confirme o recebimento. O ${vetEnabled ? 'paciente ou tutor' : 'paciente'} é avisado a cada mudança.`}
       />
 
       {overdue > 0 && !isLoading && !isError && (
@@ -294,7 +349,12 @@ export default function OrderManagement() {
             ))}
           </TabsList>
         </Tabs>
-        <SearchField value={search} onChange={setSearch} placeholder="Buscar por código ou paciente" label="Buscar pedido" />
+        <SearchField
+          value={search}
+          onChange={setSearch}
+          placeholder={vetEnabled ? 'Buscar por código, paciente ou animal' : 'Buscar por código ou paciente'}
+          label="Buscar pedido"
+        />
       </div>
 
       {content}
@@ -314,7 +374,7 @@ export default function OrderManagement() {
         open={!!cancelTarget}
         onOpenChange={(open) => !open && !mutation.isPending && setCancelTarget(null)}
         title="Cancelar este pedido?"
-        description={cancelTarget ? `Pedido #${shortId(cancelTarget.id)} · ${firstName(orderPatient(cancelTarget)?.name) || 'Paciente'}` : undefined}
+        description={cancelTarget ? `Pedido #${shortId(cancelTarget.id)} · ${orderTitle(cancelTarget)}` : undefined}
         confirmLabel="Cancelar pedido"
         cancelLabel="Manter pedido"
         destructive

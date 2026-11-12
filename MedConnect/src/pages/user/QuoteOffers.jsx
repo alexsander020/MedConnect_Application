@@ -16,7 +16,10 @@ import { Stagger, StaggerItem } from '@/components/motion';
 import { useToast } from '@/context/ToastContext';
 import { patientApi, publicApi } from '@/services/endpoints';
 import { formatDate, formatRelative } from '@/lib/format';
+import { isVetPrescription } from '@/lib/vet';
 import ViewPrescriptionButton from './components/ViewPrescriptionButton';
+import { VetBadge } from './components/vet-ui';
+import { petSummary, pharmaceuticalFormLabel } from './components/vet-format';
 import {
   asArray, awaitingQuotes, deliveryLabel, errorStatus, formatQuotePrice, friendlyError, openQuotesOf, priceCentsOf, shortId,
 } from './components/patient-utils';
@@ -81,6 +84,29 @@ function QuoteCard({ quote, rating, cheapest, fastest, onAccept, disabled }) {
         </div>
       </dl>
 
+      {(quote.pharmaceuticalForm || quote.flavoring || quote.estimatedPreparationDays != null) && (
+        <dl className="mt-3 space-y-1 text-sm">
+          {quote.pharmaceuticalForm && (
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted-foreground">Forma farmacêutica</dt>
+              <dd className="text-right text-foreground">{pharmaceuticalFormLabel(quote.pharmaceuticalForm)}</dd>
+            </div>
+          )}
+          {quote.flavoring && (
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted-foreground">Sabor</dt>
+              <dd className="text-right text-foreground">{quote.flavoring}</dd>
+            </div>
+          )}
+          {quote.estimatedPreparationDays != null && (
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted-foreground">Manipulação</dt>
+              <dd className="num text-right text-foreground">{deliveryLabel(quote.estimatedPreparationDays)}</dd>
+            </div>
+          )}
+        </dl>
+      )}
+
       {quote.notes && (
         <div className="mt-3">
           <p className="text-xs font-medium text-muted-foreground">Observações da farmácia</p>
@@ -107,13 +133,20 @@ function PrescriptionGroup({ prescription, quotes, sort, ratings, onAccept, disa
   const minPrice = Math.min(...quotes.map(priceValue));
   const minDays = Math.min(...quotes.map(daysValue));
   const headingId = `receita-${prescription.id}`;
+  const isVet = isVetPrescription(prescription);
   return (
     <section aria-labelledby={headingId} className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 id={headingId} className="font-heading text-lg font-semibold text-foreground">
-            Receita <span className="num">{shortId(prescription.id)}</span>
+          <h2 id={headingId} className="flex flex-wrap items-center gap-2 font-heading text-lg font-semibold text-foreground">
+            <span>
+              {isVet ? 'Receita veterinária' : 'Receita'} <span className="num">{shortId(prescription.id)}</span>
+            </span>
+            {isVet && <VetBadge>Veterinário</VetBadge>}
           </h2>
+          {isVet && prescription.pet && (
+            <p className="text-sm font-medium text-primary">Animal: {petSummary(prescription.pet)}</p>
+          )}
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
             <span>Enviada em {formatDate(prescription.createdAt)}</span>
             <span aria-hidden="true">·</span>

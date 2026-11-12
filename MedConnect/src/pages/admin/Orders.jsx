@@ -44,7 +44,14 @@ export default function Orders() {
       primary: true,
       cell: (o) => (
         <span className="flex flex-col">
-          <Num>{shortId(o.id)}</Num>
+          <span className="flex flex-wrap items-center gap-1.5">
+            <Num>{shortId(o.id)}</Num>
+            {o.kind === 'VETERINARY' && (
+              <StatusBadge tone="info" dot={false} className="h-5 px-2 text-[0.6875rem]">
+                Veterinária
+              </StatusBadge>
+            )}
+          </span>
           <span className="text-xs text-muted-foreground">{formatDateTime(o.createdAt)}</span>
         </span>
       ),

@@ -24,15 +24,36 @@ import { CnpjSummary } from './components/PharmacyBits';
 import { Num, RatingCell, TwoLine } from './components/cells';
 import { countActive, useSticky, useUrlFilters } from './components/useUrlFilters';
 import { toOptions } from './components/labels';
+import { CapabilitiesPanel } from './components/CapabilityReview';
+import { useAdminCapabilities } from './components/capabilities';
+import { usePublicConfig } from '@/hooks/usePublicConfig';
 
-const DEFAULTS = { tab: 'pending', search: '', verificationStatus: 'ALL', status: 'ALL', page: 1, id: '' };
+const DEFAULTS = {
+  tab: 'pending',
+  search: '',
+  verificationStatus: 'ALL',
+  status: 'ALL',
+  page: 1,
+  id: '',
+  // Aba Habilitações: por padrão, a fila de habilitações veterinárias em análise
+  capType: 'VETERINARY_COMPOUNDING',
+  capStatus: 'PENDING_VERIFICATION',
+};
 const FILTER_KEYS = ['search', 'verificationStatus', 'status'];
+const CAP_FILTER_KEYS = ['capType', 'capStatus'];
 
 /** /admin/pharmacies — fila de credenciamento + cadastro completo de farmácias */
 export default function Pharmacies() {
   const { values, setFilter, setPage, setParam, clear, patch } = useUrlFilters(DEFAULTS);
   const pending = useQuery({ queryKey: ['adminPendingPharmacies'], queryFn: adminApi.pendingPharmacies });
   const pendingCount = Array.isArray(pending.data) ? pending.data.length : 0;
+  // Habilitações (vertical veterinária): a aba aparece com VET_ENABLED ou quando já existem registros
+  const { vetEnabled } = usePublicConfig();
+  const capabilities = useAdminCapabilities();
+  const capabilityList = Array.isArray(capabilities.data) ? capabilities.data : [];
+  const showCapabilities = vetEnabled || capabilityList.length > 0;
+  const capabilityPending = capabilityList.filter((c) => c.status === 'PENDING_VERIFICATION').length;
+  const tab = values.tab === 'capabilities' && !showCapabilities ? 'pending' : values.tab;
 
   return (
     <>
@@ -41,7 +62,7 @@ export default function Pharmacies() {
         title="Farmácias"
         description="Credencie farmácias de manipulação após conferir a documentação sanitária e acompanhe o cadastro, o desempenho e o status de cada conta."
       />
-      <Tabs value={values.tab} onValueChange={(tab) => patch({ tab, id: '' })} className="gap-5">
+      <Tabs value={tab} onValueChange={(next) => patch({ tab: next, id: '' })} className="gap-5">
         <TabsList className="h-10 w-full sm:w-fit">
           <TabsTrigger value="pending" className="px-3">
             Aguardando verificação
@@ -50,13 +71,36 @@ export default function Pharmacies() {
             )}
           </TabsTrigger>
           <TabsTrigger value="all" className="px-3">Todas</TabsTrigger>
+          {showCapabilities && (
+            <TabsTrigger value="capabilities" className="px-3">
+              Habilitações
+              {capabilityPending > 0 && (
+                <span className="num ml-1 rounded-full bg-coral px-1.5 text-[0.6875rem] leading-[1.125rem] text-white">{capabilityPending}</span>
+              )}
+            </TabsTrigger>
+          )}
         </TabsList>
         <TabsContent value="pending">
           <PendingQueue query={pending} />
         </TabsContent>
         <TabsContent value="all">
-          {values.tab === 'all' && <AllPharmacies values={values} setFilter={setFilter} setPage={setPage} setParam={setParam} clear={clear} />}
+          {tab === 'all' && <AllPharmacies values={values} setFilter={setFilter} setPage={setPage} setParam={setParam} clear={clear} />}
         </TabsContent>
+        {showCapabilities && (
+          <TabsContent value="capabilities">
+            {tab === 'capabilities' && (
+              <CapabilitiesPanel
+                query={capabilities}
+                type={values.capType}
+                status={values.capStatus}
+                onTypeChange={(v) => setParam('capType', v)}
+                onStatusChange={(v) => setParam('capStatus', v)}
+                activeFilters={countActive(values, DEFAULTS, CAP_FILTER_KEYS)}
+                onClear={() => clear(CAP_FILTER_KEYS)}
+              />
+            )}
+          </TabsContent>
+        )}
       </Tabs>
     </>
   );

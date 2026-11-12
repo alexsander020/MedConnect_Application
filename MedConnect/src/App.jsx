@@ -10,6 +10,7 @@ import { TooltipProvider } from './components/ui/tooltip';
 import PublicLayout from './components/layout/PublicLayout';
 import AppShell from './components/layout/AppShell';
 import LoadingState from './components/LoadingState';
+import ErrorBoundary from './components/ErrorBoundary';
 import { Analytics } from '@vercel/analytics/react';
 import { stripSensitiveUrlParts } from './lib/analytics';
 
@@ -39,6 +40,7 @@ const SupportPage = lazy(() => import('./pages/shared/SupportPage'));
 // Paciente
 const UserDashboard = lazy(() => import('./pages/user/Dashboard'));
 const NewQuote = lazy(() => import('./pages/user/NewQuote'));
+const MyPets = lazy(() => import('./pages/user/MyPets'));
 const QuoteOffers = lazy(() => import('./pages/user/QuoteOffers'));
 const OrderTracking = lazy(() => import('./pages/user/OrderTracking'));
 const Orders = lazy(() => import('./pages/user/Orders'));
@@ -53,6 +55,7 @@ const SendQuote = lazy(() => import('./pages/pharmacy/SendQuote'));
 const OrderManagement = lazy(() => import('./pages/pharmacy/OrderManagement'));
 const Reviews = lazy(() => import('./pages/pharmacy/Reviews'));
 const PharmacySettings = lazy(() => import('./pages/pharmacy/Settings'));
+const VeterinaryCapability = lazy(() => import('./pages/pharmacy/VeterinaryCapability'));
 
 // Administração
 const AdminOverview = lazy(() => import('./pages/admin/Overview'));
@@ -102,10 +105,11 @@ function AppRoutes() {
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
 
-        {/* Paciente */}
+        {/* Paciente / tutor */}
         <Route element={<ProtectedRoute requiredType="PATIENT"><AppShell role="PATIENT" /></ProtectedRoute>}>
           <Route path="/dashboard" element={<UserDashboard />} />
           <Route path="/new-quote" element={<NewQuote />} />
+          <Route path="/my-pets" element={<MyPets />} />
           <Route path="/quote-offers" element={<QuoteOffers />} />
           <Route path="/orders" element={<Orders />} />
           <Route path="/order/:id" element={<OrderTracking />} />
@@ -124,6 +128,7 @@ function AppRoutes() {
           <Route path="orders" element={<OrderManagement />} />
           <Route path="reviews" element={<Reviews />} />
           <Route path="settings" element={<PharmacySettings />} />
+          <Route path="veterinary-capability" element={<VeterinaryCapability />} />
           <Route path="notifications" element={<NotificationsPage />} />
           <Route path="support" element={<SupportPage />} />
         </Route>
@@ -159,21 +164,23 @@ export default function App() {
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <MotionConfig reducedMotion="user">
-        <AnimateUIProvider>
-          <TooltipProvider delayDuration={250}>
-            <ToastProvider>
-              <BrowserRouter basename={import.meta.env.BASE_URL}>
-                <AuthProvider>
-                  <AppRoutes />
-                </AuthProvider>
-              </BrowserRouter>
-              {vercelAnalyticsEnabled && <Analytics beforeSend={stripSensitiveUrlParts} />}
-            </ToastProvider>
-          </TooltipProvider>
-        </AnimateUIProvider>
-      </MotionConfig>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <MotionConfig reducedMotion="user">
+          <AnimateUIProvider>
+            <TooltipProvider delayDuration={250}>
+              <ToastProvider>
+                <BrowserRouter basename={import.meta.env.BASE_URL}>
+                  <AuthProvider>
+                    <AppRoutes />
+                  </AuthProvider>
+                </BrowserRouter>
+                {vercelAnalyticsEnabled && <Analytics beforeSend={stripSensitiveUrlParts} />}
+              </ToastProvider>
+            </TooltipProvider>
+          </AnimateUIProvider>
+        </MotionConfig>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }

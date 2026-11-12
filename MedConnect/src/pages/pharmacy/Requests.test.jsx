@@ -1,10 +1,11 @@
 /**
  * @jest-environment jsdom
  */
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { Route, Routes, useLocation } from 'react-router-dom';
 import Requests from './Requests';
 import { api } from '../../services/api';
+import * as configHook from '../../hooks/usePublicConfig';
 import { apiError, renderRoute } from './test-utils';
 
 jest.mock('../../services/api', () => ({
@@ -26,6 +27,33 @@ const LIST = [
   },
 ];
 
+// Mural com receitas humana e veterinária (formato de GET /prescriptions/pharmacy com VET_ENABLED)
+const MIXED = [
+  {
+    id: 'rx-human-1',
+    kind: 'HUMAN',
+    status: 'PENDING',
+    notes: 'Minoxidil 5% com biotina',
+    createdAt: hoursAgo(1),
+    patient: { anonymousId: 'Paciente #ABC12' },
+    quotes: [],
+  },
+  {
+    id: 'rx-vet-1',
+    kind: 'VETERINARY',
+    status: 'PENDING',
+    notes: 'Biscoito palatável de omeprazol 20mg',
+    createdAt: hoursAgo(1),
+    species: 'DOG',
+    weightGrams: 14500,
+    approximateAgeMonths: 36,
+    animal: { name: 'Max', species: 'DOG', breed: 'Labrador Retriever', weightGrams: 14500, approximateAgeMonths: 36 },
+    prescriber: { name: 'Dra. Luiza Castro', crmv: '12345', uf: 'SP' },
+    requiresManualDocumentCheck: true,
+    quotes: [],
+  },
+];
+
 function Where() {
   return <p data-testid="where">{useLocation().pathname}</p>;
 }
@@ -39,7 +67,18 @@ const renderPage = () =>
     { url: '/pharmacy/requests' }
   );
 
+function mockVet({ prescriptions = MIXED, capabilities = [{ type: 'VETERINARY_COMPOUNDING', status: 'VERIFIED' }] } = {}) {
+  jest.spyOn(configHook, 'usePublicConfig').mockReturnValue({ vetEnabled: true, isLoading: false });
+  api.get.mockImplementation((url) => {
+    if (url === '/prescriptions/pharmacy') return Promise.resolve({ data: prescriptions });
+    if (url === '/pharmacy/capabilities') return Promise.resolve({ data: capabilities });
+    if (url === '/pharmacy/me') return Promise.resolve({ data: { id: 'ph1', verificationStatus: 'VERIFIED' } });
+    return Promise.reject(new Error(`unexpected GET ${url}`));
+  });
+}
+
 beforeEach(() => {
+  jest.restoreAllMocks();
   jest.clearAllMocks();
   api.get.mockImplementation((url) => {
     if (url === '/prescriptions/pharmacy') return Promise.resolve({ data: LIST });
@@ -100,5 +139,77 @@ describe('Requests (mural da farmácia)', () => {
     renderPage();
     expect(await screen.findByTestId('not-verified-state')).toBeInTheDocument();
     expect(screen.queryByText('Paciente #AAAAA')).toBeNull();
+  });
+
+  it('com a vertical veterinária desligada não mostra selos de tipo nem o filtro', async () => {
+    renderPage();
+    await screen.findByText('Paciente #AAAAA');
+    expect(screen.queryByText('Humano')).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Filtrar por tipo de receita' })).toBeNull();
+  });
+});
+
+describe('Requests — vertical veterinária (VET_ENABLED)', () => {
+  it('exibe selos Humano e Veterinário e o animal no lugar do pseudônimo', async () => {
+    mockVet();
+    renderPage();
+    expect(await screen.findByText('Paciente #ABC12')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Max' })).toBeInTheDocument();
+    expect(screen.getByText('Humano')).toBeInTheDocument();
+    expect(screen.getByText('Veterinário')).toBeInTheDocument();
+  });
+
+  it('exibe espécie, raça, peso em kg, idade e prescritor da receita veterinária', async () => {
+    mockVet();
+    renderPage();
+    const card = (await screen.findByRole('heading', { name: 'Max' })).closest('article');
+    expect(within(card).getByText('Cão')).toBeInTheDocument();
+    expect(within(card).getByText(/Labrador Retriever/)).toBeInTheDocument();
+    expect(within(card).getByText('14,5 kg')).toBeInTheDocument();
+    expect(within(card).getByText(/3 anos/)).toBeInTheDocument();
+    expect(within(card).getByText('Dra. Luiza Castro · CRMV-SP 12345')).toBeInTheDocument();
+  });
+
+  it('exibe o alerta "Conferir documento" quando requiresManualDocumentCheck é verdadeiro', async () => {
+    mockVet();
+    renderPage();
+    expect(await screen.findByText(/Conferir documento: Notificação de Receita Veterinária/)).toBeInTheDocument();
+  });
+
+  it('protege a privacidade (LGPD): sem telefone, e-mail ou endereço antes do aceite', async () => {
+    mockVet();
+    renderPage();
+    await screen.findByRole('heading', { name: 'Max' });
+    expect(screen.getByText('A receita completa e o contato do tutor são liberados após o aceite da sua proposta.')).toBeInTheDocument();
+    expect(screen.queryByText(/\(\d{2}\)\s*\d{4,5}-\d{4}/)).toBeNull();
+    expect(screen.queryByText(/@/)).toBeNull();
+  });
+
+  it('filtra por tipo de receita', async () => {
+    mockVet();
+    renderPage();
+    await screen.findByRole('heading', { name: 'Max' });
+    const group = screen.getByRole('group', { name: 'Filtrar por tipo de receita' });
+
+    fireEvent.click(within(group).getByRole('button', { name: /Humanas/ }));
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Max' })).toBeNull());
+    expect(screen.getByText('Paciente #ABC12')).toBeInTheDocument();
+
+    fireEvent.click(within(group).getByRole('button', { name: /Veterinárias/ }));
+    expect(await screen.findByRole('heading', { name: 'Max' })).toBeInTheDocument();
+    expect(screen.queryByText('Paciente #ABC12')).toBeNull();
+  });
+
+  it('explica a habilitação quando a farmácia filtra "Veterinárias" sem estar habilitada', async () => {
+    mockVet({
+      prescriptions: [],
+      capabilities: [{ type: 'VETERINARY_COMPOUNDING', status: 'PENDING_VERIFICATION', mapaRegistrationNumber: 'SP-12345-6' }],
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: /Veterinárias/ }));
+    expect(await screen.findByText('Habilitação veterinária necessária')).toBeInTheDocument();
+    expect(screen.getByText('Em análise')).toBeInTheDocument();
+    expect(screen.getByText(/registro MAPA SP-12345-6/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Ver detalhes da habilitação/ })).toHaveAttribute('href', '/pharmacy/veterinary-capability');
   });
 });

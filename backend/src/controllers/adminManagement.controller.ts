@@ -111,7 +111,7 @@ const ORDER_LIST_SELECT = {
       deliveryDays: true,
       prescriptionId: true,
       pharmacy: { select: { id: true, name: true } },
-      prescription: { select: { patient: { select: { id: true, name: true } } } }
+      prescription: { select: { kind: true, patient: { select: { id: true, name: true } } } }
     }
   }
 } satisfies Prisma.OrderSelect;
@@ -129,6 +129,7 @@ function toOrderListItem(order: OrderListRow) {
     deliveryDays: order.quote.deliveryDays,
     pharmacy: order.quote.pharmacy,
     patient: order.quote.prescription.patient,
+    kind: order.quote.prescription.kind,
     prescriptionId: order.quote.prescriptionId
   };
 }

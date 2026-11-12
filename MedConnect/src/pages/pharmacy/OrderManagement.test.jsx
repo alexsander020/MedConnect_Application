@@ -111,3 +111,83 @@ describe('OrderManagement (farmácia)', () => {
     expect(screen.queryByRole('button', { name: /Despachar|Confirmar entrega|Cancelar pedido/ })).toBeNull();
   });
 });
+
+// Pedido veterinário: a listagem (GET /orders/my) traz só o resumo do animal; contato do tutor só no detalhe auditado
+const VET_ORDER = {
+  id: 'ord-vet-12345678',
+  status: 'PRODUCTION',
+  createdAt: now,
+  updatedAt: now,
+  quote: {
+    id: 'quote-vet-1',
+    priceCents: 6500,
+    price: '65.00',
+    deliveryDays: 2,
+    pharmaceuticalForm: 'Biscoito medicamentoso',
+    flavoring: 'Carne',
+    estimatedPreparationDays: 1,
+    prescriptionId: 'rx-vet-1',
+    prescription: {
+      id: 'rx-vet-1',
+      kind: 'VETERINARY',
+      vetDocumentType: 'MAGISTRAL',
+      patient: { id: 'tutor-1', name: 'Carlos Oliveira' },
+      pet: { id: 'pet-1', name: 'Thor', species: 'DOG', breed: 'Golden Retriever', weightGrams: 15500 },
+    },
+  },
+  history: [],
+};
+
+const VET_ORDER_DETAIL = {
+  ...VET_ORDER,
+  quote: {
+    ...VET_ORDER.quote,
+    prescription: {
+      ...VET_ORDER.quote.prescription,
+      prescriberName: 'Dra. Camila',
+      prescriberCrmv: '54321',
+      prescriberUf: 'SP',
+      patient: { id: 'tutor-1', name: 'Carlos Oliveira', phone: '11987654321', address: 'Rua das Flores, 123' },
+    },
+  },
+};
+
+describe('OrderManagement — pedido veterinário', () => {
+  beforeEach(() => {
+    store = [{ ...VET_ORDER }];
+    api.get.mockImplementation((url) => {
+      if (url === '/orders/my') return Promise.resolve({ data: store.map((o) => ({ ...o })) });
+      if (url === `/orders/${VET_ORDER.id}`) return Promise.resolve({ data: VET_ORDER_DETAIL });
+      return Promise.reject(new Error(`unexpected GET ${url}`));
+    });
+  });
+
+  it('exibe o selo Veterinário, o animal e a formulação, sem o contato do tutor na listagem', async () => {
+    renderRoute(<OrderManagement />, { url: '/pharmacy/orders' });
+    expect(await screen.findByRole('heading', { name: 'Thor' })).toBeInTheDocument();
+    expect(screen.getByText('Veterinário')).toBeInTheDocument();
+    expect(screen.getByText('Cão')).toBeInTheDocument();
+    expect(screen.getByText(/Golden Retriever/)).toBeInTheDocument();
+    expect(screen.getByText('15,5 kg')).toBeInTheDocument();
+    expect(screen.getByText('Biscoito medicamentoso · Carne')).toBeInTheDocument();
+    expect(screen.getByText(/tutor: Carlos/)).toBeInTheDocument();
+    // Minimização (ADR 008): nada de telefone ou endereço na listagem
+    expect(screen.queryByText(/Rua das Flores/)).toBeNull();
+  });
+
+  it('o detalhe do pedido traz prescritor e o contato do tutor para a entrega', async () => {
+    renderRoute(<OrderManagement />, { url: '/pharmacy/orders' });
+    fireEvent.click(await screen.findByRole('button', { name: /Ver detalhes do pedido/ }));
+    const sheet = await screen.findByRole('dialog');
+    expect(await within(sheet).findByText('Rua das Flores, 123')).toBeInTheDocument();
+    expect(within(sheet).getByText('Tutor')).toBeInTheDocument();
+    expect(within(sheet).getByText('Dra. Camila · CRMV-SP 54321')).toBeInTheDocument();
+    expect(within(sheet).getByText(/98765-4321/)).toBeInTheDocument();
+  });
+
+  it('avança o status do pedido veterinário pela máquina de estados', async () => {
+    renderRoute(<OrderManagement />, { url: '/pharmacy/orders' });
+    fireEvent.click(await screen.findByRole('button', { name: /Despachar para entrega/ }));
+    await waitFor(() => expect(api.patch).toHaveBeenCalledWith('/orders/ord-vet-12345678/status', { status: 'DELIVERY' }));
+  });
+});

@@ -21,7 +21,9 @@ export default function ErrorState({
         <AlertCircle className="size-6" aria-hidden="true" />
       </span>
       <h3 className="font-heading text-lg font-medium text-foreground">{title}</h3>
-      <p className="mt-1.5 max-w-md text-sm leading-relaxed text-muted-foreground">{message}</p>
+      <p className="mt-1.5 max-w-md text-sm leading-relaxed text-muted-foreground">
+        {typeof message === 'string' ? message : message?.message || 'Não foi possível carregar os dados.'}
+      </p>
       {onRetry && (
         <Button type="button" variant="outline" onClick={onRetry} className="mt-5" data-testid="retry-button">
           <RefreshCw aria-hidden="true" />

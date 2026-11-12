@@ -13,11 +13,15 @@ import LoadingState from '@/components/LoadingState';
 import { Stagger, StaggerItem } from '@/components/motion';
 import { patientApi } from '@/services/endpoints';
 import { formatDate } from '@/lib/format';
+import { isVetPrescription } from '@/lib/vet';
 import OrderProgress from './components/OrderProgress';
+import { VetBadge } from './components/vet-ui';
 import { asArray, canReview, formatQuotePrice, isOrderActive, isOrderDone, shortId } from './components/patient-utils';
 
 function OrderRow({ order }) {
   const pharmacy = order.quote?.pharmacy?.name || 'Farmácia credenciada';
+  const isVet = isVetPrescription(order.quote?.prescription);
+  const pet = order.quote?.prescription?.pet;
   const active = isOrderActive(order);
   const reviewable = canReview(order);
   return (
@@ -27,14 +31,22 @@ function OrderRow({ order }) {
           <Store className="size-[18px]" aria-hidden="true" />
         </span>
         <div className="min-w-0">
-          <Link
-            to={`/order/${order.id}`}
-            className="block truncate font-medium text-foreground after:absolute after:inset-0 after:rounded-2xl focus-visible:outline-none focus-visible:after:ring-3 focus-visible:after:ring-ring/50"
-          >
-            {pharmacy}
-          </Link>
+          <div className="flex min-w-0 items-center gap-2">
+            <Link
+              to={`/order/${order.id}`}
+              className="block truncate font-medium text-foreground after:absolute after:inset-0 after:rounded-2xl focus-visible:outline-none focus-visible:after:ring-3 focus-visible:after:ring-ring/50"
+            >
+              {pharmacy}
+            </Link>
+            {isVet && <VetBadge>Pet</VetBadge>}
+          </div>
           <p className="text-xs text-muted-foreground">
             Pedido <span className="num">{shortId(order.id)}</span> · {formatDate(order.createdAt)}
+            {isVet && pet?.name && (
+              <>
+                {' '}· Pet: <span className="font-medium text-foreground">{pet.name}</span>
+              </>
+            )}
           </p>
         </div>
       </div>
@@ -84,7 +96,10 @@ export default function Orders() {
     const term = search.trim().toLowerCase().replace(/^#/, '');
     if (!term) return base;
     return base.filter(
-      (o) => String(o.id).toLowerCase().includes(term) || (o.quote?.pharmacy?.name || '').toLowerCase().includes(term)
+      (o) =>
+        String(o.id).toLowerCase().includes(term) ||
+        (o.quote?.pharmacy?.name || '').toLowerCase().includes(term) ||
+        (o.quote?.prescription?.pet?.name || '').toLowerCase().includes(term)
     );
   }, [orders, tab, search]);
 

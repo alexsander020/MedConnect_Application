@@ -58,10 +58,10 @@
   - Guia de deploy gerenciado no Render com rollback em menos de 30 segundos em `docs/operacao/deploy-render.md`.
 
 ### 4. Fase 6 — Novo layout, telas de gestão e evolução do banco
-- **Design system novo** (ADR 020): Tailwind v4, **shadcn/ui** com primitivos animados pelo **Animate UI** (`npx @animate-ui/cli@latest animate all`), pop-ups e avisos 100% **Radix UI** (Dialog, AlertDialog, Sheet, Popover, Select, Tooltip, **Toast**) e movimento com **Motion** respeitando `prefers-reduced-motion`. Paleta menta, Outfit + Inter auto-hospedadas (sem Google Fonts).
+- **Design system novo** (ADR 024): Tailwind v4, **shadcn/ui** com primitivos animados pelo **Animate UI** (`npx @animate-ui/cli@latest animate all`), pop-ups e avisos 100% **Radix UI** (Dialog, AlertDialog, Sheet, Popover, Select, Tooltip, **Toast**) e movimento com **Motion** respeitando `prefers-reduced-motion`. Paleta menta, Outfit + Inter auto-hospedadas (sem Google Fonts).
 - **Site público**: landing nova, diretório de farmácias credenciadas com pílula ao vivo "Aberta até 18h30", Central de Ajuda com chamados, **Política de Privacidade**, **Termos de Uso** e **Termo de Adesão** (versão `v1.0.0`, marcados como em revisão jurídica).
 - **Telas de gestão**: paciente (painel, envio de receita com consentimento versionado, comparação de cotações, timeline do pedido, Meus dados, Central de Privacidade), farmácia (painel, solicitações, proposta, pedidos, avaliações, perfil, **editor de horários**) e administração (visão geral com série de 14 dias, credenciamento e suspensão de farmácias, usuários, pedidos, receitas só com metadados, atendimento, trilha de auditoria, métricas do piloto).
-- **Banco**: hardening para Supabase (CHECKs, AuditLog imutável por trigger, RLS, ADR 018); horários de funcionamento com fuso IANA, suspensão de contas e chamados de suporte (ADR 019); observações da receita cifradas (AES-256-GCM).
+- **Banco**: hardening para Supabase (CHECKs, AuditLog imutável por trigger, RLS, ADR 022); horários de funcionamento com fuso IANA, suspensão de contas e chamados de suporte (ADR 023); observações da receita cifradas (AES-256-GCM).
 - **Privacidade reforçada**: detalhe da receita e listagem de pedidos da farmácia seguem a minimização do ADR 008 (sem arquivo/contato antes do aceite), e-mails com links de verificação/redefinição, limitador global por conta autenticada.
 
 ---
@@ -221,9 +221,9 @@ Todas as decisões técnicas do projeto estão documentadas em [`docs/decisoes/`
 - **[ADR 015: Observabilidade, Healthchecks, Sentry com LGPD Scrubbing e Métricas](./docs/decisoes/015-observabilidade-healthchecks-sentry-lgpd-metricas.md)**
 - **[ADR 016: Deploy Gerenciado no Render, Ambientes e Política de Rollback](./docs/decisoes/016-deploy-gerenciado-render-ambientes-e-rollback.md)**
 - **[ADR 017: Governança de Branch Protection e Recuperação de Desastres (Backup & Restore)](./docs/decisoes/017-governanca-branch-protection-e-backup-restore.md)**
-- **[ADR 018: Banco de Dados Gerenciado no Supabase com Hardening de Integridade, Auditoria e Exposição](./docs/decisoes/018-banco-gerenciado-supabase.md)**
-- **[ADR 019: Gestão de Contas (Suspensão), Horários de Atendimento das Farmácias e Chamados de Suporte](./docs/decisoes/019-gestao-contas-horarios-atendimento.md)**
-- **[ADR 020: Design System — Tailwind v4, shadcn/ui animado pelo Animate UI e pop-ups em Radix UI](./docs/decisoes/020-design-system-shadcn-animate-ui-radix.md)**
+- **[ADR 022: Banco de Dados Gerenciado no Supabase com Hardening de Integridade, Auditoria e Exposição](./docs/decisoes/022-banco-gerenciado-supabase.md)**
+- **[ADR 023: Gestão de Contas (Suspensão), Horários de Atendimento das Farmácias e Chamados de Suporte](./docs/decisoes/023-gestao-contas-horarios-atendimento.md)**
+- **[ADR 024: Design System — Tailwind v4, shadcn/ui animado pelo Animate UI e pop-ups em Radix UI](./docs/decisoes/024-design-system-shadcn-animate-ui-radix.md)**
 
 ---
 
@@ -306,12 +306,62 @@ npm run lint
 
 ## ☁️ Deploy e Operação em Nuvem
 
+- **Produção atual (piloto): Vercel + Supabase em São Paulo.** Site e API na mesma origem em [`medconnect-ashen.vercel.app`](https://medconnect-ashen.vercel.app) (API em `/api`, função serverless em `gru1`), banco PostgreSQL 17 e receitas em bucket privado no Supabase (`sa-east-1`), com papel de conexão dedicado (`medconnect_app`). Guia completo — variáveis, migrations, rollback e kill switch veterinário — em [`docs/operacao/deploy-vercel-supabase.md`](./docs/operacao/deploy-vercel-supabase.md).
 - **Backend:** Hospedado no **Render Web Service** com `prisma migrate deploy` pré-executado em Release Command, com ambientes de **Staging** e **Produção** separados. Rollback documentado com RTO < 30s em [`docs/operacao/deploy-render.md`](./docs/operacao/deploy-render.md).
 - **Frontend:** Hospedado no **GitHub Pages** ou CDN, compilado com a URL da API injetada por variável de ambiente (`VITE_API_URL`).
 - **Governança de Branch:** PR obrigatório, aprovação mínima de 1 revisor, CI 100% verde e sem force push em [`docs/operacao/branch-protection.md`](./docs/operacao/branch-protection.md).
 - **Recuperação de Desastres:** Rotina de backup e teste de restauração em [`docs/operacao/backup-restore.md`](./docs/operacao/backup-restore.md).
 
 ---
+
+## 🐾 Vertical Veterinária (Regulação MAPA, CRMV e CFMV)
+
+O MedConnect conta com suporte completo para a **manipulação de medicamentos veterinários**, atendendo aos requisitos sanitários do Ministério da Agricultura e Pecuária (MAPA) e conselhos profissionais (CRMV/CFMV).
+
+### 1. Principais Recursos
+- **Gestão de Animais/Pets (`/my-pets`)**: Cadastro de cães, gatos, aves, equinos, etc., com peso rigorosamente validado em gramas (`weightGrams > 0`) e controle de animais destinados à produção/alimentação humana.
+- **Receita Veterinária com Validação Sanitária**: Exigência de CRMV e UF do médico veterinário prescritor, suporte a receitas magistrais e notificações de controle especial do MAPA.
+- **Habilitação de Farmácias por Capacidade (`PharmacyCapability`)**: Separação estrita entre manipulação humana (`HUMAN_COMPOUNDING`) e veterinária (`VETERINARY_COMPOUNDING`), exigindo registro no MAPA, CRMV da empresa e RT farmacêutico/veterinário com upload privado de evidências.
+- **Painel ADMIN de Compliance**: Checklist documental humano obrigatório, visualização de documentos por URL assinada de curta duração e registro imutável em `AuditLog`.
+- **Regra de Suspensão Segura**: A suspensão da capacidade veterinária bloqueia novas cotações e o mural de receitas, preservando integralmente pedidos já contratados.
+- **Privacidade por Design (LGPD)**: Ocultamento compulsório dos dados de contato do tutor no mural de cotações da farmácia até a aceitação da proposta.
+
+### 2. Variáveis de Ambiente e Feature Flags
+No arquivo `backend/.env`:
+```env
+# Flag mestra da vertical veterinária (true para ligar, false para modo puramente humano)
+VET_ENABLED=true
+
+# Permissão para manipulação em animais de corte/produção de alimentos (default: false)
+VET_ALLOW_FOOD_PRODUCING=false
+
+# Suporte a receitas de controle especial veterinário - MAPA SIPEAGRO (default: true)
+VET_CONTROLLED_ENABLED=true
+```
+
+### 3. Como Ligar em Desenvolvimento e Staging
+1. Configure as variáveis acima no `backend/.env` ou no painel de ambiente do Render/Kubernetes.
+2. Execute as migrations e popule o banco sintético:
+   ```bash
+   npm run db:migrate && npm run db:seed
+   ```
+   *(O seed cria automaticamente um tutor com 2 animais, uma farmácia com capacidade dupla e uma farmácia puramente humana).*
+3. Inicie o sistema:
+   ```bash
+   npm run dev
+   ```
+
+### 4. Kill Switch de Emergência
+Para desativar imediatamente a vertical sem redeploy:
+- Altere `VET_ENABLED=false` nas variáveis de ambiente e reinicie o backend.
+- A API passa a responder `404 Not Found` em todos os endpoints veterinários (fail-closed) e a interface retorna ao modo 100% humano sem mocks.
+- Guia operacional detalhado: [`docs/operacao/kill-switch-vertical-veterinaria.md`](./docs/operacao/kill-switch-vertical-veterinaria.md).
+
+### 5. Decisões Arquiteturais (ADRs)
+- [`ADR 018: Vertical Veterinária — Modelo de Dados e Capacidades`](./docs/decisoes/018-vertical-veterinaria-modelo-de-dados-e-capacidades.md)
+- [`ADR 019: Isolamento por Feature Flags e Kill Switch`](./docs/decisoes/019-isolamento-por-feature-flags-e-kill-switch.md)
+- [`ADR 020: Privacidade LGPD e Segurança na Vertical Veterinária`](./docs/decisoes/020-privacidade-lgpd-e-seguranca-na-vertical-veterinaria.md)
+- [`ADR 021: Governança de Capacidades e Auditoria MAPA`](./docs/decisoes/021-governanca-de-capacidades-farmaceuticas-e-auditoria-mapa.md)
 
 ## 👤 Autor
 

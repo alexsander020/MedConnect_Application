@@ -17,6 +17,7 @@ Produção atual do **MedConnect**: site e API no mesmo domínio da Vercel, banc
 - **Função serverless** (`api/index.js`): carrega o Express já compilado (`backend/dist`). Na Vercel (`process.env.VERCEL`) o backend não abre servidor HTTP próprio e confia em 1 proxy (`trust proxy`) para obter o IP real do cliente usado no rate limiting.
 - **Sem WebSocket**: a Vercel não mantém conexões Socket.IO. O build define `VITE_ENABLE_REALTIME=false`; o aviso instantâneo de "nova cotação" fica desligado e as telas atualizam pelas consultas normais. Para tempo real, hospede o backend num serviço com processo contínuo (ver `deploy-render.md`).
 - **Receitas**: gravadas no Supabase Storage (`supabase://<uuid>.<ext>`) pela API REST com a chave secreta; leitura só por URL assinada de 5 minutos, emitida depois da linha em `PrescriptionAccessLog`.
+- **Evidências regulatórias das farmácias** (capacidades da vertical veterinária) usam o mesmo bucket privado e URLs assinadas de 5 minutos, com leitura registrada no `AuditLog`.
 
 ## 2. Banco de dados (Supabase)
 
@@ -24,7 +25,7 @@ Produção atual do **MedConnect**: site e API no mesmo domínio da Vercel, banc
 A API **não** usa o papel `postgres`. Ela conecta como `medconnect_app`:
 
 - `LOGIN`, sem `SUPERUSER`, `BYPASSRLS`, `CREATEROLE` ou `CREATEDB`; `statement_timeout = 25s`;
-- dono de todas as tabelas de `public` (as migrations do Prisma rodam com ele), por isso a API não é afetada pelo RLS sem policies (ADR 018);
+- dono de todas as tabelas de `public` (as migrations do Prisma rodam com ele), por isso a API não é afetada pelo RLS sem policies (ADR 022);
 - sem acesso aos schemas internos do Supabase (`auth`, `storage`, ...);
 - `postgres` é membro de `medconnect_app`, então o SQL Editor e o Table Editor continuam enxergando os dados.
 
@@ -53,7 +54,7 @@ cd backend
 DATABASE_URL="<string do modo sessão>" npx prisma migrate deploy
 ```
 
-Toda migration nova continua seguindo o ADR 018: `ENABLE ROW LEVEL SECURITY`, `COMMENT ON TABLE`, CHECKs de domínio. Depois de aplicar, rode os advisors do Supabase (Dashboard → Advisors). O aviso **"RLS Enabled No Policy" (INFO)** é esperado em todas as tabelas: é o bloqueio intencional da Data API.
+Toda migration nova continua seguindo o ADR 022: `ENABLE ROW LEVEL SECURITY`, `COMMENT ON TABLE`, CHECKs de domínio. Depois de aplicar, rode os advisors do Supabase (Dashboard → Advisors). O aviso **"RLS Enabled No Policy" (INFO)** é esperado em todas as tabelas: é o bloqueio intencional da Data API.
 
 ### Seed
 O seed sintético é bloqueado em produção (`NODE_ENV=production`). Contas de administrador de produção devem ser criadas de forma controlada, nunca com a senha padrão do seed.
@@ -70,6 +71,8 @@ O seed sintético é bloqueado em produção (`NODE_ENV=production`). Contas de 
 | `SUPABASE_SECRET_KEY` | Secret | Chave `sb_secret_...` (Supabase → Settings → API Keys). Exclusiva do servidor |
 | `CORS_ORIGINS` | Config | `https://medconnect-ashen.vercel.app` (também usada pela proteção CSRF) |
 | `FRONTEND_URL` | Config | `https://medconnect-ashen.vercel.app` (links dos e-mails) |
+| `VET_ENABLED` | `false` (padrão) | Vertical veterinária (ADRs 018–021). **Desligada em produção** até o parecer jurídico (`docs/regulatorio/itens-bloqueantes-producao-parecer-juridico.md`). É o kill switch: alterar a variável e fazer redeploy |
+| `VET_ALLOW_FOOD_PRODUCING` / `VET_CONTROLLED_ENABLED` | `false` (padrão) | Sub-flags da vertical veterinária |
 | `SMTP_*` | opcional | Sem SMTP os e-mails só vão para o log da função |
 | `SENTRY_DSN` | opcional | — |
 
@@ -97,4 +100,4 @@ curl -s https://medconnect-ashen.vercel.app/api/ready    # SELECT 1 no Supabase
 ## 5. Rollback
 
 - **Código**: Vercel → Deployments → deploy anterior → **Promote to Production** (instantâneo, sem rebuild). Pelo CLI: `vercel rollback`.
-- **Banco**: o plano gratuito do Supabase tem backup diário sem PITR. Para mudanças de schema arriscadas, faça `pg_dump` (modo sessão) antes de migrar — procedimento em `backup-restore.md`. Lembrete do ADR 018: após uma restauração com `--no-privileges`, reaplique o bloco de `REVOKE` da migration de hardening.
+- **Banco**: o plano gratuito do Supabase tem backup diário sem PITR. Para mudanças de schema arriscadas, faça `pg_dump` (modo sessão) antes de migrar — procedimento em `backup-restore.md`. Lembrete do ADR 022: após uma restauração com `--no-privileges`, reaplique o bloco de `REVOKE` da migration de hardening.

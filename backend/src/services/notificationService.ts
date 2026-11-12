@@ -11,7 +11,10 @@ export interface CreateNotificationOptions {
     | 'PHARMACY_VERIFIED'
     | 'NEW_ORDER'
     | 'ACCOUNT_STATUS_UPDATE'
-    | 'SUPPORT_TICKET_UPDATE';
+    | 'SUPPORT_TICKET_UPDATE'
+    | 'CAPABILITY_APPROVED'
+    | 'CAPABILITY_REJECTED'
+    | 'CAPABILITY_SUSPENDED';
   title: string;
   message: string;
 }

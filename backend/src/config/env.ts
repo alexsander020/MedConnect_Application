@@ -34,6 +34,21 @@ export const envSchema = z
       .url('FRONTEND_URL deve ser uma URL válida')
       .default('http://localhost:5173/MedConnect_Application')
       .transform((val) => val.replace(/\/+$/, '')),
+    VET_ENABLED: z
+      .union([z.boolean(), z.string()])
+      .optional()
+      .default(false)
+      .transform((val) => (typeof val === 'boolean' ? val : val === 'true' || val === '1')),
+    VET_ALLOW_FOOD_PRODUCING: z
+      .union([z.boolean(), z.string()])
+      .optional()
+      .default(false)
+      .transform((val) => (typeof val === 'boolean' ? val : val === 'true' || val === '1')),
+    VET_CONTROLLED_ENABLED: z
+      .union([z.boolean(), z.string()])
+      .optional()
+      .default(false)
+      .transform((val) => (typeof val === 'boolean' ? val : val === 'true' || val === '1')),
   })
   .superRefine((data, ctx) => {
     if (data.NODE_ENV === 'production') {

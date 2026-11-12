@@ -1,4 +1,6 @@
-# ADR 018: Banco de Dados Gerenciado no Supabase com Hardening de Integridade, Auditoria e Exposição
+# ADR 022: Banco de Dados Gerenciado no Supabase com Hardening de Integridade, Auditoria e Exposição
+
+> Numeração: este ADR foi escrito como **ADR 018** e renumerado para 022 na integração com a vertical veterinária (que publicou os ADRs 018–021 antes). Comentários das migrations já aplicadas (`20261111120000_supabase_hardening`, `20261112041717_management_hours_support`) ainda citam `018-banco-gerenciado-supabase.md`; eles foram mantidos para não alterar o checksum de migrations já aplicadas.
 
 ## Status
 Aceito
@@ -31,7 +33,7 @@ A migration `backend/prisma/migrations/20261111120000_supabase_hardening/migrati
    - Quando os papéis `anon` e `authenticated` existem (Supabase), a migration revoga todos os privilégios sobre tabelas, sequências e funções do schema `public` e ajusta os `DEFAULT PRIVILEGES` para que tabelas criadas por migrations futuras também nasçam fechadas.
    - RLS e `REVOKE` são camadas independentes: se um `GRANT` reaparecer por engano, o RLS sem policy continua bloqueando as linhas; se o RLS for desligado por engano, a falta de `GRANT` continua bloqueando a tabela.
 5. **Dicionário de dados no catálogo**: `COMMENT ON TABLE/COLUMN` descreve tabelas e colunas sensíveis (campos cifrados, hashes, dados de saúde). Os comentários aparecem no Table Editor do Supabase e em ferramentas de introspecção.
-6. **Regra para migrations futuras**: toda tabela nova deve nascer com `ENABLE ROW LEVEL SECURITY`, `COMMENT ON TABLE` e, quando houver, os CHECKs de domínio — no mesmo arquivo de migration gerado pelo Prisma (`prisma migrate dev --create-only` + SQL anexado). A migration `20261112041717_management_hours_support` (ADR 019) já segue esse padrão.
+6. **Regra para migrations futuras**: toda tabela nova deve nascer com `ENABLE ROW LEVEL SECURITY`, `COMMENT ON TABLE` e, quando houver, os CHECKs de domínio — no mesmo arquivo de migration gerado pelo Prisma (`prisma migrate dev --create-only` + SQL anexado). A migration `20261112041717_management_hours_support` (ADR 023) já segue esse padrão.
 
 ### Limites conhecidos
 - **`DISABLE TRIGGER`**: o dono da tabela (ou um superusuário) ainda pode executar `ALTER TABLE "AuditLog" DISABLE TRIGGER ...` e, com privilégio de superusuário, `SET session_replication_role = replica`, contornando a imutabilidade. A operação é DDL e fica registrada nos logs do Postgres (no Supabase, consultáveis no Logs Explorer). Mitigações: restringir quem possui a credencial do papel `postgres`, revisar periodicamente os logs de DDL e, numa evolução futura, fazer a aplicação conectar com um papel de menor privilégio que **não** seja dono das tabelas (o dono passaria a ser usado apenas para migrations).

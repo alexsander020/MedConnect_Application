@@ -35,6 +35,11 @@ export const supportApi = {
   myTickets: () => data(api.get('/support/tickets/my')),
 };
 
+/** Feature flags públicas (GET /api/config). Prefira o hook usePublicConfig nas telas. */
+export const configApi = {
+  get: () => data(api.get('/config')),
+};
+
 export const notificationsApi = {
   list: () => data(api.get('/notifications')),
   markRead: (id) => data(api.patch(`/notifications/${id}/read`)),
@@ -62,6 +67,15 @@ export const patientApi = {
   review: (payload) => data(api.post('/reviews', payload)),
 };
 
+/** Vertical veterinária (VET_ENABLED): animais do tutor */
+export const petsApi = {
+  list: () => data(api.get('/animals')),
+  get: (id) => data(api.get(`/animals/${id}`)),
+  create: (payload) => data(api.post('/animals', payload)),
+  update: (id, payload) => data(api.patch(`/animals/${id}`, payload)),
+  remove: (id) => data(api.delete(`/animals/${id}`)),
+};
+
 export const privacyApi = {
   consentStatus: () => data(api.get('/consent/status')),
   giveConsent: (consentType) => data(api.post('/consent', { consentType })),
@@ -84,6 +98,15 @@ export const pharmacyApi = {
   order: (id) => data(api.get(`/orders/${id}`)),
   updateOrderStatus: (id, status) => data(api.patch(`/orders/${id}/status`, { status })),
   reviews: (pharmacyId) => data(api.get(`/reviews/pharmacy/${pharmacyId}`)),
+  /** Capacidades regulatórias (HUMAN_COMPOUNDING / VETERINARY_COMPOUNDING) */
+  capabilities: () => data(api.get('/pharmacy/capabilities')),
+  /** Solicitação de habilitação veterinária: FormData com campos MAPA/CRMV/RT e arquivos de evidência */
+  requestVeterinaryCapability: (formData) =>
+    data(
+      api.post('/pharmacy/capabilities/veterinary', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+    ),
 };
 
 export const adminApi = {
@@ -105,6 +128,13 @@ export const adminApi = {
   orders: (params) => data(api.get('/admin/orders', { params: clean(params) })),
   order: (id) => data(api.get(`/admin/orders/${id}`)),
   prescriptions: (params) => data(api.get('/admin/prescriptions', { params: clean(params) })),
+
+  /** Capacidades regulatórias das farmácias (vertical veterinária) */
+  capabilities: (params) => data(api.get('/admin/capabilities', { params: clean(params) })),
+  capabilityEvidenceUrl: (id, index) => data(api.get(`/admin/capabilities/${id}/evidences/${index}/view-url`)),
+  approveCapability: (id, payload = {}) => data(api.patch(`/admin/capabilities/${id}/approve`, payload)),
+  rejectCapability: (id, reason) => data(api.patch(`/admin/capabilities/${id}/reject`, { reason })),
+  suspendCapability: (id, reason) => data(api.patch(`/admin/capabilities/${id}/suspend`, { reason })),
 
   supportTickets: (params) => data(api.get('/admin/support-tickets', { params: clean(params) })),
   supportTicket: (id) => data(api.get(`/admin/support-tickets/${id}`)),

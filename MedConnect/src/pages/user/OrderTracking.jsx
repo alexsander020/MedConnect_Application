@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Clock3, FileLock2, MapPin, Phone, Star, Store, XCircle } from 'lucide-react';
+import { ArrowLeft, Clock3, FileLock2, MapPin, PawPrint, Phone, Star, Store, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import PageHeader from '@/components/shared/PageHeader';
@@ -11,7 +11,10 @@ import LoadingState from '@/components/LoadingState';
 import { FadeUp } from '@/components/motion';
 import { patientApi } from '@/services/endpoints';
 import { formatDateTime, formatPhone } from '@/lib/format';
+import { formatAnimalAge, formatWeight, speciesLabel } from '@/lib/vet';
 import ViewPrescriptionButton from './components/ViewPrescriptionButton';
+import { VetBadge } from './components/vet-ui';
+import { pharmaceuticalFormLabel } from './components/vet-format';
 import { canReview, deliveryLabel, errorStatus, formatQuotePrice, shortId } from './components/patient-utils';
 
 const HEADLINES = {
@@ -73,11 +76,21 @@ export default function OrderTracking() {
   const headline = HEADLINES[order.status] || HEADLINES.PRODUCTION;
   const history = Array.isArray(order.history) ? order.history : [];
   const phone = pharmacy?.phone ? formatPhone(pharmacy.phone) : null;
+  // Pedido da vertical veterinária: a API devolve o resumo do animal em `animal`
+  const animal = order.animal || null;
+  const summaryRows = [
+    ['Valor total', <span key="v" className="text-base">{formatQuotePrice(quote)}</span>],
+    ['Prazo informado', deliveryLabel(quote.deliveryDays)],
+    quote.estimatedPreparationDays != null && ['Manipulação', deliveryLabel(quote.estimatedPreparationDays)],
+    quote.pharmaceuticalForm && ['Forma farmacêutica', pharmaceuticalFormLabel(quote.pharmaceuticalForm)],
+    quote.flavoring && ['Sabor', quote.flavoring],
+    ['Aprovado em', formatDateTime(order.createdAt)],
+  ].filter(Boolean);
 
   return (
     <>
       <PageHeader
-        eyebrow={`Pedido ${shortId(order.id)}`}
+        eyebrow={`${animal ? 'Pedido veterinário' : 'Pedido'} ${shortId(order.id)}`}
         title={headline.title}
         description={headline.text}
         actions={<BackButton />}
@@ -149,6 +162,29 @@ export default function OrderTracking() {
         </div>
 
         <aside className="space-y-6" aria-label="Detalhes do pedido">
+          {animal && (
+            <FadeUp duration={0.4} y={12}>
+              <Card className="gap-4">
+                <CardHeader className="flex flex-row items-center justify-between gap-3">
+                  <CardTitle className="font-heading text-base font-semibold">Animal</CardTitle>
+                  <VetBadge>Pet</VetBadge>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm">
+                  <p className="flex items-center gap-3 font-medium text-foreground">
+                    <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-primary">
+                      <PawPrint className="size-[18px]" aria-hidden="true" />
+                    </span>
+                    {animal.name}
+                  </p>
+                  <p className="text-muted-foreground">
+                    {[speciesLabel(animal.species), animal.breed, formatWeight(animal.weightGrams), formatAnimalAge(animal)]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
+                </CardContent>
+              </Card>
+            </FadeUp>
+          )}
           <FadeUp duration={0.4} y={12} delay={0.05}>
             <Card className="gap-4">
               <CardHeader>
@@ -156,11 +192,7 @@ export default function OrderTracking() {
               </CardHeader>
               <CardContent>
                 <dl className="divide-y divide-border rounded-xl border border-border">
-                  {[
-                    ['Valor total', <span key="v" className="text-base">{formatQuotePrice(quote)}</span>],
-                    ['Prazo informado', deliveryLabel(quote.deliveryDays)],
-                    ['Aprovado em', formatDateTime(order.createdAt)],
-                  ].map(([label, value]) => (
+                  {summaryRows.map(([label, value]) => (
                     <div key={label} className="flex items-baseline justify-between gap-4 px-4 py-3">
                       <dt className="text-sm text-muted-foreground">{label}</dt>
                       <dd className="num text-right text-sm text-foreground">{value}</dd>

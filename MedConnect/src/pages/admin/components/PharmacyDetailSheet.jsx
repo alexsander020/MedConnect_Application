@@ -14,6 +14,7 @@ import DetailSheet, { AuditNotice, MiniStat, SheetSection } from './DetailSheet'
 import AccountStatusControl from './AccountStatusControl';
 import { BusinessHoursTable, CnpjSummary } from './PharmacyBits';
 import { accountStatusErrorMessage } from './labels';
+import { PharmacyCapabilitiesSection } from './CapabilityReview';
 
 /**
  * Ficha completa da farmácia (GET /admin/pharmacies/:id — leitura auditada como ADMIN_VIEW_PHARMACY).
@@ -167,6 +168,8 @@ export default function PharmacyDetailSheet({ pharmacyId, summary, open, onOpenC
             </KeyValueList>
             <CnpjSummary data={p.cnpjData} />
           </SheetSection>
+
+          <PharmacyCapabilitiesSection pharmacyId={p.id} />
 
           <SheetSection title="Horário de atendimento" icon={Clock}>
             {p.businessHours?.length ? (

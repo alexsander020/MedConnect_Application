@@ -9,7 +9,7 @@ import { createAndSendNotification } from './notificationService';
  * Regras:
  * - Suspender exige motivo (validado na rota), grava suspendedAt/suspensionReason e
  *   revoga TODOS os refresh tokens do titular: a sessão morre na próxima renovação.
- *   O access token JWT já emitido continua válido até expirar (≤ 15 min) — ver ADR 019.
+ *   O access token JWT já emitido continua válido até expirar (≤ 15 min) — ver ADR 023.
  * - Reativar limpa suspendedAt/suspensionReason (o histórico fica no AuditLog).
  * - O banco garante status = SUSPENDED ⇔ suspendedAt IS NOT NULL (CHECK).
  */

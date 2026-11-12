@@ -1,3 +1,4 @@
+import { vetObservabilityService } from '../services/vetObservabilityService';
 import { Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middlewares/auth.middleware';
@@ -114,6 +115,9 @@ export class OrderController {
             data: { status: PrescriptionStatus.ACCEPTED }
           });
 
+          if (quote.prescription.kind === 'VETERINARY') {
+            vetObservabilityService.recordQuoteAccepted({ orderId: createdOrder.id });
+          }
           return createdOrder;
         },
         {
@@ -284,10 +288,14 @@ export class OrderController {
                   select: {
                     id: true,
                     status: true,
+                    kind: true,
+                    vetDocumentType: true,
                     createdAt: true,
                     updatedAt: true,
                     patientId: true,
-                    patient: { select: { id: true, name: true } }
+                    patient: { select: { id: true, name: true } },
+                    // Dados do animal (não são dados pessoais do tutor) para a farmácia identificar o pedido vet
+                    pet: { select: { id: true, name: true, species: true, breed: true, weightGrams: true } }
                   }
                 }
               }
@@ -307,7 +315,26 @@ export class OrderController {
           include: {
             quote: {
               include: {
-                pharmacy: { select: { id: true, name: true, phone: true, address: true } }
+                pharmacy: { select: { id: true, name: true, phone: true, address: true } },
+                prescription: {
+                  select: {
+                    id: true,
+                    kind: true,
+                    status: true,
+                    vetDocumentType: true,
+                    pet: {
+                      select: {
+                        id: true,
+                        name: true,
+                        species: true,
+                        breed: true,
+                        weightGrams: true,
+                        birthDate: true,
+                        isFoodProducing: true
+                      }
+                    }
+                  }
+                }
               }
             },
             history: { orderBy: { createdAt: 'desc' } },
@@ -349,7 +376,8 @@ export class OrderController {
                 include: {
                   patient: {
                     select: { id: true, name: true, phone: true, address: true }
-                  }
+                  },
+                  pet: true
                 }
               },
               pharmacy: {
@@ -419,8 +447,27 @@ export class OrderController {
           }
         : pharmacy;
 
+      const isVet = order.quote.prescription.kind === 'VETERINARY';
+      const pet = order.quote.prescription.pet;
+
+      const animalSummary =
+        isVet && pet
+          ? {
+              id: pet.id,
+              name: pet.name,
+              species: pet.species,
+              breed: pet.breed,
+              weightGrams: pet.weightGrams,
+              birthDate: pet.birthDate,
+              isFoodProducing: pet.isFoodProducing,
+              notes: pet.notes
+            }
+          : undefined;
+
       res.json({
         ...order,
+        animal: animalSummary,
+        tutor: isVet ? formattedPatient : undefined,
         quote: {
           ...order.quote,
           price: formatPriceCentsToDecimal(order.quote.priceCents),

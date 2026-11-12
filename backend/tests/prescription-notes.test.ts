@@ -4,6 +4,7 @@ import app from '../src/app';
 import { prisma } from '../src/lib/prisma';
 import { encryptField } from '../src/lib/fieldEncryption';
 import { cleanDatabase } from './helpers/dbCleanup';
+import { setFeatureFlagsOverrideForTesting } from '../src/config/featureFlags';
 import { createPharmacy, createUser, tokenFor } from './helpers/phase6Fixtures';
 
 /**
@@ -121,5 +122,38 @@ describe('Prescription.notes', () => {
     const rows = await prisma.prescription.findMany({ where: { patientId: patient.id } });
     expect(rows.length).toBeGreaterThan(0);
     rows.forEach((r) => expect(r.notes).toBeNull());
+  });
+
+  it('receita veterinária também grava as observações cifradas (VET_ENABLED)', async () => {
+    setFeatureFlagsOverrideForTesting({ VET_ENABLED: true });
+    try {
+      // Tutor próprio: o teste anterior anonimiza o paciente desta suíte
+      const tutor = { id: 'pn-tutor', email: 'pn.tutor@test.com' };
+      await createUser(prisma, { ...tutor, name: 'Tito Tutor' });
+      const pet = await prisma.animal.create({
+        data: { tutorId: tutor.id, name: 'Thor', species: 'DOG', weightGrams: 15500 }
+      });
+      const res = await request(app)
+        .post('/api/prescriptions')
+        .set('Authorization', `Bearer ${tokenFor(tutor.id, tutor.email, 'PATIENT')}`)
+        .field('consent', 'true')
+        .field('kind', 'VETERINARY')
+        .field('petId', pet.id)
+        .field('prescriberName', 'Dra. Mariana Costa')
+        .field('prescriberCrmv', '12345')
+        .field('prescriberUf', 'SP')
+        .field('vetDocumentType', 'MAGISTRAL')
+        .field('notes', 'Biscoito palatável sabor frango')
+        .attach('file', PNG, { filename: 'receita-vet.png', contentType: 'image/png' });
+
+      expect(res.status).toBe(201);
+      expect(res.body.kind).toBe('VETERINARY');
+      expect(res.body.notes).toBe('Biscoito palatável sabor frango');
+      const row = await prisma.prescription.findUnique({ where: { id: res.body.id } });
+      expect(row?.notes).toBeTruthy();
+      expect(row?.notes).not.toContain('frango');
+    } finally {
+      setFeatureFlagsOverrideForTesting(null);
+    }
   });
 });

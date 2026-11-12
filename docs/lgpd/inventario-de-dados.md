@@ -21,12 +21,15 @@ A plataforma **MedConnect** atua na intermediação digital entre pacientes titu
 8. **Dados Operacionais Públicos da Farmácia**: Horários de atendimento (`PharmacyBusinessHour`), fuso, cidade/UF, descrição e serviços exibidos na vitrine pública.
 
 ---
+9. **Dados da Vertical Veterinária (Animais e Prescrições)**: Embora dados de animais de estimação ou produção não constituam dados pessoais por si (animais não são titulares de direitos sob a LGPD), tais dados estão **indissociavelmente vinculados ao tutor pessoa natural** (`Animal.tutorId = User.id`), viabilizando inferência de perfil, rotina, localização e capacidade socioeconômica. Portanto, recebem tratamento e salvaguardas técnicas idênticas aos dados pessoais do titular.
+10. **Documentos de Evidência Regulatória da Farmácia**: Licenças sanitárias, certidões de regularidade do CRF, registro no MAPA (Decreto nº 5.053/2004) e comprovante de registro no CRMV-PJ, mantidos em upload privado seguro via chaves de arquivo (`evidenceFileKeys`).
+11. **Notificações de Receita Veterinária de Controle Especial**: Número de notificação oficial do MAPA (SIPEAGRO) para substâncias sujeitas a controle especial veterinário, com marcação técnica para conferência manual (`requiresManualDocumentCheck = true`).
 
 ## 2. Inventário Detalhado por Tabela / Entidade
 
 ---
 
-### 2.1 Tabela: `User` (Titular Paciente / Administrador)
+### 2.1 Tabela: `User` (Titular Paciente / Tutor / Administrador)
 
 | Campo | Tipo / Formato | Categoria do Dado | Sensível? | Finalidade Técnica | Base Legal Sugerida `[PENDENTE DE VALIDAÇÃO JURÍDICA]` | Prazo de Retenção Sugerido `[PENDENTE DE VALIDAÇÃO JURÍDICA]` | Quem Acessa | Medidas de Segurança Aplicadas |
 | :--- | :--- | :--- | :---: | :--- | :--- | :--- | :--- | :--- |
@@ -72,7 +75,7 @@ A plataforma **MedConnect** atua na intermediação digital entre pacientes titu
 
 ---
 
-### 2.3 Tabela: `Prescription` (Receita Médica / Dado de Saúde)
+### 2.3 Tabela: `Prescription` (Receita Médica Humana ou Veterinária / Dado de Saúde)
 
 | Campo | Tipo / Formato | Categoria do Dado | Sensível? | Finalidade Técnica | Base Legal Sugerida `[PENDENTE DE VALIDAÇÃO JURÍDICA]` | Prazo de Retenção Sugerido `[PENDENTE DE VALIDAÇÃO JURÍDICA]` | Quem Acessa | Medidas de Segurança Aplicadas |
 | :--- | :--- | :--- | :---: | :--- | :--- | :--- | :--- | :--- |
@@ -81,6 +84,12 @@ A plataforma **MedConnect** atua na intermediação digital entre pacientes titu
 | `fileUrl` | String (Path/URL) | **Dado Sensível de Saúde** | **SIM** | Arquivo de imagem/PDF contendo posologia, fármacos, médico e diagnósticos. | **Consentimento específico e destacado (LGPD Art. 11, I) e Tutela da Saúde (Art. 11, II, 'f')** | 5 anos de retenção mínima por exigência sanitária farmacêutica `[PENDENTE DE VALIDAÇÃO JURÍDICA]`. | Paciente dono, farmácia vencedora (somente após o aceite) e Admin, sempre por URL assinada e auditada. Farmácias em cotação aberta **não** acessam o arquivo (ADR 008). | **Armazenamento segregado, URL assinada/controlada via backend, trilha de auditoria em cada acesso (`PrescriptionAccessLog` e `AuditLog`), exclusão/anonimização sob requisição expressa.** |
 | `notes` | String (cifrado AES-256-GCM) | **Dado Sensível de Saúde** | **SIM** | Observações do paciente sobre a fórmula (substâncias, dosagens), escritas para as farmácias cotarem sem acessar o arquivo. | **Consentimento específico e destacado (LGPD Art. 11, I)** `[A VALIDAR COM O JURÍDICO]` | Igual ao da receita; apagado na anonimização mesmo quando o arquivo é retido por dever sanitário `[A VALIDAR COM O JURÍDICO]`. | Paciente dono e farmácias verificadas durante a cotação. **Admin não recebe.** | Cifragem em repouso com `keyId` (rotação), limite de 1000 caracteres na API, exportado no direito de acesso (Art. 18, II). |
 | `status` | Enum (`PrescriptionStatus`) | Controle Operacional | Não | Ciclo de vida da receita (`PENDING`, `QUOTED`, `ACCEPTED`, `CANCELLED`). | Execução de procedimentos preliminares a pedido do titular (Art. 11, II, 'g'). | Duração do pedido. | Paciente, Farmácias cotantes, Admin. | Máquina de estados finita validada em controller. |
+| `kind` | Enum (`PrescriptionKind`) | Dimensão Sanitária | Não | Diferenciação estrita: `HUMAN` vs `VETERINARY`. | Cumprimento de obrigação legal (ANVISA vs MAPA). | 5 anos. | Sistema, Farmácia habilitada, Admin. | Constraint `prescription_vet_coherence_check`. |
+| `petId` | UUID (FK Nullable) | Relacionamento Vet | Não | Vinculação ao animal destinatário da fórmula manipulada. | Execução de contrato e Normas do MAPA. | 5 anos. | Tutor, Farmácia habilitada, Admin. | Obrigatório para `VETERINARY`, estritamente nulo para `HUMAN`. |
+| `prescriberName` | String | Dado Pessoal (Profissional) | Não | Nome do médico (humano) ou médico veterinário (prescritor). | Cumprimento de obrigação legal sanitária (RDC 67/07 / MAPA). | 5 anos. | Tutor, Farmácia cotante/vencedora, Admin. | Exibido no mural para conferência de habilitação profissional. |
+| `prescriberCrmv` / `prescriberUf`| String | Identificador Profissional | Não | CRMV e UF do médico veterinário prescritor. | Cumprimento de obrigação legal sanitária (CFMV / MAPA). | 5 anos. | Tutor, Farmácia cotante/vencedora, Admin. | Validação de formato via `@medconnect/validation` (`validarCrmv`). |
+| `vetDocumentType` | Enum (`VetDocumentType`) | Classificação Documental | Não | `MAGISTRAL` (comum) ou `CONTROLLED_NOTIFICATION` (especial). | Cumprimento de normas de controle especial (SIPEAGRO/MAPA). | 5 anos. | Tutor, Farmácia cotante/vencedora, Admin. | Exige conferência manual quando controlado. |
+| `controlledNotificationNumber` | String (Nullable) | Identificador Regulatório | Não | Número da Notificação de Receita Veterinária oficial. | Cumprimento de obrigação legal sanitária de controlados (MAPA). | 5 anos. | Farmácia vencedora, Admin, Fiscalização. | Armazenado para conferência de retenção de via física. |
 
 ---
 
@@ -157,7 +166,7 @@ A plataforma **MedConnect** atua na intermediação digital entre pacientes titu
 | `id` | UUID (PK) | Identificador | Não | Identificador unívoco do consentimento. | Cumprimento de obrigação legal (LGPD Art. 8º, § 2º). | 5 anos após término da relação com o titular `[A VALIDAR]`. | Sistema interno. | UUID v4. |
 | `userId` | UUID (FK) | Relacionamento | Não | Titular que manifestou ou revogou o consentimento. | Prova de consentimento (LGPD Art. 8º, § 2º). | Mesma do registro pai. | Titular, DPO, Admin. | Relacionamento com chave estrangeira indexada. |
 | `userType` | Role | Identificação de Perfil | Não | Papel do usuário (`PATIENT`). | Prova de consentimento. | Mesma do registro pai. | Titular, DPO, Admin. | Enum restrito. |
-| `consentType` | String | Classificação do Escopo | Não | Escopo do consentimento (`HEALTH_DATA_PROCESSING`, `PRESCRIPTION_UPLOAD` e, desde a Fase 6, `TERMS_AND_PRIVACY` registrado no cadastro do paciente). | Prova de consentimento. | 5 anos pós-encerramento. | Titular, DPO, Admin. | Padronização via constantes do sistema. |
+| `consentType` | String | Classificação do Escopo | Não | Escopo do consentimento (`HEALTH_DATA_PROCESSING`, `PRESCRIPTION_UPLOAD` e, desde a Fase 6, `TERMS_AND_PRIVACY` registrado no cadastro do paciente e, na vertical veterinária, `VET_DATA_PROCESSING` com texto `v2.0.0-vet`). | Prova de consentimento. | 5 anos pós-encerramento. | Titular, DPO, Admin. | Padronização via constantes do sistema. |
 | `textVersion` | String | Controle de Versão | Não | Versão do texto legal apresentado ao titular (ex: `v1.0.0`). | Transparência e auditoria de versão de termos. | 5 anos pós-encerramento. | Titular, DPO, Admin. | Versionamento semântico de termos. |
 | `textHash` | String (SHA-256) | Integridade Textual | Não | Hash criptográfico do texto exato aprovado pelo titular. | Não repúdio e garantia de integridade do termo aceito. | 5 anos pós-encerramento. | DPO, Auditoria externa, Perícia judicial. | Hash SHA-256 calculado a partir do conteúdo bruto. |
 | `ipAddress` | String | Metadado de Conexão | Não | IP de origem no momento da manifestação da vontade. | Marco Civil da Internet (Art. 15) e auditoria. | 5 anos pós-encerramento. | DPO, Admin. | Capturado via cabeçalhos HTTP na rota autenticada. |
@@ -211,9 +220,63 @@ A plataforma **MedConnect** atua na intermediação digital entre pacientes titu
 
 ---
 
+---
+
+### 2.14 Tabela: `Animal` (Animal de Estimação ou Produção vinculado ao Tutor)
+
+> **Nota Conceitual LGPD `[PENDENTE DE VALIDAÇÃO JURÍDICA]`**: O animal não é titular de dados pessoais perante a LGPD. Contudo, seus registros estão **indissociavelmente vinculados ao tutor pessoa natural** (`tutorId`). A divulgação indevida de dados do animal (peso, espécie, alergias, medicações de uso crônico) permite inferir estilo de vida, poder aquisitivo e localização do tutor. Adota-se, portanto, a mesma postura de confidencialidade e segurança que protege os dados do próprio titular.
+
+| Campo | Tipo / Formato | Categoria do Dado | Sensível? | Finalidade Técnica | Base Legal Sugerida `[PENDENTE DE VALIDAÇÃO JURÍDICA]` | Prazo de Retenção Sugerido `[PENDENTE DE VALIDAÇÃO JURÍDICA]` | Quem Acessa | Medidas de Segurança Aplicadas |
+| :--- | :--- | :--- | :---: | :--- | :--- | :--- | :--- | :--- |
+| `id` | UUID (PK) | Identificador do sistema | Não | Chave primária do animal. | Execução de contrato (Art. 7º, V). | Duração da conta do tutor ou até exclusão do animal. | Sistema interno, APIs autenticadas. | UUID v4. |
+| `tutorId` | UUID (FK) | Relacionamento Pessoal | Não | Vinculação exclusiva ao tutor titular (`User.id`). | Execução de contrato (Art. 7º, V). | Mesma do cadastro do tutor. | Próprio tutor, Sistema. | Constraint de chave estrangeira com `ON DELETE CASCADE`. |
+| `name` | String | Identificação do Animal | Não | Nome do pet para rotulagem farmacotécnica do medicamento. | Execução de contrato e Normas do MAPA. | Duração do vínculo ou até exclusão lógica. | Tutor, Farmácia cotante/vencedora, Admin. | Exibido no resumo do pedido e rótulo. |
+| `species` | Enum (`AnimalSpecies`) | Dados Veterinários | Não | Espécie (`DOG`, `CAT`, `BIRD`, `EQUINE`, etc.) para validação de segurança farmacotécnica de ativos tóxicos por espécie. | Execução de contrato e Normas MAPA/CRMV. | Duração do vínculo ou até exclusão lógica. | Tutor, Farmácia cotante/vencedora, Admin. | Validação por enum fechado. |
+| `breed` | String | Dados Veterinários | Não | Raça do animal para cálculo posológico e predisposições. | Execução de contrato. | Duração do vínculo ou até exclusão lógica. | Tutor, Farmácia cotante/vencedora. | Sanitização de texto. |
+| `weightGrams` | Integer | Dados Veterinários | Não | Peso estrito em gramas (padrão D5) para cálculo de dose pelo farmacêutico. | Execução de contrato e Segurança Terapêutica. | Duração do vínculo ou até exclusão lógica. | Tutor, Farmácia cotante/vencedora. | Constraint de banco `animal_weight_positive_check` (`weightGrams > 0`). |
+| `birthDate` | DateTime (Nullable) | Dados Veterinários | Não | Idade aproximada do animal para avaliação de geriatria/pediatria veterinária. | Execução de contrato. | Duração do vínculo ou até exclusão lógica. | Tutor, Farmácia cotante/vencedora. | Formatação na interface sem expor dia exato para a farmácia antes do aceite. |
+| `isFoodProducing` | Boolean | Controle Regulatório MAPA | Não | Indicação se o animal é destinado à produção/alimentação (corte, leite, ovos). | Cumprimento de obrigação legal e controle de período de carência (MAPA). | Permanente no histórico sanitário. | Tutor, Sistema, Admin. | Bloqueio automático de orçamento quando `VET_ALLOW_FOOD_PRODUCING=false`. |
+| `notes` | String (Nullable) | Observações de Manejo | Não | Preferências de aroma, sabor e restrições (ex: "alérgico a frango"). | Execução de contrato e personalização de forma farmacêutica. | Duração do vínculo. | Tutor, Farmácia cotante/vencedora. | Sanitização contra XSS. |
+| `deletedAt` | DateTime (Nullable) | Estado de Privacidade | Não | Timestamp de exclusão lógica (soft delete) pelo tutor. | Cumprimento de direito do titular (LGPD Art. 18, VI). | Preservação apenas em pedidos pré-existentes. | Sistema interno. | Índice composto `(tutorId, deletedAt)` para filtrar animais ativos. |
+
+---
+
+---
+
+### 2.15 Tabela: `PharmacyCapability` (Capacidades Regulatórias da Farmácia)
+
+| Campo | Tipo / Formato | Categoria do Dado | Sensível? | Finalidade Técnica | Base Legal Sugerida `[PENDENTE DE VALIDAÇÃO JURÍDICA]` | Prazo de Retenção Sugerido `[PENDENTE DE VALIDAÇÃO JURÍDICA]` | Quem Acessa | Medidas de Segurança Aplicadas |
+| :--- | :--- | :--- | :---: | :--- | :--- | :--- | :--- | :--- |
+| `id` | UUID (PK) | Identificador | Não | Identificador da capacidade. | Cumprimento de obrigação legal de verificação sanitária. | Duração do credenciamento da farmácia. | Sistema interno. | UUID v4. |
+| `pharmacyId` | UUID (FK) | Relacionamento | Não | Vinculação à farmácia jurídica titular da capacidade. | Cumprimento de obrigação legal. | Mesma da farmácia. | Farmácia titular, Admin. | Constraint `@@unique([pharmacyId, type])`. |
+| `type` | Enum (`CapabilityType`) | Escopo Regulatório | Não | `HUMAN_COMPOUNDING` ou `VETERINARY_COMPOUNDING`. | Governança regulatória (ANVISA vs MAPA). | Permanente no histórico cadastral. | Farmácia, Admin, Sistema de RBAC. | Enum fechado. |
+| `status` | Enum (`CapabilityStatus`)| Ciclo Regulatório | Não | `PENDING_VERIFICATION`, `VERIFIED`, `REJECTED`, `SUSPENDED`. | Compliance sanitário e controle de acesso. | Permanente no histórico de auditoria. | Farmácia titular, Admin. | Transições restritas ao papel `ADMIN`. |
+| `mapaRegistrationNumber` | String | Identificador Governamental | Não | Número de registro do estabelecimento no MAPA (Decreto 5.053/2004). | Cumprimento de obrigação legal perante o MAPA. | Duração do vínculo + prazo prescricional (5-10 anos). | Farmácia titular, Admin, Fiscalização. | Validação de formato de registro do estabelecimento. |
+| `crmvCompanyRegistration` / `crmvCompanyUf` | String | Identificador Profissional PJ | Não | Inscrição da pessoa jurídica no CRMV da Unidade da Federação. | Cumprimento de obrigações profissionais (CFMV). | Duração do vínculo + prazo prescricional. | Farmácia titular, Admin. | Validação de UF e formato de inscrição. |
+| `technicalResponsibleName` | String | Dado Pessoal (Profissional) | Não | Nome do Farmacêutico ou Veterinário Responsável Técnico da empresa. | Cumprimento de dever de transparência sanitária. | Duração do vínculo + 5 anos. | Tutores (no pedido aceito), Farmácia, Admin. | Exibido no pedido para garantia de rastreabilidade. |
+| `technicalResponsibleCrf` / `technicalResponsibleCrfUf` | String | Identificador Profissional PF | Não | Número e UF da carteira profissional do Responsável Técnico (CRF/CRMV). | Cumprimento de exigência sanitária legal. | Duração do vínculo + 5 anos. | Tutores, Farmácia, Admin. | Validação de formato via `@medconnect/validation`. |
+| `evidenceFileKeys` | Array de Strings | Documentos de Evidência | Não | Chaves de arquivos de certidões do MAPA, CRMV e CRF armazenados em storage privado. | Compliance sanitário e prova perante órgãos reguladores. | Duração do vínculo + 5 a 10 anos pós-descredenciamento. | **Apenas Administrador (`ADMIN`) via URL assinada de curta duração.** | **Sem URLs públicas. Abertura auditada com registro de IP e justificativa em `AuditLog`.** |
+| `verifiedByAdminId` / `verifiedAt` | UUID / DateTime | Auditoria de Homologação | Não | Identificação do analista administrativo que homologou a capacidade. | Responsabilização e trilha de conformidade (Accountability). | Permanente para histórico de compliance. | DPO, Auditoria, Admin. | Gravado exclusivamente pelo backend em transação de aprovação. |
+| `rejectionReason` | String (Nullable) | Justificativa Regulatória | Não | Motivo formal de recusa ou suspensão da capacidade. | Transparência e ampla defesa perante o parceiro. | Permanente no histórico da solicitação. | Farmácia titular, Admin. | Campo obrigatório para transições `REJECTED` e `SUSPENDED`. |
+
+---
+
+---
+
 ## 3. Resumo de Itens Pendentes de Validação Jurídica
 
 1. **Hipótese Legal para Dados de Saúde**: O tratamento de cópias de receitas médicas está operando sob duplo respaldo técnico sugerido: **Consentimento Específico e Destacado (LGPD Art. 11, I)** e **Tutela da Saúde (LGPD Art. 11, II, 'f')**. O departamento jurídico deve determinar se ambas são mantidas em conjunto ou se há prevalência estrita do consentimento para a etapa comercial de intermediação.
 2. **Prazos de Retenção Sanitária vs. Exclusão LGPD**: A Anvisa (RDC 67/2007) e o Código de Defesa do Consumidor estipulam retenção mínima de documentos e fórmulas por até 5 anos. Quando o paciente solicita exclusão (LGPD Art. 18, VI), a plataforma anonimiza os dados cadastrais diretos e bloqueia novos orçamentos, mas preserva os registros técnicos mínimos essenciais para cumprimento de obrigação legal/regulatória (LGPD Art. 16, I). Esse procedimento e o prazo de expurgo exato dependem de parecer legal formal.
 3. **Enquadramento Regulatório da Plataforma**: Validação do enquadramento da MedConnect perante a ANPD e os Conselhos Profissionais (CFF/CFM) como Controladora de dados cadastrais e Operadora/Intermediária dos dados das receitas direcionadas às farmácias de manipulação.
 4. **Chamados de Suporte e Dados Operacionais (Fase 6)**: Definir base legal e prazo de retenção dos chamados de suporte (`SupportTicket`), que podem conter dados de saúde relatados espontaneamente pelo titular, e da suspensão de contas (`suspensionReason`, `lastLoginAt`). Hoje a plataforma não expurga chamados automaticamente; a anonimização do titular remove nome, e-mail, assunto, mensagem e resolução, preservando protocolo, categoria, status e datas `[A VALIDAR COM O JURÍDICO]`.
+
+### Vertical veterinária
+
+> **RASCUNHO — REVISÃO JURÍDICA OBRIGATÓRIA**
+
+1. **Hipótese Legal para Dados da Vertical Veterinária**:
+   - Definição formal se o tratamento de dados de tutores e prescrições veterinárias deve se dar sob **Consentimento Específico (Art. 11, I)** por assimilação ao regime de saúde humana, ou sob **Execução de Contrato (Art. 7º, V)** complementado por legítimo interesse e cumprimento de dever perante o MAPA.
+2. **Prazos de Retenção Sanitária vs. Exclusão LGPD (MAPA vs. ANVISA)**:
+   - Normas do MAPA e da ANVISA estipulam retenção mínima de documentos e fórmulas por períodos de 2 a 5 anos. Quando o tutor solicita exclusão de conta (LGPD Art. 18, VI), a plataforma anonimiza os dados cadastrais diretos e os animais associados, mas preserva os registros técnicos mínimos essenciais para cumprimento de obrigação legal/regulatória (LGPD Art. 16, I). Esse procedimento e o prazo de expurgo exato dependem de parecer legal formal.
+3. **Validade e Retenção Física de Notificação de Controle Especial Veterinário**:
+   - Necessidade de parecer sobre a responsabilidade da plataforma e da farmácia na retenção da via física da Notificação de Receita Veterinária antes da entrega do medicamento ao tutor.

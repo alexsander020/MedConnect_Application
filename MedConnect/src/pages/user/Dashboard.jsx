@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
-  ArrowRight, ChevronRight, FileText, FileUp, FlaskConical, Hourglass, MapPin, Package, PackageCheck,
+  ArrowRight, ChevronRight, FileText, FileUp, FlaskConical, Hourglass, MapPin, Package, PackageCheck, PawPrint,
   Sparkles, Star, Store, Tags, Truck,
 } from 'lucide-react';
 import { cn } from 'cn';
@@ -18,10 +18,13 @@ import ErrorState from '@/components/ErrorState';
 import LoadingState from '@/components/LoadingState';
 import { FadeUp, Stagger, StaggerItem } from '@/components/motion';
 import { useAuth } from '@/context/AuthContext';
+import { usePublicConfig } from '@/hooks/usePublicConfig';
 import { patientApi, publicApi } from '@/services/endpoints';
 import { computeOpenStatus } from '@/lib/business-hours';
 import { firstName, formatRelative } from '@/lib/format';
+import { isVetPrescription } from '@/lib/vet';
 import OrderProgress from './components/OrderProgress';
+import { VetBadge } from './components/vet-ui';
 import {
   asArray, awaitingQuotes, countOpenQuotes, formatQuotePrice, isOrderActive, openQuotesOf, shortId,
 } from './components/patient-utils';
@@ -151,15 +154,21 @@ function RecentPrescriptions({ prescriptions }) {
     <Stagger as="ul" step={0.06} className="-my-1 divide-y divide-border">
       {recent.map((p) => {
         const open = openQuotesOf(p).length;
+        const isVet = isVetPrescription(p);
+        const Icon = isVet ? PawPrint : FileText;
         return (
           <StaggerItem as="li" key={p.id} y={10} className="flex items-center gap-3 py-3">
             <span className="hidden size-9 shrink-0 items-center justify-center rounded-full bg-accent text-primary sm:inline-flex">
-              <FileText className="size-4" aria-hidden="true" />
+              <Icon className="size-4" aria-hidden="true" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-foreground">
-                <span className="sr-only sm:not-sr-only">Receita </span>
-                <span className="num">{shortId(p.id)}</span>
+              <p className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
+                <span className="truncate">
+                  <span className="sr-only sm:not-sr-only">Receita </span>
+                  <span className="num">{shortId(p.id)}</span>
+                  {isVet && p.pet?.name && <> · {p.pet.name}</>}
+                </span>
+                {isVet && <VetBadge>Pet</VetBadge>}
               </p>
               <p className="text-xs text-muted-foreground">
                 Enviada {formatRelative(p.createdAt)}
@@ -205,6 +214,9 @@ function ActiveOrders({ orders }) {
                 <p className="truncate text-sm font-medium text-foreground">{o.quote?.pharmacy?.name || 'Farmácia credenciada'}</p>
                 <p className="text-xs text-muted-foreground">
                   Pedido <span className="num">{shortId(o.id)}</span> · <span className="num">{formatQuotePrice(o.quote)}</span>
+                  {isVetPrescription(o.quote?.prescription) && o.quote?.prescription?.pet?.name && (
+                    <> · Pet: {o.quote.prescription.pet.name}</>
+                  )}
                 </p>
               </div>
               <ChevronRight className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
@@ -299,6 +311,7 @@ function OpenPharmaciesStrip() {
 /** Início do paciente */
 export default function Dashboard() {
   const { currentUser } = useAuth();
+  const { vetEnabled } = usePublicConfig();
   const prescriptionsQ = useQuery({ queryKey: ['myPrescriptions'], queryFn: patientApi.prescriptions });
   const ordersQ = useQuery({ queryKey: ['myOrders'], queryFn: patientApi.orders });
 
@@ -321,11 +334,20 @@ export default function Dashboard() {
         title={name ? `Olá, ${name}` : 'Olá!'}
         description="Acompanhe suas receitas, compare cotações e siga cada pedido até a entrega."
         actions={
-          <Button asChild size="lg">
-            <Link to="/new-quote">
-              <FileUp aria-hidden="true" /> Enviar receita
-            </Link>
-          </Button>
+          <>
+            {vetEnabled && (
+              <Button asChild size="lg" variant="outline">
+                <Link to="/new-quote" state={{ kind: 'VETERINARY' }}>
+                  <PawPrint aria-hidden="true" /> Receita do pet
+                </Link>
+              </Button>
+            )}
+            <Button asChild size="lg">
+              <Link to="/new-quote">
+                <FileUp aria-hidden="true" /> Enviar receita
+              </Link>
+            </Button>
+          </>
         }
       />
 

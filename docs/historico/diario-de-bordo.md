@@ -103,8 +103,8 @@ A Fase 2 concluiu a transição da aplicação para um produto 100% real, com da
 ## Fase 6: Novo layout, telas de gestão e evolução do banco (12/11/2026)
 
 ### Banco de dados
-- **Hardening para Supabase** (`20261111120000_supabase_hardening`, ADR 018): CHECKs de domínio, `AuditLog` somente-inserção garantido por trigger, RLS em todas as tabelas e revogação da Data API (`anon`/`authenticated`) quando os papéis existem.
-- **Gestão** (`20261112041717_management_hours_support`, ADR 019): `AccountStatus` (suspensão de pacientes e farmácias, com revogação de refresh tokens), `PharmacyBusinessHour` (minutos + fuso IANA, vários intervalos por dia) e `SupportTicket` (protocolo, categoria, resolução; leitura pelo admin auditada).
+- **Hardening para Supabase** (`20261111120000_supabase_hardening`, ADR 022): CHECKs de domínio, `AuditLog` somente-inserção garantido por trigger, RLS em todas as tabelas e revogação da Data API (`anon`/`authenticated`) quando os papéis existem.
+- **Gestão** (`20261112041717_management_hours_support`, ADR 023): `AccountStatus` (suspensão de pacientes e farmácias, com revogação de refresh tokens), `PharmacyBusinessHour` (minutos + fuso IANA, vários intervalos por dia) e `SupportTicket` (protocolo, categoria, resolução; leitura pelo admin auditada).
 - **Observações da receita** (`20261112052526_prescription_notes`): `Prescription.notes` cifrado (AES-256-GCM), visível ao paciente e às farmácias verificadas na cotação, nunca ao admin; exportado no direito de acesso e apagado na anonimização.
 
 ### Correções de privacidade encontradas na integração
@@ -114,7 +114,7 @@ A Fase 2 concluiu a transição da aplicação para um produto 100% real, com da
 - Limitador global da API: 100 req/15 min por IP para anônimos e 600 req/15 min por conta autenticada (equipes atrás do mesmo NAT eram bloqueadas).
 
 ### Frontend
-- Tailwind v4 + shadcn/ui (radix-vega, JSX) + `npx @animate-ui/cli@latest animate all` (18 componentes com primitivos animados); toasts em Radix UI Toast; Motion com `reducedMotion="user"` (ADR 020).
+- Tailwind v4 + shadcn/ui (radix-vega, JSX) + `npx @animate-ui/cli@latest animate all` (18 componentes com primitivos animados); toasts em Radix UI Toast; Motion com `reducedMotion="user"` (ADR 024).
 - Site público (landing, diretório de farmácias com status de funcionamento ao vivo, ajuda/contato, Política de Privacidade, Termos de Uso e Termo de Adesão marcados como em revisão jurídica), autenticação completa e todas as telas de gestão de paciente, farmácia e administração.
 
 ### Verificação

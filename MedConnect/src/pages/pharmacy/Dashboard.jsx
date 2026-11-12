@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Inbox, Send, Percent, Truck, Wallet, Star, ArrowRight, FileText, FlaskConical, ShieldAlert, PackageCheck,
+  Inbox, Send, Percent, Truck, Wallet, Star, ArrowRight, FileText, FlaskConical, ShieldAlert, PackageCheck, PawPrint,
 } from 'lucide-react';
 import { cn } from 'cn';
 import { Button } from '@/components/ui/button';
@@ -13,11 +13,14 @@ import StatusBadge from '@/components/shared/StatusBadge';
 import ErrorState from '@/components/ErrorState';
 import { FadeUp, Stagger, StaggerItem } from '@/components/motion';
 import { useAuth } from '@/context/AuthContext';
+import { usePublicConfig } from '@/hooks/usePublicConfig';
 import { pharmacyApi } from '@/services/endpoints';
 import { formatCents, formatDate, formatRelative, firstName } from '@/lib/format';
 import { VerificationBanner } from './components/VerificationNotice';
 import HoursSummaryCard from './components/HoursSummaryCard';
 import { isRecent, orderDeadline, orderPatient, orderPriceLabel, patientAlias, shortId } from './components/utils';
+import { CapabilityStatusBadge, KindBadge } from './components/vet';
+import { animalOf, isVetPrescription, usePharmacyCapabilities } from './components/vetUtils';
 
 const hasMyQuote = (p) => Array.isArray(p?.quotes) && p.quotes.length > 0;
 
@@ -133,7 +136,41 @@ function Muted({ icon: Icon, children }) {
   );
 }
 
-function NewRequests({ query, verification, checking }) {
+/** Situação da habilitação veterinária (MAPA/CRMV) — só aparece com a vertical ligada */
+function VetCapabilityCard({ capabilities }) {
+  const cap = capabilities.vetCapability;
+  const status = cap?.status;
+  let text;
+  if (capabilities.isLoading) text = null;
+  else if (!cap) text = 'Sua farmácia ainda não pediu habilitação para receitas veterinárias. A operação humana segue normalmente.';
+  else if (status === 'VERIFIED') text = `Habilitada para manipulação veterinária${cap.mapaRegistrationNumber ? ` (registro MAPA ${cap.mapaRegistrationNumber})` : ''}.`;
+  else if (status === 'PENDING_VERIFICATION') text = 'Documentos em análise pela equipe MedConnect. Sua operação humana segue ativa.';
+  else if (status === 'SUSPENDED') text = `Habilitação suspensa${cap.rejectionReason ? `: ${cap.rejectionReason}` : ''}. Pedidos já aprovados continuam normalmente.`;
+  else text = `Solicitação recusada${cap.rejectionReason ? `: ${cap.rejectionReason}` : ''}. Corrija os documentos e reenvie.`;
+
+  return (
+    <Card className="rounded-2xl">
+      <CardHeader>
+        <CardTitle className="flex flex-wrap items-center gap-2 text-[1.0625rem]">
+          <PawPrint className="size-5 text-info" aria-hidden="true" /> Habilitação veterinária
+        </CardTitle>
+        {status && <CardAction><CapabilityStatusBadge status={status} /></CardAction>}
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {capabilities.isLoading ? <Skeleton className="h-12 rounded-xl" /> : <p className="text-sm leading-relaxed text-muted-foreground">{text}</p>}
+        {!capabilities.isLoading && (
+          <Button asChild variant={!cap || status === 'REJECTED' ? 'default' : 'outline'} size="sm" className="w-full">
+            <Link to="/pharmacy/veterinary-capability">
+              {!cap ? 'Solicitar habilitação' : status === 'REJECTED' ? 'Reenviar documentos' : 'Ver habilitação'} <ArrowRight aria-hidden="true" />
+            </Link>
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function NewRequests({ query, verification, checking, showKind }) {
   const latest = (query.data || []).filter((p) => !hasMyQuote(p)).slice(0, 5);
   let body;
   if (verification && verification !== 'VERIFIED') {
@@ -149,27 +186,32 @@ function NewRequests({ query, verification, checking }) {
   } else {
     body = (
       <Stagger as="ul" step={0.04} inView={false} className="-my-1 divide-y divide-border">
-        {latest.map((p) => (
-          <StaggerItem as="li" key={p.id} y={8} className="flex items-center gap-3 py-3">
-            <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-primary">
-              <FileText className="size-[18px]" aria-hidden="true" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
-                <span className="truncate">{patientAlias(p)}</span>
-                {isRecent(p.createdAt) && <StatusBadge tone="primary" dot={false} className="h-5 px-2 text-[0.6875rem] tracking-wide">NOVA</StatusBadge>}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Receita <span className="num">#{shortId(p.id)}</span> · enviada {formatRelative(p.createdAt)}
-              </p>
-            </div>
-            <Button asChild size="sm">
-              <Link to={`/pharmacy/send-quote/${p.id}`} aria-label={`Enviar cotação para a receita ${shortId(p.id)}`}>
-                Cotar
-              </Link>
-            </Button>
-          </StaggerItem>
-        ))}
+        {latest.map((p) => {
+          const vet = isVetPrescription(p);
+          const Icon = vet ? PawPrint : FileText;
+          return (
+            <StaggerItem as="li" key={p.id} y={8} className="flex items-center gap-3 py-3">
+              <span className={cn('inline-flex size-10 shrink-0 items-center justify-center rounded-full', vet ? 'bg-info-wash text-info' : 'bg-accent text-primary')}>
+                <Icon className="size-[18px]" aria-hidden="true" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
+                  <span className="truncate">{vet ? animalOf(p)?.name || 'Animal' : patientAlias(p)}</span>
+                  {showKind && <KindBadge kind={vet ? 'VETERINARY' : 'HUMAN'} className="h-5 px-2 text-[0.6875rem]" />}
+                  {isRecent(p.createdAt) && <StatusBadge tone="primary" dot={false} className="h-5 px-2 text-[0.6875rem] tracking-wide">NOVA</StatusBadge>}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Receita <span className="num">#{shortId(p.id)}</span> · enviada {formatRelative(p.createdAt)}
+                </p>
+              </div>
+              <Button asChild size="sm">
+                <Link to={`/pharmacy/send-quote/${p.id}`} aria-label={`Enviar cotação para a receita ${shortId(p.id)}`}>
+                  Cotar
+                </Link>
+              </Button>
+            </StaggerItem>
+          );
+        })}
       </Stagger>
     );
   }
@@ -204,7 +246,10 @@ function OrdersNeedingAction({ query }) {
       <Stagger as="ul" step={0.04} inView={false} className="-my-1 divide-y divide-border">
         {active.map(({ order, deadline }) => {
           const Icon = order.status === 'DELIVERY' ? Truck : FlaskConical;
-          const name = firstName(orderPatient(order)?.name) || 'Paciente';
+          const presc = order.quote?.prescription || {};
+          const name = presc.kind === 'VETERINARY'
+            ? (presc.pet || presc.animal)?.name || 'Animal'
+            : firstName(orderPatient(order)?.name) || 'Paciente';
           return (
             <StaggerItem as="li" key={order.id} y={8} className="flex items-center gap-3 py-3">
               <span className={cn('inline-flex size-10 shrink-0 items-center justify-center rounded-full', order.status === 'DELIVERY' ? 'bg-info-wash text-info' : 'bg-amber-wash text-amber')}>
@@ -234,7 +279,7 @@ function OrdersNeedingAction({ query }) {
   return (
     <SectionCard
       title="Pedidos que precisam de ação"
-      description="Em manipulação ou a caminho, ordenados pelo prazo prometido ao paciente."
+      description="Em manipulação ou a caminho, ordenados pelo prazo prometido."
       action={
         <Button asChild variant="ghost" size="sm">
           <Link to="/pharmacy/orders">Gerenciar <ArrowRight aria-hidden="true" /></Link>
@@ -249,6 +294,8 @@ function OrdersNeedingAction({ query }) {
 /** Visão geral da farmácia (/pharmacy) */
 export default function PharmacyDashboard() {
   const { currentUser } = useAuth();
+  const { vetEnabled } = usePublicConfig();
+  const capabilities = usePharmacyCapabilities(vetEnabled);
   const me = useQuery({ queryKey: ['pharmacyMe'], queryFn: pharmacyApi.me, staleTime: 5 * 60_000 });
   const stats = useQuery({ queryKey: ['pharmacyStats'], queryFn: pharmacyApi.stats });
   const verification = me.data?.verificationStatus || stats.data?.verificationStatus;
@@ -286,11 +333,14 @@ export default function PharmacyDashboard() {
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <FadeUp duration={0.45} y={12} delay={0.1} className="min-w-0 space-y-6">
-          <NewRequests query={prescriptions} verification={verification} checking={me.isLoading || stats.isLoading} />
+          <NewRequests query={prescriptions} verification={verification} checking={me.isLoading || stats.isLoading} showKind={vetEnabled} />
           <OrdersNeedingAction query={orders} />
         </FadeUp>
         <FadeUp duration={0.45} y={12} delay={0.16} className="min-w-0">
-          <HoursSummaryCard pharmacy={me.data} loading={me.isLoading} className="lg:sticky lg:top-24" />
+          <div className="space-y-6 lg:sticky lg:top-24">
+            <HoursSummaryCard pharmacy={me.data} loading={me.isLoading} />
+            {vetEnabled && verified && <VetCapabilityCard capabilities={capabilities} />}
+          </div>
         </FadeUp>
       </div>
     </>

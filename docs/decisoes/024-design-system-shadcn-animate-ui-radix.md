@@ -1,4 +1,6 @@
-# 20. Design System: Tailwind v4, shadcn/ui animado pelo Animate UI e pop-ups em Radix UI
+# ADR 024: Design System: Tailwind v4, shadcn/ui animado pelo Animate UI e pop-ups em Radix UI
+
+> Numeração: este ADR foi escrito como **ADR 020** e renumerado para 024 na integração com a vertical veterinária (que publicou os ADRs 018–021 antes).
 
 ## Status
 Aceito

@@ -12,7 +12,7 @@ const loginSchema = {
   body: z.object({
     email: z.string().email('Formato de e-mail inválido'),
     password: z.string().min(1, 'Senha é obrigatória'),
-    type: z.enum(['patient', 'pharmacy']).optional()
+    type: z.enum(['patient', 'pharmacy', 'user', 'admin']).optional()
   })
 };
 

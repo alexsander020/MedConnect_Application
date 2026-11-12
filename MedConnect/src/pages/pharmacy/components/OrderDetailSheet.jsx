@@ -12,6 +12,7 @@ import { pharmacyApi } from '@/services/endpoints';
 import { formatDate, formatDateTime, formatPhone } from '@/lib/format';
 import { usePrescriptionViewer } from './usePrescriptionViewer';
 import { deliveryDaysLabel, orderDeadline, orderPriceLabel, shortId } from './utils';
+import { ControlledDocumentAlert, KindBadge, VetAnimalSummary } from './vet';
 
 function Section({ title, children }) {
   return (
@@ -43,6 +44,11 @@ export default function OrderDetailSheet({ summary, open, onOpenChange, actions 
   const deadline = orderDeadline(merged);
   const patient = data?.quote?.prescription?.patient;
   const prescriptionId = merged.quote?.prescriptionId || merged.quote?.prescription?.id;
+  // Pedido veterinário: o detalhe traz o animal e o prescritor; a listagem traz só o resumo do animal
+  const prescription = { ...(summary?.quote?.prescription || {}), ...(data?.quote?.prescription || {}) };
+  const vet = prescription.kind === 'VETERINARY';
+  const quote = merged.quote || {};
+  const vetSpecs = vet ? [quote.pharmaceuticalForm, quote.flavoring].filter(Boolean) : [];
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -53,11 +59,22 @@ export default function OrderDetailSheet({ summary, open, onOpenChange, actions 
               Pedido <span className="num">#{shortId(orderId)}</span>
             </SheetTitle>
             {status && <StatusBadge kind="order" status={status} />}
+            {vet && <KindBadge kind="VETERINARY" />}
           </div>
-          <SheetDescription>Aprovado pelo paciente em {formatDateTime(merged.createdAt)}</SheetDescription>
+          <SheetDescription>Aprovado pelo {vet ? 'tutor' : 'paciente'} em {formatDateTime(merged.createdAt)}</SheetDescription>
         </SheetHeader>
 
         <div className="flex-1 space-y-7 overflow-y-auto px-6 py-6">
+          {vet && (
+            <Section title="Animal">
+              <p className="font-heading text-base font-medium text-foreground">{(prescription.pet || prescription.animal)?.name || 'Animal'}</p>
+              <VetAnimalSummary prescription={prescription} showDocument />
+              {prescription.vetDocumentType === 'CONTROLLED_NOTIFICATION' && (
+                <ControlledDocumentAlert number={prescription.controlledNotificationNumber} />
+              )}
+            </Section>
+          )}
+
           <Section title="Entrega">
             {detail.isLoading ? (
               <div className="space-y-2" aria-busy="true">
@@ -75,7 +92,7 @@ export default function OrderDetailSheet({ summary, open, onOpenChange, actions 
             ) : (
               <>
                 <KeyValueList>
-                  <KeyValue label={<span className="inline-flex items-center gap-1.5"><User className="size-3.5" aria-hidden="true" /> Paciente</span>}>
+                  <KeyValue label={<span className="inline-flex items-center gap-1.5"><User className="size-3.5" aria-hidden="true" /> {vet ? 'Tutor' : 'Paciente'}</span>}>
                     {patient?.name || '—'}
                   </KeyValue>
                   <KeyValue label={<span className="inline-flex items-center gap-1.5"><Phone className="size-3.5" aria-hidden="true" /> Telefone</span>}>
@@ -101,6 +118,12 @@ export default function OrderDetailSheet({ summary, open, onOpenChange, actions 
             <KeyValueList>
               <KeyValue label="Valor total"><span className="num">{orderPriceLabel(merged)}</span></KeyValue>
               <KeyValue label="Prazo prometido">{deliveryDaysLabel(merged.quote?.deliveryDays)}</KeyValue>
+              {vetSpecs.length > 0 && <KeyValue label="Formulação">{vetSpecs.join(' · ')}</KeyValue>}
+              {vet && quote.estimatedPreparationDays ? (
+                <KeyValue label="Tempo de manipulação">
+                  <span className="num">{quote.estimatedPreparationDays}</span> {Number(quote.estimatedPreparationDays) === 1 ? 'dia' : 'dias'}
+                </KeyValue>
+              ) : null}
               <KeyValue label="Previsão de entrega">
                 {deadline ? (
                   <span className={deadline.overdue ? 'text-[hsl(4_62%_42%)]' : undefined}>

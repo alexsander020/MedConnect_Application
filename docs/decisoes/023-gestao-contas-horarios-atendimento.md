@@ -1,4 +1,6 @@
-# ADR 019: Gestão de Contas (Suspensão), Horários de Atendimento das Farmácias e Chamados de Suporte
+# ADR 023: Gestão de Contas (Suspensão), Horários de Atendimento das Farmácias e Chamados de Suporte
+
+> Numeração: este ADR foi escrito como **ADR 019** e renumerado para 023 na integração com a vertical veterinária (que publicou os ADRs 018–021 antes). A migration já aplicada `20261112041717_management_hours_support` ainda cita `019-gestao-contas-horarios-atendimento.md`.
 
 ## Status
 Aceito
@@ -10,7 +12,7 @@ Para operar o piloto, a equipe precisa de um painel administrativo real e as far
 3. Não havia **canal de suporte** rastreável. Mensagens de suporte são texto livre e o titular frequentemente descreve o próprio tratamento — ou seja, podem conter **dado pessoal sensível de saúde** (LGPD art. 5º, II e art. 11).
 4. O admin precisava consultar usuários, farmácias, pedidos e receitas sem violar a minimização de dados (LGPD art. 6º, III).
 
-A migration `20261112041717_management_hours_support` cria os objetos desta decisão e segue o padrão do ADR 018 (CHECKs, RLS sem policies e comentários de catálogo no mesmo arquivo).
+A migration `20261112041717_management_hours_support` cria os objetos desta decisão e segue o padrão do ADR 022 (CHECKs, RLS sem policies e comentários de catálogo no mesmo arquivo).
 
 ## Decisão
 
