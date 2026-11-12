@@ -50,7 +50,7 @@
     "postcss": "^8.5.15",
     "shadcn": "^4.23.0",
     "tailwindcss": "^4.3.5",
-    "vite": "^5.4.21"
+    "vite": "^8.3.7"
   },
   "optionalDependencies": {
     "@esbuild/linux-x64": "0.21.5",
