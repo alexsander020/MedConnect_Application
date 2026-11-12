@@ -1,0 +1,3 @@
+# Falsos positivos revisados manualmente (gitleaks detect usa o fingerprint do achado).
+# Número fictício de AFE (autorização de funcionamento) em fixture de teste, confundido com chave de API.
+bf6834000327e47d6afef9e485942b5809e93ef5:MedConnect/src/pages/admin/Pharmacies.test.jsx:generic-api-key:57

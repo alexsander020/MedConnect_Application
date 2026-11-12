@@ -54,7 +54,7 @@ const PENDING = {
   address: 'Rua das Flores, 123',
   verificationStatus: 'PENDING_VERIFICATION',
   sanitaryLicense: 'LS-2026-0042',
-  operatingAuth: 'AFE-7.12345-6',
+  operatingAuth: 'AFE-7.12345-6', // gitleaks:allow (número fictício de fixture)
   technicalResponsibleName: 'Dra. Helena Prado',
   technicalResponsibleCrf: '12345',
   technicalResponsibleUf: 'SP',
