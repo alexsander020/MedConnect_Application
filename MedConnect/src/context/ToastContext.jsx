@@ -1,147 +1,129 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { CheckCircle2, AlertTriangle, XCircle, Info, X } from 'lucide-react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { CheckCircle2, AlertTriangle, XCircle, Info } from 'lucide-react';
+import {
+  ToastProvider as RadixToastProvider,
+  ToastViewport,
+  Toast,
+  ToastTitle,
+  ToastDescription,
+  ToastAction,
+  ToastClose,
+} from '@/components/ui/toast';
+
+/**
+ * Central de avisos (toasts) da aplicação, sobre Radix UI Toast.
+ *
+ * API compatível com a versão anterior:
+ *   const toast = useToast();
+ *   toast.success('Mensagem', 'Título opcional');
+ *   toast.error(...), toast.warning(...), toast.info(...)
+ * API nova (opções completas):
+ *   toast.show({ type: 'success', title, message, duration, action: { label, onClick } })
+ * Fora do React (ex.: Socket.IO): window.dispatchEvent(new CustomEvent('app:toast', { detail: { type, title, message } }))
+ */
 
 const ToastContext = createContext(null);
 
+const ICONS = {
+  success: <CheckCircle2 className="size-5 text-success" aria-hidden="true" />,
+  error: <XCircle className="size-5 text-destructive" aria-hidden="true" />,
+  warning: <AlertTriangle className="size-5 text-amber" aria-hidden="true" />,
+  info: <Info className="size-5 text-info" aria-hidden="true" />,
+};
+
+const DEFAULT_TITLES = {
+  success: 'Sucesso',
+  error: 'Erro',
+  warning: 'Atenção',
+  info: 'Informação',
+};
+
+const MAX_VISIBLE = 4;
+
 export function ToastProvider({ children }) {
-    const [toasts, setToasts] = useState([]);
+  const [toasts, setToasts] = useState([]);
+  const counter = useRef(0);
 
-    const removeToast = useCallback((id) => {
-        setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, []);
+  const dismiss = useCallback((id) => {
+    setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, open: false } : t)));
+    // Remove do DOM depois da animação de saída (160ms)
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 220);
+  }, []);
 
-    const addToast = useCallback(({ type = 'info', message, title, duration = 4500 }) => {
-        const id = Math.random().toString(36).substring(2, 9);
-        const newToast = { id, type, message, title };
+  const show = useCallback(({ type = 'info', title, message, duration = 4500, action } = {}) => {
+    counter.current += 1;
+    const id = `toast-${Date.now()}-${counter.current}`;
+    const variant = ICONS[type] ? type : 'info';
+    setToasts((prev) => [
+      ...prev.slice(-(MAX_VISIBLE - 1)),
+      { id, type: variant, title: title ?? DEFAULT_TITLES[variant], message, duration, action, open: true },
+    ]);
+    return id;
+  }, []);
 
-        setToasts((prev) => [...prev, newToast]);
-
-        if (duration > 0) {
-            setTimeout(() => {
-                removeToast(id);
-            }, duration);
-        }
-    }, [removeToast]);
-
-    useEffect(() => {
-        const handler = (e) => {
-            if (e.detail) {
-                addToast(e.detail);
-            }
-        };
-        window.addEventListener('app:toast', handler);
-        return () => window.removeEventListener('app:toast', handler);
-    }, [addToast]);
-
-    const toast = {
-        success: (message, title = 'Sucesso') => addToast({ type: 'success', message, title }),
-        error: (message, title = 'Erro') => addToast({ type: 'error', message, title }),
-        warning: (message, title = 'Atenção') => addToast({ type: 'warning', message, title }),
-        info: (message, title = 'Informação') => addToast({ type: 'info', message, title }),
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail) show(e.detail);
     };
+    window.addEventListener('app:toast', handler);
+    return () => window.removeEventListener('app:toast', handler);
+  }, [show]);
 
-    const getIcon = (type) => {
-        switch (type) {
-            case 'success': return <CheckCircle2 size={20} color="#10b981" />;
-            case 'error': return <XCircle size={20} color="#ef4444" />;
-            case 'warning': return <AlertTriangle size={20} color="#f59e0b" />;
-            default: return <Info size={20} color="#3b82f6" />;
-        }
-    };
+  const api = useMemo(
+    () => ({
+      show,
+      dismiss,
+      success: (message, title) => show({ type: 'success', message, title }),
+      error: (message, title) => show({ type: 'error', message, title, duration: 6500 }),
+      warning: (message, title) => show({ type: 'warning', message, title, duration: 6000 }),
+      info: (message, title) => show({ type: 'info', message, title }),
+    }),
+    [show, dismiss]
+  );
 
-    const getBorderColor = (type) => {
-        switch (type) {
-            case 'success': return 'rgba(16, 185, 129, 0.4)';
-            case 'error': return 'rgba(239, 68, 68, 0.4)';
-            case 'warning': return 'rgba(245, 158, 11, 0.4)';
-            default: return 'rgba(59, 130, 246, 0.4)';
-        }
-    };
-
-    return (
-        <ToastContext.Provider value={toast}>
-            {children}
-            {/* Accessible Toast Container */}
-            <div
-                aria-live="polite"
-                aria-atomic="false"
-                style={{
-                    position: 'fixed',
-                    top: '20px',
-                    right: '20px',
-                    zIndex: 9999,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '10px',
-                    maxWidth: '380px',
-                    width: 'calc(100% - 40px)',
-                    pointerEvents: 'none',
-                }}
-            >
-                {toasts.map((t) => (
-                    <div
-                        key={t.id}
-                        role="status"
-                        className="animate-slide-down"
-                        style={{
-                            pointerEvents: 'auto',
-                            display: 'flex',
-                            alignItems: 'flex-start',
-                            gap: '12px',
-                            padding: '14px 16px',
-                            borderRadius: '12px',
-                            background: 'rgba(255, 255, 255, 0.98)',
-                            boxShadow: '0 10px 30px rgba(0, 0, 0, 0.15)',
-                            backdropFilter: 'blur(12px)',
-                            border: `1px solid ${getBorderColor(t.type)}`,
-                        }}
-                    >
-                        <div style={{ flexShrink: 0, marginTop: '2px' }}>
-                            {getIcon(t.type)}
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            {t.title && (
-                                <p style={{ fontSize: '14px', fontWeight: 700, margin: '0 0 2px', color: '#111827' }}>
-                                    {t.title}
-                                </p>
-                            )}
-                            <p style={{ fontSize: '13px', margin: 0, color: '#4b5563', lineHeight: 1.4 }}>
-                                {t.message}
-                            </p>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => removeToast(t.id)}
-                            aria-label="Fechar aviso"
-                            style={{
-                                background: 'transparent',
-                                border: 'none',
-                                cursor: 'pointer',
-                                color: '#9ca3af',
-                                padding: '2px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center'
-                            }}
-                        >
-                            <X size={16} />
-                        </button>
-                    </div>
-                ))}
+  return (
+    <ToastContext.Provider value={api}>
+      <RadixToastProvider swipeDirection="right" label="Notificações">
+        {children}
+        {toasts.map((t) => (
+          <Toast
+            key={t.id}
+            variant={t.type}
+            open={t.open}
+            duration={t.duration}
+            type={t.type === 'error' ? 'foreground' : 'background'}
+            onOpenChange={(open) => {
+              if (!open) dismiss(t.id);
+            }}
+          >
+            <span className="mt-0.5 shrink-0">{ICONS[t.type]}</span>
+            <div className="min-w-0 flex-1">
+              {t.title && <ToastTitle>{t.title}</ToastTitle>}
+              {t.message && <ToastDescription>{t.message}</ToastDescription>}
+              {t.action && (
+                <ToastAction altText={t.action.label} onClick={t.action.onClick}>
+                  {t.action.label}
+                </ToastAction>
+              )}
             </div>
-        </ToastContext.Provider>
-    );
+            <ToastClose />
+          </Toast>
+        ))}
+        <ToastViewport />
+      </RadixToastProvider>
+    </ToastContext.Provider>
+  );
 }
 
+const fallback = {
+  show: () => {},
+  dismiss: () => {},
+  success: () => {},
+  error: () => {},
+  warning: () => {},
+  info: () => {},
+};
+
 export function useToast() {
-    const context = useContext(ToastContext);
-    if (!context) {
-        return {
-            success: (msg) => console.log('Toast success:', msg),
-            error: (msg) => console.error('Toast error:', msg),
-            warning: (msg) => console.warn('Toast warning:', msg),
-            info: (msg) => console.info('Toast info:', msg),
-        };
-    }
-    return context;
+  return useContext(ToastContext) || fallback;
 }

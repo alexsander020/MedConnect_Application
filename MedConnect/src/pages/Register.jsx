@@ -1,693 +1,924 @@
-import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { motion } from 'motion/react';
+import { ArrowLeft, ArrowRight, Building2, CheckCircle2, Clock3, FileSearch, Info, ShieldCheck, User } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
+import { publicApi } from '@/services/endpoints';
+import { PasswordRules } from '@/components/account/ChangePasswordCard';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Spinner } from '@/components/ui/spinner';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { EASE_OUT, FadeUp, Stagger, StaggerItem } from '@/components/motion';
+import { ehCNPJValido, ehCPFValido, ehEmailValido, ehSenhaForte } from '@/utils/validacoes';
+import AuthLayout from './auth/components/AuthLayout';
 import {
-    Pill, ArrowLeft, User, Mail, Lock, Phone, MapPin,
-    Building2, FileText, CheckCircle2, Eye, EyeOff,
-    Shield, Star, Clock, Truck, BadgeCheck, Sparkles
-} from 'lucide-react';
-import { ehEmailValido, ehSenhaForte, ehCNPJValido, ehCPFValido } from '../utils/validacoes';
+  AuthHeading,
+  CheckboxField,
+  FormAlert,
+  FormField,
+  PasswordInput,
+  StepIndicator,
+  TextInput,
+} from './auth/components/AuthFields';
+import {
+  UFS,
+  authErrorMessage,
+  errorCode,
+  focusById,
+  isHttpUrl,
+  maskCNPJ,
+  maskCPF,
+  maskPhone,
+  onlyDigits,
+} from './auth/components/auth-helpers';
+import { usePageMeta } from '@/lib/seo';
 
-// ── Máscara de CPF: 000.000.000-00
-function maskCPF(v) {
-    return v.replace(/\D/g, '').slice(0, 11)
-        .replace(/^(\d{3})(\d)/, '$1.$2')
-        .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
-        .replace(/\.(\d{3})(\d)/, '.$1-$2');
+const PASSWORD_MESSAGE = 'A senha deve ter 8+ caracteres, com ao menos uma maiúscula, número e caractere especial.';
+const DELIVERY_OPTIONS = ['5', '10', '15', '20', '30'];
+
+const FALLBACK_CONSENT = {
+  title: 'Consentimento para tratamento de dados de saúde',
+  text:
+    'Autorizo a MedConnect e as farmácias de manipulação credenciadas a tratar meus dados de saúde (receitas e informações clínicas anexas) exclusivamente para cotação, manipulação e entrega do medicamento, nos termos do art. 11, I, da LGPD (Lei 13.709/2018). Posso revogar este consentimento a qualquer momento no Centro de Privacidade da minha conta.',
+};
+
+const STEPS = {
+  patient: [
+    { name: 'Acesso', legend: 'Dados de acesso', fields: ['name', 'email', 'password'] },
+    { name: 'Seus dados', legend: 'Dados pessoais e de entrega', fields: ['phone', 'cpf', 'address'] },
+    { name: 'Privacidade', legend: 'Termos e consentimento', fields: ['termsAccepted', 'healthConsent'] },
+  ],
+  pharmacy: [
+    { name: 'Acesso', legend: 'Dados de acesso', fields: ['name', 'email', 'password'] },
+    {
+      name: 'Farmácia',
+      legend: 'Dados da farmácia',
+      fields: ['cnpj', 'phone', 'address', 'city', 'state', 'deliveryArea'],
+    },
+    {
+      name: 'Regularidade',
+      legend: 'Regularidade sanitária e responsável técnico',
+      fields: [
+        'sanitaryLicense',
+        'operatingAuth',
+        'technicalResponsibleName',
+        'technicalResponsibleCrf',
+        'technicalResponsibleUf',
+        'documentUrl',
+        'pharmacyTerms',
+      ],
+    },
+  ],
+};
+
+const EMPTY_FORM = {
+  name: '',
+  email: '',
+  password: '',
+  phone: '',
+  cpf: '',
+  address: '',
+  termsAccepted: false,
+  healthConsent: false,
+  cnpj: '',
+  city: '',
+  state: '',
+  deliveryArea: '10',
+  sanitaryLicense: '',
+  operatingAuth: '',
+  technicalResponsibleName: '',
+  technicalResponsibleCrf: '',
+  technicalResponsibleUf: '',
+  documentUrl: '',
+  pharmacyTerms: false,
+};
+
+/** Regras de validação por campo (mensagens em pt-BR) */
+const VALIDATORS = {
+  name: (v, type) => {
+    if (!v.trim()) return type === 'pharmacy' ? 'Informe o nome da farmácia.' : 'Informe seu nome completo.';
+    if (v.trim().length < 2) return 'O nome deve ter ao menos 2 letras.';
+    return undefined;
+  },
+  email: (v) => (!v.trim() ? 'Informe seu e-mail.' : !ehEmailValido(v.trim()) ? 'Informe um e-mail válido.' : undefined),
+  password: (v) => (!ehSenhaForte(v) ? PASSWORD_MESSAGE : undefined),
+  phone: (v) => {
+    const digits = onlyDigits(v).length;
+    if (!digits) return 'Informe o número de telefone ou WhatsApp.';
+    return digits < 10 ? 'Informe o telefone com DDD.' : undefined;
+  },
+  cpf: (v) => (!ehCPFValido(v) ? 'CPF inválido. Verifique os 11 números digitados.' : undefined),
+  address: (v) => (!v.trim() ? 'Informe o endereço completo.' : undefined),
+  termsAccepted: (v) => (!v ? 'Para criar a conta, aceite os Termos de Uso e a Política de Privacidade.' : undefined),
+  healthConsent: (v) =>
+    !v ? 'É obrigatório consentir com o tratamento de dados de saúde para criar a conta de paciente.' : undefined,
+  cnpj: (v) => (!ehCNPJValido(v) ? 'CNPJ inválido. Verifique os números digitados.' : undefined),
+  city: (v) => (!v.trim() ? 'Informe a cidade.' : undefined),
+  state: (v) => (!v ? 'Selecione a UF.' : undefined),
+  deliveryArea: (v) => (!v ? 'Selecione o raio de atendimento.' : undefined),
+  sanitaryLicense: (v) => (!v.trim() ? 'Informe o número da licença sanitária.' : undefined),
+  operatingAuth: (v) => (!v.trim() ? 'Informe o número da AFE.' : undefined),
+  technicalResponsibleName: (v) => (!v.trim() ? 'Informe o nome do farmacêutico responsável técnico.' : undefined),
+  technicalResponsibleCrf: (v) =>
+    !v.trim() ? 'Informe o número de inscrição no CRF.' : v.trim().length < 3 ? 'Número do CRF incompleto.' : undefined,
+  technicalResponsibleUf: (v) => (!v ? 'Selecione a UF do CRF.' : undefined),
+  documentUrl: (v) =>
+    v.trim() && !isHttpUrl(v) ? 'Informe um link válido, começando com https://.' : undefined,
+  pharmacyTerms: (v) => (!v ? 'Para concluir o credenciamento, aceite o Termo de Adesão.' : undefined),
+};
+
+/** Erros da API que pertencem a um campo específico */
+const API_FIELD_ERRORS = {
+  EMAIL_ALREADY_EXISTS: ['email', 'Este e-mail já está cadastrado. Entre na sua conta ou use outro e-mail.'],
+  INVALID_EMAIL: ['email', 'Informe um e-mail válido.'],
+  WEAK_PASSWORD: ['password', PASSWORD_MESSAGE],
+  CPF_ALREADY_EXISTS: ['cpf', 'Este CPF já está cadastrado. Se a conta é sua, entre ou recupere a senha.'],
+  INVALID_CPF: ['cpf', 'CPF inválido. Verifique os 11 números digitados.'],
+  CNPJ_ALREADY_EXISTS: ['cnpj', 'Este CNPJ já está cadastrado na MedConnect.'],
+  INVALID_CNPJ: ['cnpj', 'CNPJ inválido. Verifique os números digitados.'],
+};
+
+const fieldId = (field) => `reg-${field}`;
+
+function initialProfile(searchParams, state) {
+  return searchParams.get('type') === 'pharmacy' || state?.type === 'pharmacy' ? 'pharmacy' : 'patient';
 }
 
-// ── Máscara de CNPJ: 00.000.000/0001-00
-function maskCNPJ(v) {
-    return v.replace(/\D/g, '').slice(0, 14)
-        .replace(/^(\d{2})(\d)/, '$1.$2')
-        .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
-        .replace(/\.(\d{3})(\d)/, '.$1/$2')
-        .replace(/(\d{4})(\d)/, '$1-$2');
+function NewTabLink({ to, children }) {
+  return (
+    <Link to={to} target="_blank" rel="noopener noreferrer">
+      {children}
+      <span className="sr-only"> (abre em nova aba)</span>
+    </Link>
+  );
 }
 
-// ── Máscara de telefone: (11) 99999-9999
-function maskPhone(v) {
-    return v.replace(/\D/g, '').slice(0, 11)
-        .replace(/^(\d{2})(\d)/, '($1) $2')
-        .replace(/(\d{5})(\d)/, '$1-$2');
+function UfSelect({ value, onChange, a11y, placeholder = 'UF', autoComplete, name }) {
+  return (
+    <Select value={value || undefined} onValueChange={onChange} name={name} autoComplete={autoComplete}>
+      <SelectTrigger
+        {...a11y}
+        className="w-full rounded-lg bg-background px-3 text-base data-[size=default]:h-11 md:text-sm"
+      >
+        <SelectValue placeholder={placeholder}>{value || undefined}</SelectValue>
+      </SelectTrigger>
+      <SelectContent position="popper" align="end" className="max-h-72">
+        {UFS.map((uf) => (
+          <SelectItem key={uf.sigla} value={uf.sigla}>
+            {uf.sigla} — {uf.nome}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
 }
 
-// ── Indicador de força da senha
-function PasswordStrength({ password }) {
-    const checks = [
-        { label: '8+ caracteres', ok: password.length >= 8 },
-        { label: 'Letra maiúscula', ok: /[A-Z]/.test(password) },
-        { label: 'Número', ok: /\d/.test(password) },
-        { label: 'Caractere especial', ok: /[^a-zA-Z0-9]/.test(password) },
-    ];
-    const score = checks.filter(c => c.ok).length;
-    const colors = ['rgba(226, 232, 240, 0.8)', '#ef4444', '#f59e0b', '#3b82f6', '#10b981'];
-    const labels = ['', 'Fraca', 'Razoável', 'Boa', 'Forte'];
-
-    if (!password) return null;
-    return (
-        <div style={{ marginTop: 'var(--space-2)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                <span style={{ fontSize: 11, color: 'var(--gray-500)', fontWeight: 500 }}>Segurança da senha</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: colors[score] }}>{labels[score]}</span>
+/** Tela final do credenciamento: explica a verificação pendente antes de cotar */
+function PharmacyReviewNotice({ name, onContinue }) {
+  const steps = [
+    {
+      icon: Clock3,
+      title: 'Verificação pendente',
+      text: 'É o status atual. Você já pode entrar no painel e completar o perfil da farmácia.',
+    },
+    {
+      icon: FileSearch,
+      title: 'Análise documental',
+      text: 'Nossa equipe confere CNPJ, licença sanitária, AFE e responsável técnico. Se faltar algo, avisamos pelo painel.',
+    },
+    {
+      icon: ShieldCheck,
+      title: 'Farmácia verificada',
+      text: 'Com a aprovação, a farmácia passa a receber receitas da região e a enviar cotações.',
+    },
+  ];
+  return (
+    <div>
+      <FadeUp y={12} duration={0.6}>
+        <span className="inline-flex size-14 items-center justify-center rounded-full bg-success-wash text-success">
+          <CheckCircle2 className="size-7" aria-hidden="true" />
+        </span>
+        <p className="eyebrow mt-6">Cadastro recebido</p>
+        <h1
+          id="register-done-title"
+          tabIndex={-1}
+          className="mt-2.5 font-heading text-[1.75rem] leading-tight font-semibold tracking-[-0.02em] outline-none sm:text-3xl"
+        >
+          Sua farmácia está em análise
+        </h1>
+        <p className="mt-3 leading-relaxed text-muted-foreground">
+          Recebemos os dados de <strong className="font-medium text-foreground">{name}</strong>. Antes de liberar as
+          cotações, a conta passa por uma verificação da equipe MedConnect.
+        </p>
+      </FadeUp>
+      <Stagger as="ol" step={0.12} delay={0.15} inView={false} className="mt-7 grid gap-3">
+        {steps.map(({ icon: Icon, title, text }, i) => (
+          <StaggerItem
+            as="li"
+            key={title}
+            y={10}
+            className="flex gap-3.5 rounded-xl border border-border bg-background p-4"
+          >
+            <span
+              className={
+                i === 0
+                  ? 'inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-wash text-amber'
+                  : 'inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-primary'
+              }
+            >
+              <Icon className="size-[1.125rem]" aria-hidden="true" />
+            </span>
+            <div>
+              <p className="font-medium">{title}</p>
+              <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">{text}</p>
             </div>
-            <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
-                {[1, 2, 3, 4].map(i => (
-                    <div key={i} style={{
-                        flex: 1, height: 4, borderRadius: 2,
-                        background: score >= i ? colors[score] : 'rgba(226, 232, 240, 0.7)',
-                        transition: 'background 0.3s ease',
-                    }} />
-                ))}
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4 }}>
-                {checks.map(c => (
-                    <span key={c.label} style={{
-                        fontSize: 11, color: c.ok ? '#059669' : 'var(--gray-400)',
-                        fontWeight: c.ok ? 600 : 400,
-                        display: 'flex', alignItems: 'center', gap: 3,
-                    }}>
-                        {c.ok ? '✓' : '○'} {c.label}
-                    </span>
-                ))}
-            </div>
-        </div>
-    );
+          </StaggerItem>
+        ))}
+      </Stagger>
+      <FadeUp delay={0.45} y={8} duration={0.5} className="mt-7 grid gap-3">
+        <Button size="lg" className="w-full" onClick={onContinue}>
+          Entrar no painel da farmácia
+          <ArrowRight aria-hidden="true" />
+        </Button>
+        <Button asChild variant="ghost" className="w-full">
+          <Link to="/help?category=PHARMACY_ONBOARDING#contato">Dúvidas sobre o credenciamento</Link>
+        </Button>
+      </FadeUp>
+    </div>
+  );
 }
-
-// ── Benefícios da farmácia (painel lateral)
-const pharmacyBenefits = [
-    { icon: <Star size={18} />, text: 'Receba cotações de pacientes na sua região' },
-    { icon: <Clock size={18} />, text: 'Gerencie pedidos e status em tempo real' },
-    { icon: <Truck size={18} />, text: 'Configure seu raio de entrega personalizado' },
-    { icon: <BadgeCheck size={18} />, text: 'Construa sua reputação com avaliações 5 estrelas' },
-];
-
-const userBenefits = [
-    { icon: <Star size={18} />, text: 'Compare preços de múltiplas farmácias parceiras' },
-    { icon: <Clock size={18} />, text: 'Receba propostas detalhadas em poucos minutos' },
-    { icon: <Shield size={18} />, text: 'Receitas e dados de saúde 100% protegidos' },
-    { icon: <BadgeCheck size={18} />, text: 'Farmácias certificadas pela ANVISA e CRF' },
-];
 
 export default function Register() {
-    const navigate = useNavigate();
-    const location = useLocation();
-    const { register } = useAuth();
+  usePageMeta({
+    title: 'Criar conta · MedConnect',
+    description:
+      'Crie sua conta de paciente para receber cotações de farmácias de manipulação credenciadas, ou credencie sua farmácia na MedConnect.',
+  });
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const { register } = useAuth();
+  const toast = useToast();
 
-    const [type, setType] = useState(location.state?.type || 'user');
-    const [step, setStep] = useState(1);
+  const [type, setType] = useState(() => initialProfile(searchParams, location.state));
+  const [[step, direction], setStepState] = useState([1, 1]);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [errors, setErrors] = useState({});
+  const [formError, setFormError] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
+  const pendingFocus = useRef(null);
 
-    // Campos comuns
-    const [name, setName] = useState('');
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [showPassword, setShowPassword] = useState(false);
-    const [phone, setPhone] = useState('');
-    const [address, setAddress] = useState('');
-    const [cpf, setCpf] = useState('');
-    const [healthConsent, setHealthConsent] = useState(true);
+  const isPharmacy = type === 'pharmacy';
+  const steps = STEPS[type];
+  const isLastStep = step === steps.length;
 
-    // Campos exclusivos de farmácia
-    const [cnpj, setCnpj] = useState('');
-    const [deliveryArea, setDeliveryArea] = useState('10');
-    const [specialties, setSpecialties] = useState([]);
+  const consentQuery = useQuery({
+    queryKey: ['consentTerms'],
+    queryFn: publicApi.consentTerms,
+    enabled: !isPharmacy,
+    staleTime: 30 * 60 * 1000,
+    retry: 1,
+  });
+  const consent = consentQuery.data?.currentHealthConsent;
 
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
+  // Move o foco depois da troca de etapa (ou para o título da tela final)
+  useEffect(() => {
+    if (!pendingFocus.current) return;
+    const id = pendingFocus.current;
+    pendingFocus.current = null;
+    focusById(id);
+  }, [step, done]);
 
-    const specialtyOptions = [
-        'Dermatologia', 'Hormonal', 'Pediatria', 'Oncologia',
-        'Veterinária', 'Nutracêuticos', 'Neurologia', 'Geriátrica',
-    ];
+  const update = (field, value) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    if (errors[field]) setErrors((prev) => ({ ...prev, [field]: undefined }));
+  };
 
-    const toggleSpecialty = (s) => {
-        setSpecialties(prev =>
-            prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]
-        );
+  const goToStep = (next, focusField) => {
+    pendingFocus.current = focusField ? fieldId(focusField) : fieldId(steps[next - 1].fields[0]);
+    setStepState([next, next >= step ? 1 : -1]);
+  };
+
+  const changeProfile = (value) => {
+    setType(value);
+    setErrors({});
+    setFormError(null);
+  };
+
+  const validateStep = (index) => {
+    const found = {};
+    for (const field of steps[index - 1].fields) {
+      const message = VALIDATORS[field]?.(form[field], type);
+      if (message) found[field] = message;
+    }
+    return found;
+  };
+
+  const buildPayload = () => {
+    const common = {
+      name: form.name.trim(),
+      email: form.email.trim(),
+      password: form.password,
+      phone: form.phone,
+      address: form.address.trim(),
     };
-
-    const handleNextStep = (e) => {
-        e.preventDefault();
-        setError('');
-        if (!name.trim()) { setError('Informe seu nome ou razão social.'); return; }
-        if (!ehEmailValido(email)) { setError('Informe um e-mail válido.'); return; }
-        if (!ehSenhaForte(password)) {
-            setError('A senha deve ter 8+ caracteres, com ao menos uma maiúscula, número e caractere especial.');
-            return;
-        }
-        setStep(2);
+    if (!isPharmacy) {
+      return { ...common, cpf: onlyDigits(form.cpf), healthConsent: true, termsAccepted: true };
+    }
+    return {
+      ...common,
+      cnpj: onlyDigits(form.cnpj),
+      deliveryArea: form.deliveryArea,
+      city: form.city.trim(),
+      state: form.state,
+      sanitaryLicense: form.sanitaryLicense.trim(),
+      operatingAuth: form.operatingAuth.trim(),
+      technicalResponsibleName: form.technicalResponsibleName.trim(),
+      technicalResponsibleCrf: form.technicalResponsibleCrf.trim(),
+      technicalResponsibleUf: form.technicalResponsibleUf,
+      ...(form.documentUrl.trim() ? { documentUrl: form.documentUrl.trim() } : {}),
+      termsAccepted: true,
     };
+  };
 
-    const handleRegister = async (e) => {
-        e.preventDefault();
-        setError('');
+  const handleApiError = (err) => {
+    const mapped = API_FIELD_ERRORS[errorCode(err)];
+    const owningStep = mapped ? steps.findIndex((s) => s.fields.includes(mapped[0])) + 1 : 0;
+    if (mapped && owningStep > 0) {
+      const [field, message] = mapped;
+      setErrors({ [field]: message });
+      setFormError({ title: 'Revise o campo destacado', message });
+      if (owningStep !== step) goToStep(owningStep, field);
+      else focusById(fieldId(field));
+      return;
+    }
+    setFormError({
+      title: 'Não foi possível concluir o cadastro',
+      message: authErrorMessage(err, 'Tente novamente em instantes.'),
+    });
+  };
 
-        if (type === 'pharmacy') {
-            if (!ehCNPJValido(cnpj)) {
-                setError('CNPJ inválido. Verifique os números digitados.');
-                return;
-            }
-            if (!deliveryArea) {
-                setError('Selecione o raio de atendimento.');
-                return;
-            }
-        } else {
-            if (!ehCPFValido(cpf)) {
-                setError('CPF inválido. Verifique os 11 números digitados.');
-                return;
-            }
-            if (!healthConsent) {
-                setError('É obrigatório consentir com o tratamento de dados de saúde para finalizar o cadastro de paciente.');
-                return;
-            }
-        }
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (loading) return;
+    setFormError(null);
 
-        if (!phone) { setError('Informe o número de telefone ou WhatsApp.'); return; }
-        if (!address.trim()) { setError('Informe o endereço completo.'); return; }
-
-        setLoading(true);
-        try {
-            const userData = {
-                name, email, password, phone, address,
-                ...(type === 'pharmacy'
-                    ? { cnpj: cnpj.replace(/\D/g, ''), deliveryArea }
-                    : { cpf: cpf.replace(/\D/g, ''), healthConsent: true }),
-            };
-            await register(userData, type);
-            setStep(3);
-        } catch (err) {
-            const msg = err.response?.data?.error?.message || err.response?.data?.error || err.message || 'Erro ao criar conta. Tente novamente.';
-            setError(msg);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const isPharmacy = type === 'pharmacy';
-    const benefits = isPharmacy ? pharmacyBenefits : userBenefits;
-
-    // ── Tela de Sucesso (Passo 3) ──
-    if (step === 3) {
-        return (
-            <div className="aurora-container" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-6)' }}>
-                <div className="aurora-blob aurora-blob-1" />
-                <div className="aurora-blob aurora-blob-2" />
-                <div className="aurora-blob aurora-blob-3" />
-
-                <div className="glass-panel animate-scale-in" style={{
-                    maxWidth: 520, width: '100%', padding: 'var(--space-10) var(--space-8)',
-                    textAlign: 'center', position: 'relative', zIndex: 1, borderRadius: 'var(--radius-2xl)'
-                }}>
-                    <div style={{
-                        width: 90, height: 90, borderRadius: '50%',
-                        background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(13, 148, 136, 0.2))',
-                        border: '1px solid rgba(16, 185, 129, 0.4)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        margin: '0 auto var(--space-6)',
-                        boxShadow: '0 0 30px rgba(16, 185, 129, 0.2)'
-                    }}>
-                        <CheckCircle2 size={50} color="#10b981" />
-                    </div>
-
-                    <h2 style={{ fontSize: 'var(--font-3xl)', fontWeight: 800, color: 'var(--gray-900)', marginBottom: 'var(--space-3)' }}>
-                        {isPharmacy ? 'Farmácia Cadastrada!' : 'Conta Criada com Sucesso!'}
-                    </h2>
-
-                    <p style={{ color: 'var(--gray-600)', marginBottom: 'var(--space-8)', fontSize: 'var(--font-base)', lineHeight: 1.7 }}>
-                        {isPharmacy
-                            ? 'Sua farmácia foi registrada no MedConnect. Agora você já pode acessar o painel e receber cotações de pacientes!'
-                            : 'Bem-vindo(a) ao MedConnect! Faça login para começar a comparar orçamentos e economizar nas suas fórmulas manipuladas.'}
-                    </p>
-
-                    <button
-                        className="btn btn-primary btn-glass-primary btn-shimmer btn-lg btn-block"
-                        onClick={() => navigate('/login', { state: { type } })}
-                    >
-                        Acessar Conta Agora →
-                    </button>
-                </div>
-            </div>
-        );
+    const found = validateStep(step);
+    const stepFields = steps[step - 1].fields;
+    setErrors((prev) => {
+      const next = { ...prev };
+      stepFields.forEach((f) => delete next[f]);
+      return { ...next, ...found };
+    });
+    const firstInvalid = stepFields.find((f) => found[f]);
+    if (firstInvalid) {
+      focusById(fieldId(firstInvalid));
+      return;
     }
 
+    if (!isLastStep) {
+      goToStep(step + 1);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await register(buildPayload(), isPharmacy ? 'pharmacy' : 'patient');
+      if (isPharmacy) {
+        toast.success('A verificação da farmácia foi iniciada.', 'Cadastro enviado');
+        pendingFocus.current = 'register-done-title';
+        setDone(true);
+      } else {
+        toast.success('Entre com seu e-mail e senha para enviar sua primeira receita.', 'Conta criada');
+        navigate('/login', { replace: true, state: { email: form.email.trim() } });
+      }
+    } catch (err) {
+      handleApiError(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (done) {
     return (
-        <div className="aurora-container" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-6)' }}>
-            {/* Aurora Background Blobs */}
-            <div className="aurora-blob aurora-blob-1" />
-            <div className="aurora-blob aurora-blob-2" />
-            <div className="aurora-blob aurora-blob-3" />
-
-            <div style={{ width: '100%', maxWidth: '1080px', position: 'relative', zIndex: 1 }}>
-                {/* Back button */}
-                <button
-                    className="btn btn-ghost"
-                    onClick={() => step === 1 ? navigate('/') : setStep(1)}
-                    style={{ marginBottom: 'var(--space-4)', display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 600, color: 'var(--gray-700)' }}
-                >
-                    <ArrowLeft size={18} />
-                    {step === 1 ? 'Voltar ao Início' : 'Voltar ao Passo 1'}
-                </button>
-
-                <div className="glass-panel" style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
-                    borderRadius: 'var(--radius-2xl)',
-                    overflow: 'hidden',
-                    boxShadow: '0 20px 50px -10px rgba(15, 23, 42, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.7) inset'
-                }}>
-                    {/* Left Column: Visual branding and benefits */}
-                    <div style={{
-                        background: 'linear-gradient(145deg, rgba(13, 148, 136, 0.95) 0%, rgba(15, 118, 110, 0.92) 50%, rgba(15, 23, 42, 0.95) 100%)',
-                        color: 'white',
-                        padding: 'var(--space-10) var(--space-8)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'space-between',
-                        position: 'relative',
-                        overflow: 'hidden'
-                    }}>
-                        {/* Glow circles */}
-                        <div style={{
-                            position: 'absolute', top: '-10%', right: '-10%',
-                            width: '320px', height: '320px', borderRadius: '50%',
-                            background: 'rgba(94, 234, 212, 0.25)', filter: 'blur(55px)'
-                        }} />
-
-                        <div style={{ position: 'relative', zIndex: 1 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-8)' }}>
-                                <div style={{
-                                    width: '46px', height: '46px', borderRadius: '14px',
-                                    background: 'rgba(255, 255, 255, 0.15)',
-                                    backdropFilter: 'blur(10px)',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
-                                }}>
-                                    <Pill size={26} color="white" />
-                                </div>
-                                <span style={{ fontSize: 'var(--font-2xl)', fontWeight: 800, letterSpacing: '-0.02em' }}>
-                                    Med<span style={{ color: '#5eead4' }}>Connect</span>
-                                </span>
-                            </div>
-
-                            <span className="glass-badge" style={{ background: 'rgba(255,255,255,0.15)', color: '#ccfbf1', marginBottom: 'var(--space-4)' }}>
-                                <Sparkles size={13} />
-                                Cadastro Rápido & Sem Taxas
-                            </span>
-
-                            <h2 style={{ fontSize: 'clamp(1.75rem, 3vw, 2.2rem)', fontWeight: 800, lineHeight: 1.2, marginBottom: 'var(--space-4)', color: 'white' }}>
-                                {isPharmacy ? 'Expanda a sua farmácia de manipulação.' : 'A melhor forma de economizar em manipulação.'}
-                            </h2>
-
-                            <p style={{ color: 'rgba(204, 251, 241, 0.9)', fontSize: 'var(--font-base)', lineHeight: 1.6, maxWidth: '400px' }}>
-                                {isPharmacy
-                                    ? 'Conecte-se diretamente com centenas de pacientes que enviam receitas diárias e acelere seu faturamento.'
-                                    : 'Envie sua receita médica, receba propostas detalhadas de farmácias credenciadas e compre pelo melhor preço.'}
-                            </p>
-                        </div>
-
-                        {/* Benefits list */}
-                        <div style={{ marginTop: 'var(--space-8)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', position: 'relative', zIndex: 1 }}>
-                            {benefits.map((b, i) => (
-                                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                                    <div style={{
-                                        width: 36, height: 36, borderRadius: 'var(--radius-lg)',
-                                        background: 'rgba(255, 255, 255, 0.12)',
-                                        backdropFilter: 'blur(8px)',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        color: '#5eead4', flexShrink: 0
-                                    }}>
-                                        {b.icon}
-                                    </div>
-                                    <span style={{ fontSize: 'var(--font-sm)', color: 'rgba(255, 255, 255, 0.9)', fontWeight: 500 }}>
-                                        {b.text}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Right Column: Register Form */}
-                    <div style={{ padding: 'var(--space-8)', background: 'rgba(255, 255, 255, 0.85)', overflowY: 'auto' }}>
-                        <div style={{ maxWidth: '420px', margin: '0 auto' }}>
-
-                            {/* Header */}
-                            <div style={{ marginBottom: 'var(--space-5)' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <h1 style={{ fontSize: 'var(--font-2xl)', fontWeight: 800, color: 'var(--gray-900)' }}>
-                                        {step === 1 ? 'Criar Conta' : isPharmacy ? 'Dados da Farmácia' : 'Dados de Entrega'}
-                                    </h1>
-                                    <span className="glass-pill" style={{ fontSize: 12, padding: '4px 10px', background: 'rgba(13, 148, 136, 0.1)', color: 'var(--primary-700)', fontWeight: 700 }}>
-                                        Passo {step} de 2
-                                    </span>
-                                </div>
-                                <p style={{ fontSize: 'var(--font-sm)', color: 'var(--gray-500)', marginTop: 4 }}>
-                                    {step === 1 ? 'Preencha suas informações de login' : 'Complete os detalhes para finalizar'}
-                                </p>
-                            </div>
-
-                            {/* Progress bar */}
-                            <div style={{ display: 'flex', gap: 8, marginBottom: 'var(--space-6)' }}>
-                                <div style={{
-                                    flex: 1, height: 5, borderRadius: 4,
-                                    background: 'var(--gradient-primary)',
-                                    boxShadow: '0 0 10px rgba(13, 148, 136, 0.3)'
-                                }} />
-                                <div style={{
-                                    flex: 1, height: 5, borderRadius: 4,
-                                    background: step >= 2 ? 'var(--gradient-primary)' : 'rgba(226, 232, 240, 0.8)',
-                                    boxShadow: step >= 2 ? '0 0 10px rgba(13, 148, 136, 0.3)' : 'none',
-                                    transition: 'all 0.3s ease'
-                                }} />
-                            </div>
-
-                            {/* Profile Type Toggle (Step 1 only) */}
-                            {step === 1 && (
-                                <div className="glass-tab-container" style={{ marginBottom: 'var(--space-6)' }}>
-                                    <div
-                                        className={`glass-tab ${type === 'user' ? 'active' : ''}`}
-                                        onClick={() => setType('user')}
-                                    >
-                                        <User size={16} />
-                                        <span>Sou Paciente</span>
-                                    </div>
-                                    <div
-                                        className={`glass-tab ${type === 'pharmacy' ? 'active' : ''}`}
-                                        onClick={() => setType('pharmacy')}
-                                    >
-                                        <Building2 size={16} />
-                                        <span>Sou Farmácia</span>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Error alert */}
-                            {error && (
-                                <div style={{
-                                    marginBottom: 'var(--space-4)', padding: 'var(--space-3) var(--space-4)',
-                                    background: 'rgba(254, 242, 242, 0.95)',
-                                    border: '1px solid rgba(239, 68, 68, 0.3)',
-                                    borderRadius: 'var(--radius-lg)',
-                                    color: '#b91c1c', fontSize: 'var(--font-sm)', fontWeight: 500,
-                                    display: 'flex', alignItems: 'center', gap: 8,
-                                    boxShadow: '0 4px 12px rgba(239, 68, 68, 0.08)'
-                                }}>
-                                    <span>⚠️</span> {error}
-                                </div>
-                            )}
-
-                            {/* ──── PASSO 1 ──── */}
-                            {step === 1 && (
-                                <form onSubmit={handleNextStep} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-                                    {/* Nome */}
-                                    <div className="form-group" style={{ marginBottom: 0 }}>
-                                        <label className="form-label" style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--gray-700)' }}>
-                                            {isPharmacy ? 'Nome Fantasia da Farmácia' : 'Nome Completo'}
-                                        </label>
-                                        <div style={{ position: 'relative' }}>
-                                            {isPharmacy
-                                                ? <Building2 size={18} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)' }} />
-                                                : <User size={18} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)' }} />}
-                                            <input
-                                                className="form-input"
-                                                placeholder={isPharmacy ? 'Ex: Farmácia Essencial Manipulação' : 'Ex: Carlos Alberto Silva'}
-                                                style={{ paddingLeft: 42, background: 'rgba(255, 255, 255, 0.7)' }}
-                                                value={name}
-                                                onChange={e => setName(e.target.value)}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* E-mail */}
-                                    <div className="form-group" style={{ marginBottom: 0 }}>
-                                        <label className="form-label" style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--gray-700)' }}>
-                                            E-mail {isPharmacy && <span style={{ color: 'var(--gray-400)', fontWeight: 400 }}>(acesso da farmácia)</span>}
-                                        </label>
-                                        <div style={{ position: 'relative' }}>
-                                            <Mail size={18} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)' }} />
-                                            <input
-                                                type="email"
-                                                className="form-input"
-                                                placeholder={isPharmacy ? 'contato@farmacia.com.br' : 'seu@email.com'}
-                                                style={{ paddingLeft: 42, background: 'rgba(255, 255, 255, 0.7)' }}
-                                                value={email}
-                                                onChange={e => setEmail(e.target.value)}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* Senha */}
-                                    <div className="form-group" style={{ marginBottom: 0 }}>
-                                        <label className="form-label" style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--gray-700)' }}>
-                                            Criar Senha de Acesso
-                                        </label>
-                                        <div style={{ position: 'relative' }}>
-                                            <Lock size={18} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)' }} />
-                                            <input
-                                                type={showPassword ? 'text' : 'password'}
-                                                className="form-input"
-                                                placeholder="••••••••"
-                                                style={{ paddingLeft: 42, paddingRight: 42, background: 'rgba(255, 255, 255, 0.7)' }}
-                                                value={password}
-                                                onChange={e => setPassword(e.target.value)}
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() => setShowPassword(!showPassword)}
-                                                style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--gray-400)', cursor: 'pointer' }}
-                                            >
-                                                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                                            </button>
-                                        </div>
-                                        <PasswordStrength password={password} />
-                                    </div>
-
-                                    <button
-                                        type="submit"
-                                        className="btn btn-primary btn-glass-primary btn-shimmer btn-lg btn-block"
-                                        style={{ marginTop: 'var(--space-3)' }}
-                                    >
-                                        Continuar para o Passo 2 →
-                                    </button>
-                                </form>
-                            )}
-
-                            {/* ──── PASSO 2 ──── */}
-                            {step === 2 && (
-                                <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-                                    {/* Resumo do passo 1 */}
-                                    <div style={{
-                                        padding: 'var(--space-3) var(--space-4)',
-                                        background: 'rgba(240, 253, 250, 0.8)',
-                                        borderRadius: 'var(--radius-lg)',
-                                        border: '1px solid rgba(13, 148, 136, 0.2)',
-                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                        fontSize: 'var(--font-xs)'
-                                    }}>
-                                        <div>
-                                            <span style={{ fontWeight: 700, color: 'var(--primary-800)' }}>{name}</span>
-                                            <div style={{ color: 'var(--primary-600)' }}>{email}</div>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setStep(1)}
-                                            style={{ background: 'none', border: 'none', color: 'var(--primary-700)', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}
-                                        >
-                                            Editar
-                                        </button>
-                                    </div>
-
-                                    {/* Telefone */}
-                                    <div className="form-group" style={{ marginBottom: 0 }}>
-                                        <label className="form-label" style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--gray-700)' }}>
-                                            Telefone / WhatsApp
-                                        </label>
-                                        <div style={{ position: 'relative' }}>
-                                            <Phone size={18} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)' }} />
-                                            <input
-                                                className="form-input"
-                                                placeholder="(11) 98765-4321"
-                                                style={{ paddingLeft: 42, background: 'rgba(255, 255, 255, 0.7)' }}
-                                                value={phone}
-                                                onChange={e => setPhone(maskPhone(e.target.value))}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* CNPJ — só farmácia */}
-                                    {isPharmacy && (
-                                        <div className="form-group" style={{ marginBottom: 0 }}>
-                                            <label className="form-label" style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--gray-700)' }}>
-                                                CNPJ da Farmácia
-                                            </label>
-                                            <div style={{ position: 'relative' }}>
-                                                <FileText size={18} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)' }} />
-                                                <input
-                                                    className="form-input"
-                                                    placeholder="00.000.000/0001-00"
-                                                    style={{ paddingLeft: 42, background: 'rgba(255, 255, 255, 0.7)' }}
-                                                    value={cnpj}
-                                                    onChange={e => setCnpj(maskCNPJ(e.target.value))}
-                                                />
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* CPF — só paciente */}
-                                    {!isPharmacy && (
-                                        <div className="form-group" style={{ marginBottom: 0 }}>
-                                            <label className="form-label" style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--gray-700)' }}>
-                                                CPF do Paciente
-                                            </label>
-                                            <div style={{ position: 'relative' }}>
-                                                <FileText size={18} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)' }} />
-                                                <input
-                                                    className="form-input"
-                                                    placeholder="000.000.000-00"
-                                                    style={{ paddingLeft: 42, background: 'rgba(255, 255, 255, 0.7)' }}
-                                                    value={cpf}
-                                                    onChange={e => setCpf(maskCPF(e.target.value))}
-                                                />
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Endereço */}
-                                    <div className="form-group" style={{ marginBottom: 0 }}>
-                                        <label className="form-label" style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--gray-700)' }}>
-                                            {isPharmacy ? 'Endereço da Farmácia (Rua, Nº, Bairro, Cidade)' : 'Endereço de Entrega Principal'}
-                                        </label>
-                                        <div style={{ position: 'relative' }}>
-                                            <MapPin size={18} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)' }} />
-                                            <input
-                                                className="form-input"
-                                                placeholder="Av. Paulista, 1000 - Bela Vista, São Paulo - SP"
-                                                style={{ paddingLeft: 42, background: 'rgba(255, 255, 255, 0.7)' }}
-                                                value={address}
-                                                onChange={e => setAddress(e.target.value)}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* Raio de Atendimento — só farmácia */}
-                                    {isPharmacy && (
-                                        <div className="form-group" style={{ marginBottom: 0 }}>
-                                            <label className="form-label" style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--gray-700)' }}>
-                                                Raio de Atendimento e Entrega
-                                            </label>
-                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6 }}>
-                                                {['5', '10', '15', '20', '30'].map(km => (
-                                                    <button
-                                                        key={km}
-                                                        type="button"
-                                                        onClick={() => setDeliveryArea(km)}
-                                                        style={{
-                                                            padding: '8px 4px',
-                                                            borderRadius: 'var(--radius-md)',
-                                                            border: `1.5px solid ${deliveryArea === km ? 'var(--primary-500)' : 'rgba(226, 232, 240, 0.8)'}`,
-                                                            background: deliveryArea === km ? 'rgba(13, 148, 136, 0.12)' : 'rgba(255, 255, 255, 0.6)',
-                                                            color: deliveryArea === km ? 'var(--primary-700)' : 'var(--gray-600)',
-                                                            fontWeight: deliveryArea === km ? 700 : 500,
-                                                            fontSize: 'var(--font-xs)',
-                                                            cursor: 'pointer',
-                                                            transition: 'all 0.2s ease',
-                                                        }}
-                                                    >
-                                                        {km} km
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Especialidades — só farmácia */}
-                                    {isPharmacy && (
-                                        <div className="form-group" style={{ marginBottom: 0 }}>
-                                            <label className="form-label" style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--gray-700)' }}>
-                                                Especialidades de Manipulação
-                                            </label>
-                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                                                {specialtyOptions.map(s => (
-                                                    <button
-                                                        key={s}
-                                                        type="button"
-                                                        onClick={() => toggleSpecialty(s)}
-                                                        style={{
-                                                            padding: '5px 12px',
-                                                            borderRadius: 'var(--radius-full)',
-                                                            border: `1.5px solid ${specialties.includes(s) ? 'var(--primary-500)' : 'rgba(226, 232, 240, 0.8)'}`,
-                                                            background: specialties.includes(s) ? 'rgba(13, 148, 136, 0.12)' : 'rgba(255, 255, 255, 0.6)',
-                                                            color: specialties.includes(s) ? 'var(--primary-700)' : 'var(--gray-600)',
-                                                            fontWeight: specialties.includes(s) ? 600 : 500,
-                                                            fontSize: 11,
-                                                            cursor: 'pointer',
-                                                            transition: 'all 0.2s ease',
-                                                        }}
-                                                    >
-                                                        {specialties.includes(s) ? '✓ ' : '+ '}{s}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Consentimento Destacado para Dados de Saúde (LGPD Art. 11) */}
-                                    {!isPharmacy && (
-                                        <div style={{
-                                            padding: '12px 14px',
-                                            borderRadius: 'var(--radius-lg)',
-                                            background: 'rgba(13, 148, 136, 0.08)',
-                                            border: '1px solid rgba(13, 148, 136, 0.25)',
-                                            marginTop: 'var(--space-2)',
-                                            marginBottom: 'var(--space-2)'
-                                        }}>
-                                            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={healthConsent}
-                                                    onChange={e => setHealthConsent(e.target.checked)}
-                                                    style={{ marginTop: 3, accentColor: 'var(--primary-600)', width: 16, height: 16 }}
-                                                    required
-                                                />
-                                                <span style={{ fontSize: 11, color: 'var(--gray-700)', lineHeight: 1.5 }}>
-                                                    <strong>Consentimento para Tratamento de Dados de Saúde (v1.0.0):</strong> Autorizo expressamente o tratamento das minhas receitas médicas e dados de saúde para cotação e manipulação farmacêutica, nos termos do Art. 11, I da LGPD. Posso revogar este consentimento a qualquer momento nas configurações do meu perfil.
-                                                </span>
-                                            </label>
-                                        </div>
-                                    )}
-
-                                    <button
-                                        type="submit"
-                                        className="btn btn-primary btn-glass-primary btn-shimmer btn-lg btn-block"
-                                        disabled={loading}
-                                        style={{ marginTop: 'var(--space-3)' }}
-                                    >
-                                        {loading ? (
-                                            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                                                <span style={{ width: 18, height: 18, border: '2px solid rgba(255,255,255,0.4)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} />
-                                                Finalizando Cadastro...
-                                            </span>
-                                        ) : (
-                                            isPharmacy ? '🏥 Cadastrar Minha Farmácia' : '✓ Finalizar Cadastro'
-                                        )}
-                                    </button>
-                                </form>
-                            )}
-
-                            {/* Footer link to login */}
-                            <p style={{ textAlign: 'center', marginTop: 'var(--space-6)', fontSize: 'var(--font-sm)', color: 'var(--gray-500)' }}>
-                                Já possui uma conta?{' '}
-                                <button
-                                    onClick={() => navigate('/login', { state: { type } })}
-                                    style={{ background: 'none', border: 'none', color: 'var(--primary-600)', fontWeight: 700, cursor: 'pointer', fontSize: 'var(--font-sm)', textDecoration: 'none' }}
-                                >
-                                    Fazer Login
-                                </button>
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+      <AuthLayout audience="pharmacy">
+        <PharmacyReviewNotice
+          name={form.name.trim()}
+          onContinue={() => navigate('/login?type=pharmacy', { replace: true, state: { email: form.email.trim() } })}
+        />
+      </AuthLayout>
     );
+  }
+
+  const field = (name) => ({ id: fieldId(name), error: errors[name] });
+  const current = steps[step - 1];
+
+  return (
+    <AuthLayout audience={type} contentClassName="max-w-[480px]">
+      <AuthHeading
+        eyebrow={isPharmacy ? 'Credenciamento' : 'Cadastro gratuito'}
+        title={isPharmacy ? 'Credenciar minha farmácia' : 'Criar conta de paciente'}
+        description={
+          isPharmacy
+            ? 'Informe os dados da farmácia e do responsável técnico. A equipe MedConnect confere tudo antes de liberar as cotações.'
+            : 'Cadastre-se para enviar sua receita e receber cotações de farmácias de manipulação verificadas.'
+        }
+      />
+
+      <FadeUp delay={0.08} y={12} duration={0.6}>
+        {step === 1 && (
+          <Tabs value={type} onValueChange={changeProfile} className="mb-6 gap-0">
+            <TabsList aria-label="Tipo de conta" className="grid h-11 w-full grid-cols-2 rounded-xl p-1">
+              <TabsTrigger
+                value="patient"
+                id="register-tab-patient"
+                aria-controls="register-panel"
+                className="h-full rounded-lg text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+              >
+                <User aria-hidden="true" />
+                Sou paciente
+              </TabsTrigger>
+              <TabsTrigger
+                value="pharmacy"
+                id="register-tab-pharmacy"
+                aria-controls="register-panel"
+                className="h-full rounded-lg text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+              >
+                <Building2 aria-hidden="true" />
+                Sou farmácia
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        )}
+
+        <div
+          id="register-panel"
+          {...(step === 1 ? { role: 'tabpanel', 'aria-labelledby': `register-tab-${type}` } : {})}
+        >
+          <StepIndicator steps={steps.map((s) => s.name)} current={step} />
+
+          <form noValidate onSubmit={handleSubmit} aria-busy={loading || undefined}>
+            {formError && (
+              <FormAlert title={formError.title} className="mb-5">
+                {formError.message}
+              </FormAlert>
+            )}
+
+            <motion.fieldset
+              key={`${type}-${step}`}
+              initial={{ opacity: 0, x: 14 * direction }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.35, ease: EASE_OUT }}
+              className="min-w-0"
+            >
+              <legend className="mb-5 font-heading text-lg font-semibold">{current.legend}</legend>
+
+              {step === 1 && (
+                <div className="grid gap-5">
+                  <FormField {...field('name')} label={isPharmacy ? 'Nome fantasia da farmácia' : 'Nome completo'}>
+                    {(a11y) => (
+                      <TextInput
+                        {...a11y}
+                        name="name"
+                        autoComplete={isPharmacy ? 'organization' : 'name'}
+                        placeholder={isPharmacy ? 'Como a farmácia é conhecida' : 'Seu nome e sobrenome'}
+                        required
+                        value={form.name}
+                        onChange={(e) => update('name', e.target.value)}
+                      />
+                    )}
+                  </FormField>
+                  <FormField
+                    {...field('email')}
+                    label={isPharmacy ? 'E-mail da farmácia' : 'E-mail'}
+                    hint={isPharmacy ? 'Será o login da farmácia e o canal dos avisos de credenciamento.' : undefined}
+                  >
+                    {(a11y) => (
+                      <TextInput
+                        {...a11y}
+                        type="email"
+                        name="email"
+                        inputMode="email"
+                        autoComplete="email"
+                        autoCapitalize="none"
+                        spellCheck={false}
+                        placeholder={isPharmacy ? 'contato@suafarmacia.com.br' : 'seu@email.com'}
+                        required
+                        value={form.email}
+                        onChange={(e) => update('email', e.target.value)}
+                      />
+                    )}
+                  </FormField>
+                  <FormField {...field('password')} label="Crie uma senha">
+                    {(a11y) => (
+                      <>
+                        <PasswordInput
+                          {...a11y}
+                          aria-describedby={[a11y['aria-describedby'], 'reg-password-rules'].filter(Boolean).join(' ')}
+                          name="password"
+                          autoComplete="new-password"
+                          placeholder="Mínimo de 8 caracteres"
+                          required
+                          value={form.password}
+                          onChange={(e) => update('password', e.target.value)}
+                        />
+                        <div id="reg-password-rules">
+                          <PasswordRules value={form.password} />
+                        </div>
+                      </>
+                    )}
+                  </FormField>
+                </div>
+              )}
+
+              {step === 2 && !isPharmacy && (
+                <div className="grid gap-5">
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <FormField {...field('phone')} label="Telefone ou WhatsApp">
+                      {(a11y) => (
+                        <TextInput
+                          {...a11y}
+                          type="tel"
+                          name="phone"
+                          inputMode="tel"
+                          autoComplete="tel-national"
+                          placeholder="(11) 98765-4321"
+                          required
+                          value={form.phone}
+                          onChange={(e) => update('phone', maskPhone(e.target.value))}
+                        />
+                      )}
+                    </FormField>
+                    <FormField {...field('cpf')} label="CPF">
+                      {(a11y) => (
+                        <TextInput
+                          {...a11y}
+                          name="cpf"
+                          inputMode="numeric"
+                          autoComplete="off"
+                          placeholder="000.000.000-00"
+                          required
+                          value={form.cpf}
+                          onChange={(e) => update('cpf', maskCPF(e.target.value))}
+                        />
+                      )}
+                    </FormField>
+                  </div>
+                  <FormField
+                    {...field('address')}
+                    label="Endereço de entrega"
+                    hint="Rua, número, complemento, bairro, cidade e UF. Só a farmácia que você escolher verá o endereço."
+                  >
+                    {(a11y) => (
+                      <TextInput
+                        {...a11y}
+                        name="address"
+                        autoComplete="street-address"
+                        placeholder="Rua, número - bairro, cidade - UF"
+                        required
+                        value={form.address}
+                        onChange={(e) => update('address', e.target.value)}
+                      />
+                    )}
+                  </FormField>
+                  <p className="flex items-start gap-2 rounded-xl bg-mint-wash px-3.5 py-3 text-xs leading-relaxed text-muted-foreground">
+                    <ShieldCheck className="mt-px size-4 shrink-0 text-primary" aria-hidden="true" />
+                    CPF, telefone e endereço são guardados de forma cifrada e usados só para identificar você e
+                    entregar o pedido.
+                  </p>
+                </div>
+              )}
+
+              {step === 3 && !isPharmacy && (
+                <div className="grid gap-4">
+                  <CheckboxField
+                    id={fieldId('termsAccepted')}
+                    checked={form.termsAccepted}
+                    onCheckedChange={(v) => update('termsAccepted', v)}
+                    error={errors.termsAccepted}
+                  >
+                    Li e aceito os <NewTabLink to="/terms">Termos de Uso</NewTabLink> e a{' '}
+                    <NewTabLink to="/privacy">Política de Privacidade</NewTabLink>.
+                  </CheckboxField>
+
+                  <section aria-labelledby="reg-consent-title" className="rounded-xl border border-border bg-muted/50 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <h2 id="reg-consent-title" className="font-sans text-sm leading-snug font-semibold tracking-normal">
+                        {consent?.title || FALLBACK_CONSENT.title}
+                      </h2>
+                      {consent?.version && (
+                        <Badge variant="outline" className="num bg-background">
+                          Versão {consent.version}
+                        </Badge>
+                      )}
+                    </div>
+                    {consentQuery.isPending ? (
+                      <div className="mt-3 grid gap-2" aria-busy="true" aria-label="Carregando o texto do consentimento">
+                        <Skeleton className="h-3 w-full" />
+                        <Skeleton className="h-3 w-11/12" />
+                        <Skeleton className="h-3 w-4/5" />
+                      </div>
+                    ) : (
+                      <div
+                        id="reg-consent-text"
+                        role="region"
+                        tabIndex={0}
+                        aria-label="Texto do consentimento"
+                        className="mt-2.5 max-h-44 overflow-y-auto rounded-md pr-1 text-sm leading-relaxed text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                      >
+                        <p>{consent?.text || FALLBACK_CONSENT.text}</p>
+                        {consentQuery.isError && (
+                          <p className="mt-2 text-xs">
+                            Não conseguimos carregar a versão mais recente agora; este é o resumo do consentimento.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </section>
+
+                  <CheckboxField
+                    id={fieldId('healthConsent')}
+                    checked={form.healthConsent}
+                    onCheckedChange={(v) => update('healthConsent', v)}
+                    error={errors.healthConsent}
+                    describedBy="reg-consent-title"
+                  >
+                    Li e autorizo o tratamento dos meus dados de saúde conforme o texto acima. Posso revogar quando
+                    quiser no Centro de Privacidade.
+                  </CheckboxField>
+                </div>
+              )}
+
+              {step === 2 && isPharmacy && (
+                <div className="grid gap-5">
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <FormField {...field('cnpj')} label="CNPJ">
+                      {(a11y) => (
+                        <TextInput
+                          {...a11y}
+                          name="cnpj"
+                          inputMode="numeric"
+                          autoComplete="off"
+                          placeholder="00.000.000/0001-00"
+                          required
+                          value={form.cnpj}
+                          onChange={(e) => update('cnpj', maskCNPJ(e.target.value))}
+                        />
+                      )}
+                    </FormField>
+                    <FormField {...field('phone')} label="Telefone ou WhatsApp">
+                      {(a11y) => (
+                        <TextInput
+                          {...a11y}
+                          type="tel"
+                          name="phone"
+                          inputMode="tel"
+                          autoComplete="tel-national"
+                          placeholder="(11) 3456-7890"
+                          required
+                          value={form.phone}
+                          onChange={(e) => update('phone', maskPhone(e.target.value))}
+                        />
+                      )}
+                    </FormField>
+                  </div>
+                  <FormField {...field('address')} label="Endereço da farmácia">
+                    {(a11y) => (
+                      <TextInput
+                        {...a11y}
+                        name="address"
+                        autoComplete="street-address"
+                        placeholder="Rua, número - bairro"
+                        required
+                        value={form.address}
+                        onChange={(e) => update('address', e.target.value)}
+                      />
+                    )}
+                  </FormField>
+                  <div className="grid grid-cols-[minmax(0,1fr)_7.5rem] gap-4">
+                    <FormField {...field('city')} label="Cidade">
+                      {(a11y) => (
+                        <TextInput
+                          {...a11y}
+                          name="city"
+                          autoComplete="address-level2"
+                          placeholder="Cidade"
+                          required
+                          value={form.city}
+                          onChange={(e) => update('city', e.target.value)}
+                        />
+                      )}
+                    </FormField>
+                    <FormField {...field('state')} label="UF">
+                      {(a11y) => (
+                        <UfSelect
+                          a11y={a11y}
+                          name="state"
+                          autoComplete="address-level1"
+                          value={form.state}
+                          onChange={(v) => update('state', v)}
+                        />
+                      )}
+                    </FormField>
+                  </div>
+                  <div className="grid gap-2.5">
+                    <p id="reg-deliveryArea-label" className="text-sm font-medium">
+                      Raio de atendimento e entrega
+                    </p>
+                    <ToggleGroup
+                      type="single"
+                      variant="outline"
+                      spacing={2}
+                      aria-labelledby="reg-deliveryArea-label"
+                      value={form.deliveryArea}
+                      onValueChange={(v) => v && update('deliveryArea', v)}
+                      className="flex w-full flex-wrap"
+                    >
+                      {DELIVERY_OPTIONS.map((km) => (
+                        <ToggleGroupItem
+                          key={km}
+                          value={km}
+                          id={km === DELIVERY_OPTIONS[0] ? fieldId('deliveryArea') : undefined}
+                          className="h-10 min-w-16 flex-1 rounded-lg data-[state=on]:border-primary data-[state=on]:bg-accent data-[state=on]:text-primary"
+                        >
+                          <span className="num">{km} km</span>
+                        </ToggleGroupItem>
+                      ))}
+                    </ToggleGroup>
+                    {errors.deliveryArea && <p className="text-sm text-destructive">{errors.deliveryArea}</p>}
+                  </div>
+                </div>
+              )}
+
+              {step === 3 && isPharmacy && (
+                <div className="grid gap-5">
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <FormField
+                      {...field('sanitaryLicense')}
+                      label="Licença sanitária"
+                      hint="Número do alvará da Vigilância Sanitária."
+                    >
+                      {(a11y) => (
+                        <TextInput
+                          {...a11y}
+                          name="sanitaryLicense"
+                          autoComplete="off"
+                          required
+                          value={form.sanitaryLicense}
+                          onChange={(e) => update('sanitaryLicense', e.target.value)}
+                        />
+                      )}
+                    </FormField>
+                    <FormField
+                      {...field('operatingAuth')}
+                      label="AFE (Anvisa)"
+                      hint="Autorização de Funcionamento da Empresa."
+                    >
+                      {(a11y) => (
+                        <TextInput
+                          {...a11y}
+                          name="operatingAuth"
+                          autoComplete="off"
+                          required
+                          value={form.operatingAuth}
+                          onChange={(e) => update('operatingAuth', e.target.value)}
+                        />
+                      )}
+                    </FormField>
+                  </div>
+                  <FormField {...field('technicalResponsibleName')} label="Farmacêutico(a) responsável técnico(a)">
+                    {(a11y) => (
+                      <TextInput
+                        {...a11y}
+                        name="technicalResponsibleName"
+                        autoComplete="off"
+                        placeholder="Nome completo"
+                        required
+                        value={form.technicalResponsibleName}
+                        onChange={(e) => update('technicalResponsibleName', e.target.value)}
+                      />
+                    )}
+                  </FormField>
+                  <div className="grid grid-cols-[minmax(0,1fr)_7.5rem] gap-4">
+                    <FormField {...field('technicalResponsibleCrf')} label="Inscrição no CRF">
+                      {(a11y) => (
+                        <TextInput
+                          {...a11y}
+                          name="technicalResponsibleCrf"
+                          inputMode="numeric"
+                          autoComplete="off"
+                          maxLength={20}
+                          placeholder="Número"
+                          required
+                          value={form.technicalResponsibleCrf}
+                          onChange={(e) => update('technicalResponsibleCrf', e.target.value)}
+                        />
+                      )}
+                    </FormField>
+                    <FormField {...field('technicalResponsibleUf')} label="UF do CRF">
+                      {(a11y) => (
+                        <UfSelect
+                          a11y={a11y}
+                          value={form.technicalResponsibleUf}
+                          onChange={(v) => update('technicalResponsibleUf', v)}
+                        />
+                      )}
+                    </FormField>
+                  </div>
+                  <FormField
+                    {...field('documentUrl')}
+                    label="Link dos documentos"
+                    optional
+                    hint="Pasta compartilhada (https://…) com licença, AFE e certidão de regularidade do CRF. Se preferir, envie depois pelo suporte."
+                  >
+                    {(a11y) => (
+                      <TextInput
+                        {...a11y}
+                        type="url"
+                        name="documentUrl"
+                        inputMode="url"
+                        autoComplete="url"
+                        placeholder="https://"
+                        value={form.documentUrl}
+                        onChange={(e) => update('documentUrl', e.target.value)}
+                      />
+                    )}
+                  </FormField>
+                  <p className="flex items-start gap-2 rounded-xl bg-amber-wash px-3.5 py-3 text-xs leading-relaxed text-foreground/80">
+                    <Info className="mt-px size-4 shrink-0 text-amber" aria-hidden="true" />
+                    Depois do envio, a farmácia fica com verificação pendente. Você poderá entrar no painel, mas só
+                    envia cotações após a aprovação da equipe.
+                  </p>
+                  <CheckboxField
+                    id={fieldId('pharmacyTerms')}
+                    checked={form.pharmacyTerms}
+                    onCheckedChange={(v) => update('pharmacyTerms', v)}
+                    error={errors.pharmacyTerms}
+                  >
+                    Li e aceito o <NewTabLink to="/pharmacy-terms">Termo de Adesão para Farmácias</NewTabLink>,
+                    incluindo as responsabilidades técnicas, de preço e de entrega.
+                  </CheckboxField>
+                </div>
+              )}
+            </motion.fieldset>
+
+            <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row">
+              {step > 1 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="w-full sm:w-auto"
+                  onClick={() => goToStep(step - 1)}
+                  disabled={loading}
+                >
+                  <ArrowLeft aria-hidden="true" />
+                  Voltar
+                </Button>
+              )}
+              <Button type="submit" size="lg" className="w-full sm:w-auto sm:flex-1" disabled={loading}>
+                {loading ? (
+                  <>
+                    <Spinner aria-hidden="true" /> Enviando...
+                  </>
+                ) : isLastStep ? (
+                  isPharmacy ? (
+                    'Enviar para análise'
+                  ) : (
+                    'Criar conta'
+                  )
+                ) : (
+                  <>
+                    Continuar
+                    <ArrowRight aria-hidden="true" />
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
+        </div>
+      </FadeUp>
+
+      <FadeUp delay={0.16} y={8} duration={0.6} className="mt-8">
+        <Separator />
+        <p className="mt-6 text-center text-sm text-muted-foreground">
+          Já tem uma conta?{' '}
+          <Link
+            to={isPharmacy ? '/login?type=pharmacy' : '/login'}
+            className="font-medium text-primary underline-offset-4 hover:underline"
+          >
+            Entrar
+          </Link>
+        </p>
+      </FadeUp>
+    </AuthLayout>
+  );
 }

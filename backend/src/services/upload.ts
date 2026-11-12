@@ -5,6 +5,7 @@ import fs from 'fs';
 import { v2 as cloudinary } from 'cloudinary';
 import { validateMagicBytes, stripExifMetadata, malwareScanner } from './prescriptionSecurity';
 import { env } from '../config/env';
+import { isSupabaseStorageConfigured, uploadToSupabaseStorage } from './storage/supabaseStorage';
 
 // Multer configurado com memória para permitir inspeção profunda de Magic Bytes e sanitização
 export const upload = multer({
@@ -30,7 +31,7 @@ if (hasCloudinary) {
 }
 
 export interface StoredPrescriptionResult {
-  fileIdentifier: string; // "cloudinary://..." ou "local://..." (NUNCA caminho de disco do servidor)
+  fileIdentifier: string; // "supabase://...", "cloudinary://..." ou "local://..." (NUNCA caminho de disco do servidor)
   detectedType: string;
 }
 
@@ -76,7 +77,14 @@ export async function processAndSavePrescriptionFile(
   const fileUuid = crypto.randomUUID();
   const ext = validation.detectedType === 'pdf' ? '.pdf' : validation.detectedType === 'png' ? '.png' : '.jpg';
 
-  // 5. Armazenamento Seguro
+  // 5. Armazenamento Seguro (prioridade: Supabase Storage > Cloudinary > disco local de desenvolvimento)
+  if (isSupabaseStorageConfigured()) {
+    const contentType =
+      validation.detectedType === 'pdf' ? 'application/pdf' : validation.detectedType === 'png' ? 'image/png' : 'image/jpeg';
+    const fileIdentifier = await uploadToSupabaseStorage(`${fileUuid}${ext}`, cleanBuffer, contentType);
+    return { fileIdentifier, detectedType: validation.detectedType };
+  }
+
   if (hasCloudinary) {
     return new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(

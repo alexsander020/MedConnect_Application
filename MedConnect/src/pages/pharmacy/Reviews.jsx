@@ -1,149 +1,188 @@
-import React from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import Header from '../../components/Header';
-import BottomNav from '../../components/BottomNav';
-import StarRating from '../../components/StarRating';
-import { Star, Loader2, MessageSquare, AlertCircle } from 'lucide-react';
-import { api } from '../../services/api';
-import { useAuth } from '../../context/AuthContext';
+import { motion } from 'motion/react';
+import { MessageSquareText, Star, X } from 'lucide-react';
+import { cn } from 'cn';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
+import PageHeader from '@/components/shared/PageHeader';
+import StarRating from '@/components/StarRating';
+import EmptyState from '@/components/EmptyState';
+import ErrorState from '@/components/ErrorState';
+import LoadingState from '@/components/LoadingState';
+import { EASE_OUT, Stagger, StaggerItem } from '@/components/motion';
+import { useAuth } from '@/context/AuthContext';
+import { pharmacyApi } from '@/services/endpoints';
+import { formatDate, initials } from '@/lib/format';
 
-export default function Reviews() {
-    const { user } = useAuth();
-    const pharmacyId = user?.id;
+const fmtAvg = (n) => n.toFixed(1).replace('.', ',');
 
-    // Busca avaliações reais da farmácia autenticada
-    const {
-        data: reviews = [],
-        isLoading,
-        isError,
-        refetch
-    } = useQuery({
-        queryKey: ['pharmacyReviews', pharmacyId],
-        queryFn: async () => {
-            if (!pharmacyId) return [];
-            const res = await api.get(`/reviews/pharmacy/${pharmacyId}`);
-            return Array.isArray(res.data) ? res.data : [];
-        },
-        enabled: !!pharmacyId
-    });
+function Summary({ reviews, filter, onFilter }) {
+  const count = reviews.length;
+  const avg = count ? reviews.reduce((s, r) => s + Number(r.rating || 0), 0) / count : 0;
+  const dist = [5, 4, 3, 2, 1].map((stars) => {
+    const n = reviews.filter((r) => r.rating === stars).length;
+    return { stars, n, pct: count ? n / count : 0 };
+  });
+  const withComment = reviews.filter((r) => r.comment?.trim()).length;
 
-    const reviewsCount = reviews.length;
-    const avgRating = reviewsCount > 0
-        ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviewsCount).toFixed(1)
-        : '5.0';
-
-    const ratingDist = [5, 4, 3, 2, 1].map((stars) => {
-        const count = reviews.filter((r) => r.rating === stars).length;
-        const percent = reviewsCount > 0 ? (count / reviewsCount) * 100 : 0;
-        return { stars, count, percent };
-    });
-
-    return (
-        <div className="app-container">
-            <Header title="Avaliações de Clientes" />
-
-            <div className="page" style={{ maxWidth: '640px', margin: '0 auto' }}>
-                {/* Summary card */}
-                <div className="card animate-scale-in" style={{
-                    marginBottom: 'var(--space-6)',
-                    background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
-                    border: 'none',
-                    padding: '24px'
-                }}>
-                    <div className="flex items-center gap-6">
-                        <div style={{ textAlign: 'center', minWidth: '100px' }}>
-                            <p style={{ fontSize: 'var(--font-4xl)', fontWeight: 800, color: '#92400e', lineHeight: 1, margin: '0 0 6px' }}>
-                                {avgRating}
-                            </p>
-                            <StarRating rating={Math.round(Number(avgRating))} size={16} />
-                            <p className="text-xs mt-2" style={{ color: '#92400e', fontWeight: 600 }}>
-                                {reviewsCount} {reviewsCount === 1 ? 'avaliação' : 'avaliações'}
-                            </p>
-                        </div>
-                        <div style={{ flex: 1 }}>
-                            {ratingDist.map(({ stars, count, percent }) => (
-                                <div key={stars} className="flex items-center gap-2" style={{ marginBottom: '4px' }}>
-                                    <span className="text-xs font-semibold" style={{ width: '12px', color: '#92400e' }}>{stars}</span>
-                                    <Star size={12} fill="#f59e0b" color="#f59e0b" />
-                                    <div style={{
-                                        flex: 1, height: '6px', background: 'rgba(146,64,14,0.15)',
-                                        borderRadius: '3px', overflow: 'hidden',
-                                    }}>
-                                        <div style={{
-                                            width: `${percent}%`, height: '100%',
-                                            background: '#f59e0b', borderRadius: '3px',
-                                            transition: 'width 0.5s ease-out',
-                                        }} />
-                                    </div>
-                                    <span className="text-xs" style={{ width: '20px', textAlign: 'right', color: '#92400e' }}>{count}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Reviews List */}
-                {isLoading ? (
-                    <div style={{ padding: '40px', textAlign: 'center' }}>
-                        <Loader2 className="animate-spin" size={36} color="var(--primary-600)" style={{ margin: '0 auto' }} />
-                    </div>
-                ) : isError ? (
-                    <div className="card" style={{ padding: '32px', textAlign: 'center' }}>
-                        <AlertCircle size={36} color="var(--error)" style={{ margin: '0 auto 8px' }} />
-                        <p className="text-sm font-semibold" style={{ color: 'var(--gray-800)', marginBottom: '8px' }}>
-                            Erro ao carregar avaliações
-                        </p>
-                        <button className="btn btn-outline" style={{ padding: '6px 14px', fontSize: '13px' }} onClick={() => refetch()}>
-                            Tentar Novamente
-                        </button>
-                    </div>
-                ) : reviews.length === 0 ? (
-                    <div className="card" style={{ padding: '40px 20px', textAlign: 'center' }}>
-                        <MessageSquare size={40} color="var(--gray-300)" style={{ margin: '0 auto 12px' }} />
-                        <h4 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--gray-800)', marginBottom: '4px' }}>
-                            Nenhuma avaliação recebida ainda
-                        </h4>
-                        <p style={{ fontSize: '13px', color: 'var(--gray-500)', margin: 0 }}>
-                            Assim que os pacientes receberem fórmulas entregues com sucesso, os depoimentos e notas aparecerão aqui.
-                        </p>
-                    </div>
-                ) : (
-                    <div className="stagger" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-                        {reviews.map((review) => {
-                            const patientName = review.patient?.name || 'Paciente';
-                            const initials = patientName.slice(0, 2).toUpperCase();
-                            const formattedDate = new Date(review.createdAt).toLocaleDateString('pt-BR');
-
-                            return (
-                                <div key={review.id} className="card animate-slide-up" style={{ padding: '18px' }}>
-                                    <div className="flex items-center gap-3" style={{ marginBottom: 'var(--space-3)' }}>
-                                        <div className="avatar" style={{ width: '36px', height: '36px', fontSize: '12px', background: 'var(--primary-50)', color: 'var(--primary-700)', fontWeight: 700 }}>
-                                            {initials}
-                                        </div>
-                                        <div style={{ flex: 1 }}>
-                                            <h4 className="font-semibold text-sm" style={{ margin: 0 }}>{patientName}</h4>
-                                            <div className="flex items-center gap-2 mt-1">
-                                                <StarRating rating={review.rating} size={12} />
-                                                <span className="text-xs text-gray">{formattedDate}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    {review.comment && (
-                                        <p className="text-sm" style={{ color: 'var(--gray-700)', lineHeight: 1.5, margin: 0 }}>
-                                            "{review.comment}"
-                                        </p>
-                                    )}
-                                    <p className="text-xs text-gray mt-2" style={{ margin: '8px 0 0' }}>
-                                        Pedido: #{review.orderId.slice(0, 8).toUpperCase()}
-                                    </p>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-            </div>
-
-            <BottomNav />
+  return (
+    <Card className="mb-6 rounded-2xl">
+      <CardContent className="grid gap-8 md:grid-cols-[220px_minmax(0,1fr)] md:items-center">
+        <div className="flex flex-col items-center text-center md:items-start md:text-left">
+          <p className="text-sm font-medium text-muted-foreground">Nota média</p>
+          <p className="num mt-1 text-[3.5rem] leading-none tracking-tight text-foreground">{count ? fmtAvg(avg) : '—'}</p>
+          <StarRating rating={avg} size={20} className="mt-3" label="Nota média" />
+          <p className="mt-2 text-sm text-muted-foreground">
+            {count ? `${count} ${count === 1 ? 'avaliação' : 'avaliações'} · ${withComment} com comentário` : 'Nenhuma avaliação ainda'}
+          </p>
         </div>
-    );
+        <div>
+          <p id="dist-label" className="mb-3 text-sm font-medium text-foreground">Distribuição das notas</p>
+          <ul aria-labelledby="dist-label" className="space-y-1.5">
+            {dist.map(({ stars, n, pct }, i) => {
+              const active = filter === stars;
+              return (
+                <li key={stars}>
+                  <button
+                    type="button"
+                    onClick={() => onFilter(active ? null : stars)}
+                    aria-pressed={active}
+                    disabled={n === 0}
+                    aria-label={`${stars} ${stars === 1 ? 'estrela' : 'estrelas'}: ${n} ${n === 1 ? 'avaliação' : 'avaliações'}${n ? (active ? '. Remover filtro' : '. Filtrar') : ''}`}
+                    className={cn(
+                      'group flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-default',
+                      active ? 'bg-accent' : 'enabled:hover:bg-muted'
+                    )}
+                  >
+                    <span className="num inline-flex w-8 shrink-0 items-center gap-1 text-sm text-foreground">
+                      {stars}
+                      <Star className="size-3.5 fill-amber text-amber" aria-hidden="true" />
+                    </span>
+                    <span className="relative h-2 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+                      <motion.span
+                        className="absolute inset-0 rounded-full bg-amber"
+                        style={{ originX: 0 }}
+                        initial={{ scaleX: 0 }}
+                        animate={{ scaleX: pct }}
+                        transition={{ duration: 0.7, delay: 0.15 + i * 0.06, ease: EASE_OUT }}
+                      />
+                    </span>
+                    <span className="num w-14 shrink-0 text-right text-xs text-muted-foreground">
+                      {n} <span className="font-normal">({Math.round(pct * 100)}%)</span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Avaliações recebidas (/pharmacy/reviews) — GET /reviews/pharmacy/:id (nome do paciente já abreviado pela API) */
+export default function Reviews() {
+  const { currentUser } = useAuth();
+  const pharmacyId = currentUser?.id;
+  const [filter, setFilter] = useState(null);
+  const [onlyComments, setOnlyComments] = useState(false);
+
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['pharmacyReviews', pharmacyId],
+    queryFn: () => pharmacyApi.reviews(pharmacyId),
+    enabled: !!pharmacyId,
+  });
+  const reviews = useMemo(() => (Array.isArray(data) ? data : []), [data]);
+  const list = reviews
+    .filter((r) => !filter || r.rating === filter)
+    .filter((r) => !onlyComments || r.comment?.trim());
+
+  return (
+    <>
+      <PageHeader
+        eyebrow="Reputação"
+        title="Avaliações"
+        description="O que os pacientes disseram depois de receber as fórmulas. A nota média aparece para quem compara cotações."
+      />
+
+      {isLoading ? (
+        <>
+          <Skeleton className="mb-6 h-[220px] rounded-2xl" />
+          <LoadingState variant="list" rows={3} message="Carregando avaliações…" />
+        </>
+      ) : isError ? (
+        <ErrorState title="Erro ao carregar avaliações" message="Não foi possível buscar as avaliações agora. Tente novamente." onRetry={refetch} />
+      ) : (
+        <>
+          <Summary reviews={reviews} filter={filter} onFilter={setFilter} />
+
+          {reviews.length === 0 ? (
+            <EmptyState
+              icon={MessageSquareText}
+              title="Nenhuma avaliação recebida ainda"
+              description="Depois que um pedido é entregue, o paciente pode dar uma nota de 1 a 5 e deixar um comentário."
+            />
+          ) : (
+            <>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <h2 className="font-heading text-lg font-medium text-foreground">
+                  {filter ? `Avaliações com ${filter} ${filter === 1 ? 'estrela' : 'estrelas'}` : 'Todas as avaliações'}
+                  <span className="num ml-2 text-sm font-normal text-muted-foreground">({list.length})</span>
+                </h2>
+                <div className="flex flex-wrap items-center gap-3">
+                  {filter && (
+                    <Button variant="ghost" size="sm" onClick={() => setFilter(null)}>
+                      <X aria-hidden="true" /> Limpar filtro
+                    </Button>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <Switch id="only-comments" checked={onlyComments} onCheckedChange={setOnlyComments} />
+                    <Label htmlFor="only-comments" className="font-normal">Só com comentário</Label>
+                  </div>
+                </div>
+              </div>
+
+              {list.length === 0 ? (
+                <EmptyState icon={Star} title="Nenhuma avaliação neste filtro" description="Ajuste os filtros para ver outras avaliações." />
+              ) : (
+                <Stagger key={`${filter}-${onlyComments}`} as="ul" step={0.05} inView={false} className="grid gap-4 md:grid-cols-2">
+                  {list.map((r) => (
+                    <StaggerItem as="li" key={r.id} y={12} className="min-w-0">
+                      <article className="flex h-full flex-col rounded-2xl border border-border bg-card p-5 shadow-[0_1px_2px_hsl(190_30%_12%/0.04)]">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="size-9">
+                            <AvatarFallback className="bg-accent text-xs font-semibold text-primary">{initials(r.patientName || 'Paciente')}</AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-foreground">{r.patientName || 'Paciente'}</p>
+                            <p className="text-xs text-muted-foreground">
+                              <time dateTime={r.createdAt}>{formatDate(r.createdAt)}</time>
+                            </p>
+                          </div>
+                          <StarRating rating={r.rating} size={14} />
+                        </div>
+                        {r.comment?.trim() ? (
+                          <blockquote className="mt-4 whitespace-pre-line break-words text-[0.9375rem] leading-relaxed text-foreground/90">
+                            “{r.comment.trim()}”
+                          </blockquote>
+                        ) : (
+                          <p className="mt-4 text-sm italic text-muted-foreground">O paciente deixou só a nota, sem comentário.</p>
+                        )}
+                      </article>
+                    </StaggerItem>
+                  ))}
+                </Stagger>
+              )}
+            </>
+          )}
+        </>
+      )}
+    </>
+  );
 }

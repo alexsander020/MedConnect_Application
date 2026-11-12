@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { AuthController } from '../controllers/auth.controller';
 import { authLimiter } from '../middlewares/rate-limit.middleware';
 import { validateRequest } from '../middlewares/validateRequest.middleware';
+import { authMiddleware } from '../middlewares/auth.middleware';
 
 const router = Router();
 const authController = new AuthController();
@@ -49,6 +50,13 @@ const verifyEmailSchema = {
   }).optional()
 };
 
+const changePasswordSchema = {
+  body: z.object({
+    currentPassword: z.string().min(1, 'Senha atual é obrigatória'),
+    newPassword: z.string().min(1, 'Nova senha é obrigatória').max(128, 'A nova senha deve ter no máximo 128 caracteres')
+  })
+};
+
 router.post('/login', authLimiter, validateRequest(loginSchema), authController.login);
 router.post('/refresh', validateRequest(refreshSchema), authController.refresh);
 router.post('/logout', validateRequest(logoutSchema), authController.logout);
@@ -56,5 +64,14 @@ router.post('/forgot-password', authLimiter, validateRequest(forgotPasswordSchem
 router.post('/reset-password', authLimiter, validateRequest(resetPasswordSchema), authController.resetPassword);
 router.post('/verify-email', validateRequest(verifyEmailSchema), authController.verifyEmail);
 router.get('/verify-email', validateRequest(verifyEmailSchema), authController.verifyEmail);
+
+// Troca de senha pelo titular autenticado (qualquer papel). Limitada como as demais rotas de credencial.
+router.post(
+  '/change-password',
+  authMiddleware,
+  authLimiter,
+  validateRequest(changePasswordSchema),
+  authController.changePassword
+);
 
 export default router;

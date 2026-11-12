@@ -1,340 +1,502 @@
-import { useNavigate } from 'react-router-dom';
-import { Pill, Shield, ArrowRight, Activity, Clock, CheckCircle2, Star, Sparkles, Building2, User } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import {
+  ArrowRight,
+  BadgeCheck,
+  Bell,
+  Building2,
+  ClipboardCheck,
+  Clock,
+  FileSearch,
+  FileUp,
+  FlaskConical,
+  Layers,
+  LifeBuoy,
+  Lock,
+  MapPinned,
+  MessageSquareText,
+  PackageCheck,
+  PackageSearch,
+  Scale,
+  ShieldCheck,
+  Star,
+  Stethoscope,
+  Store,
+  Truck,
+  UserRoundCheck,
+} from 'lucide-react';
+import { cn } from 'cn';
+import { Button } from '@/components/ui/button';
+import { FadeUp, LiftCard, PopIn, Stagger, StaggerItem } from '@/components/motion';
+import { useAuth, homeFor } from '@/context/AuthContext';
+import HeroVisual from './public/components/HeroVisual';
+import CredentialedPharmacies from './public/components/CredentialedPharmacies';
+import { usePageMeta, DEFAULT_DESCRIPTION } from '@/lib/seo';
+
+const TRUST = [
+  { icon: BadgeCheck, title: 'Farmácias verificadas', text: 'Licença sanitária e farmacêutico responsável (CRF) conferidos.' },
+  { icon: Lock, title: 'Receita protegida', text: 'Aberta só por links temporários, com registro de cada acesso.' },
+  { icon: Scale, title: 'Você compara', text: 'Preço e prazo lado a lado, antes de decidir.' },
+  { icon: Truck, title: 'Até a entrega', text: 'Acompanhe cada etapa do pedido.' },
+];
+
+const FEATURES = [
+  { icon: Layers, title: 'Uma receita, várias cotações', text: 'Envie uma vez e receba propostas de diferentes farmácias credenciadas, sem ligar para nenhuma.' },
+  { icon: Scale, title: 'Comparação lado a lado', text: 'Preço total, prazo, observações da farmácia e avaliações de outros pacientes no mesmo lugar.' },
+  { icon: BadgeCheck, title: 'Só farmácias verificadas', text: 'Cada farmácia passa por conferência de documentos sanitários e do responsável técnico antes de cotar.' },
+  { icon: Lock, title: 'Receita protegida', text: 'Arquivo em armazenamento privado, metadados da foto removidos e cada abertura registrada.' },
+  { icon: Clock, title: 'Horários ao vivo', text: 'Veja quais farmácias estão abertas agora, calculado com o horário e o fuso de cada uma.' },
+  { icon: Bell, title: 'Acompanhamento ao vivo', text: 'Em manipulação, saiu para entrega, entregue: você recebe uma notificação a cada etapa.' },
+  { icon: Star, title: 'Avaliações reais', text: 'Depois da entrega, quem comprou avalia a farmácia. Isso ajuda o próximo paciente a escolher.' },
+  { icon: ShieldCheck, title: 'Seus dados, suas regras', text: 'Exporte seus dados, revogue consentimentos ou peça a anonimização no Centro de Privacidade.' },
+];
+
+const GUARANTORS = [
+  {
+    icon: Stethoscope,
+    kicker: 'Na farmácia',
+    title: 'O farmacêutico responsável técnico',
+    text: 'Toda farmácia credenciada informa seu responsável técnico, com registro no Conselho Regional de Farmácia (CRF). É ele quem avalia a receita, a fórmula, as dosagens e a qualidade dos insumos.',
+  },
+  {
+    icon: ClipboardCheck,
+    kicker: 'Na MedConnect',
+    title: 'A revisão de credenciamento',
+    text: 'Antes da primeira cotação, nossa equipe confere CNPJ, licença sanitária, autorização de funcionamento e os dados do responsável técnico. Sem aprovação, a farmácia não vê receitas.',
+  },
+  {
+    icon: UserRoundCheck,
+    kicker: 'Com você',
+    title: 'O seu controle sobre os dados',
+    text: 'Você decide quando enviar a receita e qual cotação aceitar. E pode exportar seus dados, revogar consentimentos ou pedir a anonimização da conta quando quiser.',
+  },
+];
+
+const STEPS = [
+  { title: 'Envie a receita', text: 'Foto ou PDF, depois de autorizar o uso para cotação. Leva poucos minutos.' },
+  { title: 'Receba cotações', text: 'Farmácias credenciadas respondem com preço e prazo, cada uma no seu horário de funcionamento.' },
+  { title: 'Escolha e confirme', text: 'Compare e aceite a proposta que fizer mais sentido. As demais são encerradas.' },
+  { title: 'Acompanhe até a entrega', text: 'Cada mudança de etapa aparece ao vivo no seu pedido, com notificação.' },
+];
+
+const DELIVERY_POINTS = [
+  { icon: MapPinned, text: 'Cada farmácia define a própria área de entrega — você vê no diretório.' },
+  { icon: Clock, text: 'O prazo vem em cada cotação, antes de você decidir.' },
+  { icon: Bell, text: 'O status do pedido é atualizado pela farmácia e chega a você ao vivo.' },
+  { icon: FileSearch, text: 'Medicamentos controlados podem exigir a via original da receita na entrega, conforme orientação do farmacêutico.' },
+];
+
+const TRACKING = [
+  { icon: FlaskConical, label: 'Em manipulação', note: 'A farmácia está preparando a fórmula', state: 'done' },
+  { icon: Truck, label: 'Saiu para entrega', note: 'O pedido está a caminho', state: 'current' },
+  { icon: PackageCheck, label: 'Entregue', note: 'Você recebe e pode avaliar', state: 'next' },
+];
+
+const ARTICLES = [
+  {
+    topic: 'pacientes',
+    title: 'A MedConnect é uma farmácia?',
+    text: 'Não. Somos a plataforma que conecta você a farmácias de manipulação credenciadas. A avaliação da receita, a manipulação e a entrega são da farmácia escolhida e do seu farmacêutico responsável.',
+  },
+  {
+    topic: 'privacidade',
+    title: 'Quem vê a minha receita?',
+    text: 'Ela é usada só para cotação e manipulação, por farmácias credenciadas. O arquivo abre por links temporários, e cada acesso fica registrado. Seus contatos vão apenas para a farmácia que você escolher.',
+  },
+  {
+    topic: 'pagamento-e-entrega',
+    title: 'Como funciona o pagamento?',
+    text: 'Nesta fase do piloto, a MedConnect não processa pagamentos. A forma e o momento do pagamento são definidos pela farmácia escolhida — confirme com ela antes de pagar.',
+  },
+];
+
+const PHARMACY_BENEFITS = [
+  { icon: PackageSearch, title: 'Receitas chegando até você', text: 'Pacientes enviam a receita; sua farmácia analisa e responde com a cotação.' },
+  { icon: Scale, title: 'Concorrência transparente', text: 'Preço e prazo claros para o paciente. Quem decide é ele.' },
+  { icon: ClipboardCheck, title: 'Pedido em um só lugar', text: 'Atualize as etapas e o paciente acompanha ao vivo.' },
+  { icon: Star, title: 'Reputação que se constrói', text: 'Avaliações após cada entrega, visíveis no diretório público.' },
+];
+
+const REQUIREMENTS = [
+  'CNPJ ativo de farmácia com manipulação',
+  'Licença sanitária vigente',
+  'Autorização de Funcionamento (AFE) da ANVISA',
+  'Farmacêutico responsável técnico com registro no CRF',
+];
+
+function SectionHeading({ id, eyebrow, title, lead, className, align = 'left' }) {
+  return (
+    <FadeUp inView className={cn('max-w-2xl', align === 'center' && 'mx-auto text-center', className)}>
+      {eyebrow && <p className="eyebrow mb-4">{eyebrow}</p>}
+      <h2 id={id} className="text-section text-foreground">
+        {title}
+      </h2>
+      {lead && <p className="text-lead mt-4 text-muted-foreground">{lead}</p>}
+    </FadeUp>
+  );
+}
+
+function IconCircle({ icon: Icon, className }) {
+  return (
+    <span className={cn('inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-accent text-primary', className)}>
+      <Icon className="size-5" aria-hidden="true" />
+    </span>
+  );
+}
 
 export default function Welcome() {
-    const navigate = useNavigate();
+  const { isAuthenticated, userType } = useAuth();
+  const isPatient = isAuthenticated && userType === 'PATIENT';
+  const otherRole = isAuthenticated && !isPatient;
+  const quoteTo = isPatient ? '/new-quote' : otherRole ? homeFor(userType) : '/register';
+  const ordersTo = isPatient ? '/orders' : otherRole ? homeFor(userType) : '/login';
 
-    return (
-        <div className="aurora-container" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-            {/* Animated Aurora Blobs */}
-            <div className="aurora-blob aurora-blob-1" />
-            <div className="aurora-blob aurora-blob-2" />
-            <div className="aurora-blob aurora-blob-3" />
+  usePageMeta({ title: 'MedConnect · Cotação de manipulados em farmácias credenciadas', description: DEFAULT_DESCRIPTION });
 
-            {/* Floating Glass Header */}
-            <header style={{
-                background: 'rgba(255, 255, 255, 0.75)',
-                backdropFilter: 'blur(20px)',
-                WebkitBackdropFilter: 'blur(20px)',
-                padding: 'var(--space-4) var(--space-8)',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                borderBottom: '1px solid rgba(255, 255, 255, 0.6)',
-                position: 'fixed',
-                top: 0,
-                width: '100%',
-                zIndex: 100,
-                boxShadow: '0 4px 20px rgba(15, 23, 42, 0.03)'
-            }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                    <div style={{
-                        width: '42px', height: '42px', borderRadius: '12px',
-                        background: 'linear-gradient(135deg, #0d9488 0%, #06b6d4 100%)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        boxShadow: '0 4px 14px rgba(13, 148, 136, 0.35)'
-                    }}>
-                        <Pill size={24} color="white" />
-                    </div>
+  const routes = [
+    {
+      to: quoteTo,
+      icon: FileUp,
+      title: 'Enviar receita',
+      text: 'Foto ou PDF da receita. Farmácias credenciadas respondem com preço e prazo.',
+      cta: otherRole ? 'Abrir meu painel' : 'Começar agora',
+    },
+    {
+      to: ordersTo,
+      icon: PackageSearch,
+      title: 'Acompanhar meu pedido',
+      text: 'Veja em que etapa está: em manipulação, saiu para entrega ou entregue.',
+      cta: isAuthenticated ? 'Ver pedidos' : 'Entrar e acompanhar',
+    },
+    {
+      to: '/help',
+      icon: LifeBuoy,
+      title: 'Tirar uma dúvida',
+      text: 'Perguntas frequentes e atendimento com número de protocolo.',
+      cta: 'Abrir a central de ajuda',
+    },
+  ];
+
+  return (
+    <div className="overflow-x-clip">
+      {/* 1. Hero */}
+      <section aria-labelledby="hero-titulo" className="container-page pb-14 pt-8 md:pb-20 md:pt-14 lg:pb-24 lg:pt-20">
+        <div className="grid items-center gap-10 lg:grid-cols-12 lg:gap-12">
+          <div className="min-w-0 lg:col-span-6">
+            <FadeUp>
+              <p className="eyebrow mb-5 leading-relaxed">
+                Farmácias de manipulação verificadas <span aria-hidden="true">·</span> Receita protegida <span aria-hidden="true">·</span> LGPD
+              </p>
+            </FadeUp>
+            <FadeUp delay={0.06}>
+              <h1 id="hero-titulo" className="text-display text-foreground">
+                Sua receita, várias farmácias. <span className="text-primary">Você escolhe.</span>
+              </h1>
+            </FadeUp>
+            <FadeUp delay={0.12}>
+              <p className="text-lead mt-6 max-w-xl text-muted-foreground">
+                Envie a receita do seu manipulado uma vez e receba cotações de farmácias credenciadas. Compare preço e prazo, escolha a que fizer mais sentido e acompanhe o pedido até a entrega.
+              </p>
+            </FadeUp>
+            <FadeUp delay={0.18} className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <Button asChild size="lg">
+                <Link to={quoteTo}>
+                  <FileUp aria-hidden="true" /> {otherRole ? 'Abrir meu painel' : 'Enviar receita e cotar'}
+                </Link>
+              </Button>
+              {userType !== 'PHARMACY' && (
+                <Button asChild size="lg" variant="outline">
+                  <Link to="/register?type=pharmacy">
+                    <Store aria-hidden="true" /> Sou farmácia
+                  </Link>
+                </Button>
+              )}
+            </FadeUp>
+            <FadeUp delay={0.26}>
+              <ul aria-label="Por que confiar" className="mt-10 grid gap-x-6 gap-y-5 border-t border-border pt-7 sm:grid-cols-2">
+                {TRUST.map((t) => (
+                  <li key={t.title} className="flex gap-3">
+                    <t.icon className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
                     <div>
-                        <span style={{ fontSize: 'var(--font-xl)', fontWeight: 800, letterSpacing: '-0.02em' }}>
-                            Med<span className="gradient-text">Connect</span>
-                        </span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: -2 }}>
-                            <span className="neon-pulse" />
-                            <span style={{ fontSize: '11px', color: 'var(--gray-500)', fontWeight: 600 }}>Plataforma Ativa</span>
-                        </div>
+                      <p className="text-sm font-semibold text-foreground">{t.title}</p>
+                      <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">{t.text}</p>
                     </div>
-                </div>
-
-                <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
-                    <button 
-                        className="btn btn-ghost"
-                        style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
-                        onClick={() => navigate('/login', { state: { type: 'pharmacy' } })}
-                    >
-                        <Building2 size={16} />
-                        Área da Farmácia
-                    </button>
-                    <button 
-                        className="btn btn-glass-primary"
-                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 20px', borderRadius: 'var(--radius-full)' }}
-                        onClick={() => navigate('/login', { state: { type: 'user' } })}
-                    >
-                        <User size={16} />
-                        Entrar / Cadastro
-                    </button>
-                </div>
-            </header>
-
-            {/* Hero Section */}
-            <main style={{ 
-                flex: 1, 
-                display: 'flex', 
-                flexDirection: 'column',
-                justifyContent: 'center',
-                padding: '140px var(--space-6) var(--space-16)',
-                position: 'relative',
-                zIndex: 1
-            }}>
-                <div style={{
-                    maxWidth: '1200px',
-                    margin: '0 auto',
-                    width: '100%',
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-                    gap: 'var(--space-12)',
-                    alignItems: 'center',
-                }}>
-                    {/* Left Column: Headline and Call-to-actions */}
-                    <div className="animate-slide-down">
-                        <div style={{ marginBottom: 'var(--space-4)' }}>
-                            <span className="glass-pill glass-pill-primary">
-                                <Sparkles size={14} color="var(--primary-600)" />
-                                O Marketplace nº 1 de Manipulação no Brasil
-                            </span>
-                        </div>
-
-                        <h1 style={{
-                            fontSize: 'clamp(2.5rem, 5vw, 3.8rem)',
-                            fontWeight: 900,
-                            lineHeight: 1.1,
-                            marginBottom: 'var(--space-5)',
-                            color: 'var(--gray-900)'
-                        }}>
-                            Suas receitas manipuladas com o <span className="gradient-text">melhor preço e rapidez.</span>
-                        </h1>
-
-                        <p style={{
-                            fontSize: 'var(--font-lg)',
-                            color: 'var(--gray-600)',
-                            marginBottom: 'var(--space-8)',
-                            maxWidth: '540px',
-                            lineHeight: 1.6
-                        }}>
-                            Envie sua foto ou PDF da receita médica. Receba orçamentos de farmácias credenciadas da sua região em minutos e economize até 40% com segurança certificada.
-                        </p>
-
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-4)', marginBottom: 'var(--space-8)' }}>
-                            <button
-                                className="btn btn-glass-primary btn-lg"
-                                style={{ borderRadius: 'var(--radius-xl)', padding: '14px 28px', fontSize: '1rem', fontWeight: 700 }}
-                                onClick={() => navigate('/login', { state: { type: 'user' } })}
-                            >
-                                Solicitar Cotação Grátis
-                                <ArrowRight size={20} />
-                            </button>
-                            <button
-                                className="btn btn-outline btn-lg"
-                                style={{
-                                    borderRadius: 'var(--radius-xl)',
-                                    padding: '14px 24px',
-                                    background: 'rgba(255, 255, 255, 0.7)',
-                                    borderColor: 'rgba(203, 213, 225, 0.8)',
-                                    fontWeight: 600,
-                                    color: 'var(--gray-700)'
-                                }}
-                                onClick={() => navigate('/login', { state: { type: 'pharmacy' } })}
-                            >
-                                Cadastrar Farmácia
-                            </button>
-                        </div>
-
-                        {/* Trust markers */}
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-6)', paddingTop: 'var(--space-4)', borderTop: '1px solid rgba(226, 232, 240, 0.8)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <CheckCircle2 size={18} color="var(--success)" />
-                                <span style={{ fontSize: 'var(--font-sm)', color: 'var(--gray-700)', fontWeight: 500 }}>
-                                    Farmácias Certificadas Anvisa
-                                </span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <Shield size={18} color="var(--primary-600)" />
-                                <span style={{ fontSize: 'var(--font-sm)', color: 'var(--gray-700)', fontWeight: 500 }}>
-                                    Privacidade LGPD Garantida
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Right Column: Live Interactive Glass Preview Card */}
-                    <div className="animate-scale-in" style={{ position: 'relative' }}>
-                        <div className="glass-panel" style={{
-                            padding: 'var(--space-8)',
-                            position: 'relative',
-                            overflow: 'hidden'
-                        }}>
-                            {/* Card Header */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-6)' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                    <div style={{
-                                        width: 12, height: 12, borderRadius: '50%', background: '#ef4444'
-                                    }} />
-                                    <div style={{
-                                        width: 12, height: 12, borderRadius: '50%', background: '#f59e0b'
-                                    }} />
-                                    <div style={{
-                                        width: 12, height: 12, borderRadius: '50%', background: '#10b981'
-                                    }} />
-                                    <span style={{ fontSize: '13px', color: 'var(--gray-500)', marginLeft: 8, fontWeight: 600 }}>
-                                        Cotação em Andamento #8942
-                                    </span>
-                                </div>
-                                <span className="glass-pill glass-pill-primary">
-                                    3 propostas
-                                </span>
-                            </div>
-
-                            {/* Quote Simulation Item 1 (Best price highlight) */}
-                            <div className="glass-card" style={{
-                                padding: 'var(--space-4) var(--space-5)',
-                                marginBottom: 'var(--space-3)',
-                                border: '1.5px solid var(--primary-400)',
-                                background: 'linear-gradient(135deg, rgba(240, 253, 250, 0.9) 0%, rgba(255, 255, 255, 0.95) 100%)'
-                            }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-                                    <div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                            <span style={{ fontWeight: 700, color: 'var(--gray-900)' }}>Farmácia Arte & Fórmula</span>
-                                            <span style={{
-                                                background: 'var(--success)', color: 'white', fontSize: '10px',
-                                                fontWeight: 700, padding: '2px 6px', borderRadius: 6
-                                            }}>
-                                                MELHOR PREÇO
-                                            </span>
-                                        </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                                            <Star size={12} fill="#f59e0b" color="#f59e0b" />
-                                            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--gray-700)' }}>4.9</span>
-                                            <span style={{ fontSize: '12px', color: 'var(--gray-400)' }}>(248 avaliações) • 2.1 km</span>
-                                        </div>
-                                    </div>
-                                    <div style={{ textAlign: 'right' }}>
-                                        <span style={{ fontSize: 'var(--font-xl)', fontWeight: 800, color: 'var(--primary-700)' }}>
-                                            R$ 68,50
-                                        </span>
-                                        <p style={{ fontSize: '11px', color: 'var(--success)', fontWeight: 600 }}>Economia de 32%</p>
-                                    </div>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, fontSize: '12px', color: 'var(--gray-500)' }}>
-                                    <span>📦 Entrega em até 24h</span>
-                                    <span style={{ color: 'var(--primary-600)', fontWeight: 600 }}>Frete Grátis</span>
-                                </div>
-                            </div>
-
-                            {/* Quote Simulation Item 2 */}
-                            <div className="glass-card" style={{
-                                padding: 'var(--space-4) var(--space-5)',
-                                opacity: 0.85
-                            }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                    <div>
-                                        <span style={{ fontWeight: 600, color: 'var(--gray-800)' }}>Manipula & Vida</span>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                                            <Star size={12} fill="#f59e0b" color="#f59e0b" />
-                                            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--gray-700)' }}>4.8</span>
-                                            <span style={{ fontSize: '12px', color: 'var(--gray-400)' }}>• 4.5 km</span>
-                                        </div>
-                                    </div>
-                                    <div style={{ textAlign: 'right' }}>
-                                        <span style={{ fontSize: 'var(--font-lg)', fontWeight: 700, color: 'var(--gray-800)' }}>
-                                            R$ 84,00
-                                        </span>
-                                        <p style={{ fontSize: '11px', color: 'var(--gray-400)' }}>Entrega em 2 dias</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Stats bar */}
-                            <div style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(3, 1fr)',
-                                gap: 'var(--space-3)',
-                                marginTop: 'var(--space-6)',
-                                paddingTop: 'var(--space-5)',
-                                borderTop: '1px solid rgba(226, 232, 240, 0.8)',
-                                textAlign: 'center'
-                            }}>
-                                <div>
-                                    <p style={{ fontSize: 'var(--font-xl)', fontWeight: 800, color: 'var(--gray-900)' }}>+15 mil</p>
-                                    <p style={{ fontSize: '11px', color: 'var(--gray-500)' }}>Cotações Realizadas</p>
-                                </div>
-                                <div>
-                                    <p style={{ fontSize: 'var(--font-xl)', fontWeight: 800, color: 'var(--primary-600)' }}>4.9 ★</p>
-                                    <p style={{ fontSize: '11px', color: 'var(--gray-500)' }}>Satisfação</p>
-                                </div>
-                                <div>
-                                    <p style={{ fontSize: 'var(--font-xl)', fontWeight: 800, color: 'var(--gray-900)' }}>+400</p>
-                                    <p style={{ fontSize: '11px', color: 'var(--gray-500)' }}>Farmácias Ativas</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Features Section */}
-                <div style={{ maxWidth: '1200px', margin: '80px auto 0', width: '100%' }}>
-                    <div style={{ textAlign: 'center', marginBottom: 'var(--space-10)' }}>
-                        <span className="glass-pill" style={{ marginBottom: 'var(--space-3)' }}>
-                            Como funciona
-                        </span>
-                        <h2 style={{ fontSize: 'var(--font-3xl)', fontWeight: 800, color: 'var(--gray-900)' }}>
-                            Tudo o que você precisa em uma única plataforma
-                        </h2>
-                    </div>
-
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-                        gap: 'var(--space-6)'
-                    }}>
-                        {[
-                            {
-                                icon: <Activity size={26} color="var(--primary-600)" />,
-                                title: 'Cotação Expressa',
-                                desc: 'Envie sua receita em segundos e receba múltiplos orçamentos diretamente no celular sem sair de casa.'
-                            },
-                            {
-                                icon: <Star size={26} color="#f59e0b" />,
-                                title: 'Comparador Transparente',
-                                desc: 'Compare preços, prazos de entrega e avaliações de outros pacientes de maneira simples e clara.'
-                            },
-                            {
-                                icon: <Shield size={26} color="var(--primary-700)" />,
-                                title: 'Segurança Médica',
-                                desc: 'Seus dados e receitas são criptografados de ponta a ponta em conformidade rigorosa com a LGPD.'
-                            },
-                            {
-                                icon: <Clock size={26} color="#6366f1" />,
-                                title: 'Rastreamento em Tempo Real',
-                                desc: 'Acompanhe todas as etapas: da aprovação da fórmula até a manipulação e entrega na sua porta.'
-                            }
-                        ].map((feature, i) => (
-                            <div key={i} className="glass-card" style={{
-                                padding: 'var(--space-6)',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: 'var(--space-3)'
-                            }}>
-                                <div style={{
-                                    width: 52, height: 52, borderRadius: 'var(--radius-lg)',
-                                    background: 'rgba(255, 255, 255, 0.9)',
-                                    boxShadow: '0 4px 14px rgba(15, 23, 42, 0.06)',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                }}>
-                                    {feature.icon}
-                                </div>
-                                <h3 style={{ fontSize: 'var(--font-lg)', fontWeight: 700, color: 'var(--gray-900)' }}>
-                                    {feature.title}
-                                </h3>
-                                <p style={{ fontSize: 'var(--font-sm)', color: 'var(--gray-600)', lineHeight: 1.6 }}>
-                                    {feature.desc}
-                                </p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </main>
+                  </li>
+                ))}
+              </ul>
+            </FadeUp>
+          </div>
+          <HeroVisual className="order-first min-w-0 lg:order-none lg:col-span-6 lg:pl-4" />
         </div>
-    );
+      </section>
+
+      {/* 2. Três caminhos */}
+      <section aria-labelledby="caminhos-titulo" className="container-page pb-16 md:pb-20 lg:pb-24">
+        <h2 id="caminhos-titulo" className="sr-only">
+          Por onde você quer começar?
+        </h2>
+        <Stagger step={0.06} as="ul" className="grid gap-4 md:grid-cols-3 md:gap-5">
+          {routes.map((r) => (
+            <StaggerItem as="li" key={r.title} className="min-w-0">
+              <LiftCard className="h-full rounded-2xl border border-border bg-card shadow-[0_1px_2px_hsl(190_22%_16%/0.04)] transition-shadow hover:shadow-[0_14px_32px_-18px_hsl(190_22%_16%/0.3)]">
+                <Link to={r.to} className="flex h-full flex-col rounded-2xl p-6 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 lg:p-7">
+                  <IconCircle icon={r.icon} className="size-12" />
+                  <span className="mt-5 font-heading text-xl font-semibold text-foreground">{r.title}</span>
+                  <span className="mt-2 text-[0.9375rem] leading-relaxed text-muted-foreground">{r.text}</span>
+                  <span className="mt-auto inline-flex items-center gap-1.5 pt-5 text-sm font-medium text-primary">
+                    {r.cta}
+                    <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true" />
+                  </span>
+                </Link>
+              </LiftCard>
+            </StaggerItem>
+          ))}
+        </Stagger>
+      </section>
+
+      {/* 3. O que a MedConnect faz por você */}
+      <section aria-labelledby="recursos-titulo" className="border-t border-border">
+        <div className="container-page py-16 md:py-20 lg:py-24">
+          <SectionHeading
+            id="recursos-titulo"
+            eyebrow="Para pacientes"
+            title="O que a MedConnect faz por você"
+            lead="Menos telefonemas e menos incerteza: a cotação do seu manipulado organizada do envio da receita até a entrega."
+          />
+          <Stagger step={0.06} as="ul" className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {FEATURES.map((f) => (
+              <StaggerItem as="li" key={f.title} className="flex gap-4 rounded-2xl border border-border bg-card p-5 sm:block sm:p-6">
+                <IconCircle icon={f.icon} />
+                <div className="min-w-0">
+                  <h3 className="font-heading text-lg font-semibold leading-snug text-foreground sm:mt-5">{f.title}</h3>
+                  <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground sm:mt-2">{f.text}</p>
+                </div>
+              </StaggerItem>
+            ))}
+          </Stagger>
+        </div>
+      </section>
+
+      {/* 4. Farmácias credenciadas (dados reais) */}
+      <CredentialedPharmacies />
+
+      {/* 5. Quem garante a qualidade */}
+      <section aria-labelledby="qualidade-titulo">
+        <div className="container-page py-16 md:py-20 lg:py-24">
+          <SectionHeading
+            id="qualidade-titulo"
+            eyebrow="Segurança do começo ao fim"
+            title="Quem garante a qualidade"
+            lead="Três camadas de cuidado, cada uma com um papel claro."
+          />
+          <Stagger step={0.1} as="ul" className="mt-12 grid gap-5 md:grid-cols-3">
+            {GUARANTORS.map((g) => (
+              <StaggerItem as="li" key={g.title} className="flex flex-col rounded-2xl border border-border bg-card p-6 lg:p-7">
+                <div className="flex items-center gap-3">
+                  <IconCircle icon={g.icon} className="size-12" />
+                  <span className="eyebrow">{g.kicker}</span>
+                </div>
+                <h3 className="mt-5 font-heading text-xl font-semibold text-foreground">{g.title}</h3>
+                <p className="mt-2 text-[0.9375rem] leading-relaxed text-muted-foreground">{g.text}</p>
+              </StaggerItem>
+            ))}
+          </Stagger>
+        </div>
+      </section>
+
+      {/* 6. Como funciona */}
+      <section id="como-funciona" aria-labelledby="como-funciona-titulo" className="scroll-mt-20 border-t border-border">
+        <div className="container-page py-16 md:py-20 lg:py-24">
+          <SectionHeading
+            id="como-funciona-titulo"
+            eyebrow="Como funciona"
+            title="Quatro passos, do envio à entrega"
+            lead="O tempo de cada etapa depende das farmácias e da fórmula — mas você sempre sabe em que ponto está."
+          />
+          <ol className="relative mt-12 grid gap-8 md:grid-cols-2 lg:grid-cols-4 lg:gap-6">
+            <span aria-hidden="true" className="absolute left-6 right-[calc((100%-72px)/4-24px)] top-6 hidden h-px bg-border lg:block" />
+            {STEPS.map((s, i) => (
+              <li key={s.title} className="relative flex gap-4 lg:flex-col lg:gap-0">
+                <PopIn delay={i * 0.12} className="relative z-10 shrink-0">
+                  <span className="num inline-flex size-12 items-center justify-center rounded-full border border-[color-mix(in_oklab,var(--primary)_35%,var(--border))] bg-background text-lg text-primary shadow-[0_0_0_6px_var(--background)]">
+                    {i + 1}
+                  </span>
+                </PopIn>
+                <FadeUp inView delay={0.05 + i * 0.12} duration={0.5} className="min-w-0 lg:mt-6">
+                  <h3 className="font-heading text-lg font-semibold text-foreground">{s.title}</h3>
+                  <p className="mt-1.5 text-[0.9375rem] leading-relaxed text-muted-foreground">{s.text}</p>
+                </FadeUp>
+              </li>
+            ))}
+          </ol>
+          <FadeUp inView className="mt-12">
+            <Button asChild size="lg">
+              <Link to={quoteTo}>
+                <FileUp aria-hidden="true" /> {otherRole ? 'Abrir meu painel' : 'Enviar receita e cotar'}
+              </Link>
+            </Button>
+          </FadeUp>
+        </div>
+      </section>
+
+      {/* 7. Entrega */}
+      <section aria-labelledby="entrega-titulo" className="bg-mint-wash">
+        <div className="container-page grid gap-12 py-16 md:py-20 lg:grid-cols-12 lg:items-center lg:gap-16 lg:py-24">
+          <div className="lg:col-span-6">
+            <SectionHeading
+              id="entrega-titulo"
+              eyebrow="Entrega"
+              title="Do balcão da farmácia até você"
+              lead="A entrega é feita pela farmácia que você escolher. A MedConnect mostra as condições antes do aceite e o andamento depois."
+            />
+            <ul className="mt-8 space-y-4">
+              {DELIVERY_POINTS.map((d) => (
+                <li key={d.text} className="flex gap-3">
+                  <d.icon className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
+                  <span className="text-[0.9375rem] leading-relaxed text-foreground">{d.text}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <FadeUp inView delay={0.1} className="lg:col-span-5 lg:col-start-8">
+            <figure>
+              <div
+                role="img"
+                aria-label="Ilustração do acompanhamento: em manipulação concluído, saiu para entrega em andamento, entregue como próxima etapa."
+                className="rounded-2xl border border-border bg-background p-5 shadow-[0_24px_48px_-30px_hsl(190_22%_16%/0.3)] sm:p-6"
+              >
+                <div className="flex items-center justify-between gap-3 border-b border-border pb-4">
+                  <p className="font-heading text-base font-semibold text-foreground">Seu pedido</p>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-info-wash px-2.5 py-1 text-xs font-medium text-info">
+                    <span className="size-1.5 rounded-full bg-info animate-pulse-soft" /> Ao vivo
+                  </span>
+                </div>
+                <ol className="mt-5 space-y-0">
+                  {TRACKING.map((t, i) => (
+                    <li key={t.label} className="relative flex gap-4 pb-6 last:pb-0">
+                      {i < TRACKING.length - 1 && (
+                        <span className={cn('absolute left-[19px] top-10 h-[calc(100%-40px)] w-0.5 rounded-full', t.state === 'done' ? 'bg-primary' : 'bg-border')} />
+                      )}
+                      <span
+                        className={cn(
+                          'relative inline-flex size-10 shrink-0 items-center justify-center rounded-full border',
+                          t.state === 'done' && 'border-primary bg-primary text-primary-foreground',
+                          t.state === 'current' && 'border-primary bg-accent text-primary',
+                          t.state === 'next' && 'border-border bg-background text-muted-foreground'
+                        )}
+                      >
+                        <t.icon className="size-[18px]" />
+                      </span>
+                      <div className="pt-1.5">
+                        <p className={cn('text-sm font-semibold', t.state === 'next' ? 'text-muted-foreground' : 'text-foreground')}>{t.label}</p>
+                        <p className="text-sm text-muted-foreground">{t.note}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+              <figcaption className="mt-3 text-center text-xs text-muted-foreground">Ilustração do acompanhamento do pedido.</figcaption>
+            </figure>
+          </FadeUp>
+        </div>
+      </section>
+
+      {/* 8. Dúvidas comuns */}
+      <section aria-labelledby="duvidas-titulo">
+        <div className="container-page py-16 md:py-20 lg:py-24">
+          <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+            <SectionHeading id="duvidas-titulo" eyebrow="Dúvidas comuns" title="Antes de enviar a sua receita" />
+            <FadeUp inView delay={0.08} className="shrink-0">
+              <Button asChild variant="outline">
+                <Link to="/help">
+                  Todas as perguntas <ArrowRight aria-hidden="true" />
+                </Link>
+              </Button>
+            </FadeUp>
+          </div>
+          <Stagger step={0.06} className="mt-12 grid gap-5 md:grid-cols-3">
+            {ARTICLES.map((a) => (
+              <StaggerItem key={a.title} className="min-w-0">
+                <LiftCard as="article" className="flex h-full flex-col rounded-2xl border border-border bg-card p-6 lg:p-7">
+                  <MessageSquareText className="size-5 text-primary" aria-hidden="true" />
+                  <h3 className="mt-4 font-heading text-lg font-semibold text-foreground">{a.title}</h3>
+                  <p className="mt-2 text-[0.9375rem] leading-relaxed text-muted-foreground">{a.text}</p>
+                  <Link
+                    to={`/help#${a.topic}`}
+                    className="mt-auto inline-flex items-center gap-1.5 pt-5 text-sm font-medium text-primary after:absolute after:inset-0 after:rounded-2xl focus-visible:outline-none focus-visible:after:ring-3 focus-visible:after:ring-ring/50"
+                  >
+                    Saiba mais<span className="sr-only">: {a.title}</span>
+                    <ArrowRight className="size-4" aria-hidden="true" />
+                  </Link>
+                </LiftCard>
+              </StaggerItem>
+            ))}
+          </Stagger>
+        </div>
+      </section>
+
+      {/* 9. Para farmácias */}
+      <section id="para-farmacias" aria-labelledby="para-farmacias-titulo" className="scroll-mt-20 pb-16 md:pb-20 lg:pb-24">
+        <div className="container-page">
+          <div className="grid gap-10 overflow-hidden rounded-3xl border border-border bg-mint-wash p-6 sm:p-10 lg:grid-cols-12 lg:gap-12 lg:p-14">
+            <div className="min-w-0 lg:col-span-7">
+              <SectionHeading
+                id="para-farmacias-titulo"
+                eyebrow="Para farmácias de manipulação"
+                title="Receitas de pacientes, direto no seu painel"
+                lead="Credencie sua farmácia, responda às receitas com a sua cotação e acompanhe cada pedido num painel feito para a rotina da manipulação."
+              />
+              <Stagger step={0.06} as="ul" className="mt-10 grid gap-6 sm:grid-cols-2">
+                {PHARMACY_BENEFITS.map((b) => (
+                  <StaggerItem as="li" key={b.title} className="flex gap-3">
+                    <IconCircle icon={b.icon} className="bg-background" />
+                    <div className="min-w-0">
+                      <h3 className="font-heading text-base font-semibold text-foreground">{b.title}</h3>
+                      <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{b.text}</p>
+                    </div>
+                  </StaggerItem>
+                ))}
+              </Stagger>
+            </div>
+            <FadeUp inView delay={0.1} className="min-w-0 lg:col-span-5">
+              <div className="rounded-2xl border border-border bg-background p-6 lg:p-7">
+                <div className="flex items-center gap-3">
+                  <IconCircle icon={Building2} />
+                  <p className="font-heading text-lg font-semibold text-foreground">Para se credenciar</p>
+                </div>
+                <ul className="mt-5 space-y-3">
+                  {REQUIREMENTS.map((r) => (
+                    <li key={r} className="flex gap-2.5 text-sm leading-relaxed text-foreground">
+                      <BadgeCheck className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+                      {r}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-5 text-sm leading-relaxed text-muted-foreground">
+                  Nossa equipe confere os documentos e aprova o credenciamento ou informa o motivo da recusa.
+                </p>
+                <div className="mt-6 flex flex-col gap-3">
+                  {userType === 'PHARMACY' ? (
+                    <Button asChild size="lg">
+                      <Link to={homeFor('PHARMACY')}>
+                        Abrir painel da farmácia <ArrowRight aria-hidden="true" />
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button asChild size="lg">
+                      <Link to="/register?type=pharmacy">
+                        <Store aria-hidden="true" /> Credenciar minha farmácia
+                      </Link>
+                    </Button>
+                  )}
+                  <Button asChild variant="link" className="h-auto justify-start px-0">
+                    <Link to="/pharmacy-terms">Ler o Termo de Adesão de farmácias</Link>
+                  </Button>
+                </div>
+              </div>
+            </FadeUp>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
 }

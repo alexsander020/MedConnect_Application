@@ -18,9 +18,29 @@ const createUserSchema = {
     phone: z.string().optional(),
     address: z.string().optional(),
     healthConsent: z.boolean().optional(),
-    consent: z.boolean().optional()
+    consent: z.boolean().optional(),
+    termsAccepted: z.boolean().optional()
   })
 };
+
+// Campo opcional de texto: string vazia ou null limpa o valor
+const optionalClearableText = (max: number, label: string) =>
+  z
+    .union([z.string().trim().max(max, `${label} deve ter no máximo ${max} caracteres`), z.null()])
+    .optional()
+    .transform((value) => (value === '' ? null : value));
+
+const updateMeSchema = {
+  body: z.object({
+    name: z.string().trim().min(2, 'Nome deve ter no mínimo 2 caracteres').max(120, 'Nome deve ter no máximo 120 caracteres').optional(),
+    phone: optionalClearableText(30, 'Telefone'),
+    address: optionalClearableText(300, 'Endereço')
+  })
+};
+
+// Perfil do próprio titular (paciente ou admin)
+router.get('/me', authMiddleware, roleMiddleware(['PATIENT', 'ADMIN']), userController.getMe);
+router.patch('/me', authMiddleware, roleMiddleware(['PATIENT', 'ADMIN']), validateRequest(updateMeSchema), userController.updateMe);
 
 // Direitos do Titular (Art. 18 LGPD)
 router.get('/me/export', authMiddleware, lgpdController.exportMyData.bind(lgpdController));

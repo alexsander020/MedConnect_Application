@@ -100,6 +100,27 @@ A Fase 2 concluiu a transição da aplicação para um produto 100% real, com da
 - Substituição do README padrão do Vite por documentação real do projeto.
 - Migração de `legacy/` e `diario-de-bordo.md` para `docs/historico/`.
 
+## Fase 6: Novo layout, telas de gestão e evolução do banco (12/11/2026)
+
+### Banco de dados
+- **Hardening para Supabase** (`20261111120000_supabase_hardening`, ADR 018): CHECKs de domínio, `AuditLog` somente-inserção garantido por trigger, RLS em todas as tabelas e revogação da Data API (`anon`/`authenticated`) quando os papéis existem.
+- **Gestão** (`20261112041717_management_hours_support`, ADR 019): `AccountStatus` (suspensão de pacientes e farmácias, com revogação de refresh tokens), `PharmacyBusinessHour` (minutos + fuso IANA, vários intervalos por dia) e `SupportTicket` (protocolo, categoria, resolução; leitura pelo admin auditada).
+- **Observações da receita** (`20261112052526_prescription_notes`): `Prescription.notes` cifrado (AES-256-GCM), visível ao paciente e às farmácias verificadas na cotação, nunca ao admin; exportado no direito de acesso e apagado na anonimização.
+
+### Correções de privacidade encontradas na integração
+- `GET /prescriptions/:id` entregava a qualquer farmácia verificada o `fileUrl` cru, nome/telefone do paciente e as cotações concorrentes antes do aceite. Agora segue o ADR 008 (pseudônimo, só as próprias cotações, contato liberado após o aceite).
+- `GET /orders/my` (farmácia) deixou de trazer o arquivo da receita e o contato cifrado; esses dados ficam no detalhe auditado.
+- E-mails de cadastro e recuperação passaram a levar links (`FRONTEND_URL`) para `/verify-email` e `/reset-password`.
+- Limitador global da API: 100 req/15 min por IP para anônimos e 600 req/15 min por conta autenticada (equipes atrás do mesmo NAT eram bloqueadas).
+
+### Frontend
+- Tailwind v4 + shadcn/ui (radix-vega, JSX) + `npx @animate-ui/cli@latest animate all` (18 componentes com primitivos animados); toasts em Radix UI Toast; Motion com `reducedMotion="user"` (ADR 020).
+- Site público (landing, diretório de farmácias com status de funcionamento ao vivo, ajuda/contato, Política de Privacidade, Termos de Uso e Termo de Adesão marcados como em revisão jurídica), autenticação completa e todas as telas de gestão de paciente, farmácia e administração.
+
+### Verificação
+- Backend: 34 suítes / 465 testes, cobertura 88,3% (controllers + services). Frontend: 20 suítes / 132 testes, ESLint limpo, build ok. E2E Playwright (dois navegadores) verde.
+- Percurso real com backend + banco de dev semeado nos quatro perfis (26 telas) em 1360px e 390px, sem erros de console nem rolagem horizontal.
+
 ## Conclusão
 Ao aplicar TDD, Refatoração Segura, Design Vanilla focado em estética, Integração Contínua e uma base de produção com PostgreSQL, atingimos um alto padrão de qualidade em código e produto no ecossistema MedConnect.
 

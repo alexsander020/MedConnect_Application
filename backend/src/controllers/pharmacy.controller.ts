@@ -5,7 +5,26 @@ import { ehEmailValido, ehSenhaForte, ehCNPJValido } from '@medconnect/validatio
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { cnpjLookup } from '../services/cnpj';
 import { formatPriceCentsToDecimal } from '../lib/money';
-import { OrderStatus, QuoteStatus, PharmacyVerificationStatus } from '@prisma/client';
+import { OrderStatus, QuoteStatus, PharmacyVerificationStatus, AccountStatus, Prisma } from '@prisma/client';
+import { sendVerificationEmail } from '../services/emailVerificationService';
+import {
+  BusinessHoursValidationError,
+  isValidTimezone,
+  parseWeeklySchedule
+} from '../domain/businessHours';
+import {
+  BUSINESS_HOURS_SELECT,
+  PHARMACY_PROFILE_SELECT,
+  buildPharmacyProfile,
+  buildSchedule,
+  getPharmacyRatings,
+  ratingOf
+} from '../services/pharmacyProfileService';
+
+// Versão vigente do Termo de Adesão de farmácias (docs/lgpd/termo-de-adesao-farmacias.md)
+export const PHARMACY_TERMS_VERSION = 'v1.0.0';
+// Teto defensivo da listagem pública (rota sem autenticação)
+const PUBLIC_LISTING_MAX = 200;
 
 export class PharmacyController {
   async create(req: Request, res: Response): Promise<void> {
@@ -23,7 +42,10 @@ export class PharmacyController {
         technicalResponsibleName,
         technicalResponsibleCrf,
         technicalResponsibleUf,
-        documentUrl
+        documentUrl,
+        city,
+        state,
+        termsAccepted
       } = req.body;
 
       if (!name || !email || !password || !cnpj) {
@@ -96,11 +118,17 @@ export class PharmacyController {
           technicalResponsibleUf,
           documentUrl,
           cnpjData: cnpjEvidenceData,
-          emailVerified: false
+          emailVerified: false,
+          city,
+          state,
+          termsAcceptedAt: termsAccepted === true ? new Date() : null,
+          termsVersion: termsAccepted === true ? PHARMACY_TERMS_VERSION : null
         }
       });
 
       const { password: _, ...pharmacyWithoutPassword } = pharmacy;
+      await sendVerificationEmail(pharmacy.email, pharmacy.name);
+
       res.status(201).json(pharmacyWithoutPassword);
     } catch (error: any) {
       if (error?.code === 'P2002') {
@@ -210,6 +238,181 @@ export class PharmacyController {
       });
     } catch (error) {
       res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Erro ao calcular métricas da farmácia' } });
+    }
+  }
+
+  /**
+   * Perfil completo da farmácia autenticada, com grade de horários e status de abertura.
+   */
+  async getMe(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const pharmacy = await prisma.pharmacy.findUnique({
+        where: { id: req.user!.id },
+        select: PHARMACY_PROFILE_SELECT
+      });
+      if (!pharmacy) {
+        res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Farmácia não encontrada' } });
+        return;
+      }
+      res.json(buildPharmacyProfile(pharmacy));
+    } catch (error) {
+      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Erro ao carregar perfil da farmácia' } });
+    }
+  }
+
+  /**
+   * Atualização parcial do perfil operacional. Nome, CNPJ e e-mail NÃO são editáveis aqui
+   * (são dados de credenciamento e exigem nova verificação).
+   */
+  async updateMe(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const existing = await prisma.pharmacy.findUnique({ where: { id: req.user!.id }, select: { id: true } });
+      if (!existing) {
+        res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Farmácia não encontrada' } });
+        return;
+      }
+
+      const allowed = ['phone', 'address', 'city', 'state', 'deliveryArea', 'description', 'services'] as const;
+      const data: Prisma.PharmacyUpdateInput = {};
+      for (const field of allowed) {
+        if (req.body[field] !== undefined) {
+          (data as any)[field] = req.body[field];
+        }
+      }
+
+      const updated = await prisma.pharmacy.update({
+        where: { id: existing.id },
+        data,
+        select: PHARMACY_PROFILE_SELECT
+      });
+      res.json(buildPharmacyProfile(updated));
+    } catch (error) {
+      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Erro ao atualizar perfil da farmácia' } });
+    }
+  }
+
+  /**
+   * Substitui toda a grade semanal de horários (e opcionalmente o fuso) numa transação.
+   */
+  async replaceBusinessHours(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { timezone, hours } = req.body as {
+        timezone?: string;
+        hours: Array<{ dayOfWeek: number; opensAt: string; closesAt: string }>;
+      };
+
+      if (timezone !== undefined && !isValidTimezone(timezone)) {
+        res.status(400).json({
+          error: { code: 'INVALID_TIMEZONE', message: `Fuso horário inválido: "${timezone}". Use um identificador IANA (ex.: America/Sao_Paulo).` }
+        });
+        return;
+      }
+
+      let intervals;
+      try {
+        intervals = parseWeeklySchedule(hours);
+      } catch (error) {
+        if (error instanceof BusinessHoursValidationError) {
+          res.status(400).json({ error: { code: error.code, message: error.message } });
+          return;
+        }
+        throw error;
+      }
+
+      const pharmacyId = req.user!.id;
+      const existing = await prisma.pharmacy.findUnique({ where: { id: pharmacyId }, select: { id: true } });
+      if (!existing) {
+        res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Farmácia não encontrada' } });
+        return;
+      }
+
+      const result = await prisma.$transaction(async (tx) => {
+        await tx.pharmacyBusinessHour.deleteMany({ where: { pharmacyId } });
+        if (intervals.length > 0) {
+          await tx.pharmacyBusinessHour.createMany({
+            data: intervals.map((i) => ({ pharmacyId, dayOfWeek: i.dayOfWeek, opensAt: i.opensAt, closesAt: i.closesAt }))
+          });
+        }
+        return tx.pharmacy.update({
+          where: { id: pharmacyId },
+          data: timezone !== undefined ? { timezone } : {},
+          select: { timezone: true, businessHours: BUSINESS_HOURS_SELECT }
+        });
+      });
+
+      res.json({
+        timezone: result.timezone,
+        ...buildSchedule(result.businessHours, result.timezone)
+      });
+    } catch (error) {
+      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Erro ao salvar horários de atendimento' } });
+    }
+  }
+
+  /**
+   * Vitrine pública: somente farmácias VERIFIED e ACTIVE, sem dados de contato
+   * (e-mail, CNPJ, telefone e endereço nunca saem desta rota).
+   */
+  async listPublic(req: Request, res: Response): Promise<void> {
+    try {
+      const { search, city, openNow } = req.query as { search?: string; city?: string; openNow?: boolean };
+
+      const where: Prisma.PharmacyWhereInput = {
+        verificationStatus: PharmacyVerificationStatus.VERIFIED,
+        status: AccountStatus.ACTIVE
+      };
+      if (search) {
+        where.OR = [
+          { name: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+          { deliveryArea: { contains: search, mode: 'insensitive' } }
+        ];
+      }
+      if (city) {
+        where.city = { contains: city, mode: 'insensitive' };
+      }
+
+      const pharmacies = await prisma.pharmacy.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          city: true,
+          state: true,
+          deliveryArea: true,
+          description: true,
+          services: true,
+          timezone: true,
+          businessHours: BUSINESS_HOURS_SELECT
+        },
+        orderBy: { name: 'asc' },
+        take: PUBLIC_LISTING_MAX
+      });
+
+      const ratings = await getPharmacyRatings(pharmacies.map((p) => p.id));
+      const now = new Date();
+
+      const items = pharmacies.map((p) => {
+        const { businessHours, ...rest } = p;
+        return {
+          ...rest,
+          services: rest.services ?? [],
+          ...ratingOf(ratings, p.id),
+          ...buildSchedule(businessHours, p.timezone, now)
+        };
+      });
+
+      const data = openNow ? items.filter((i) => i.openStatus.isOpen) : items;
+
+      res.json({
+        data,
+        meta: {
+          total: data.length,
+          openNow: data.filter((i) => i.openStatus.isOpen).length
+        }
+      });
+    } catch (error) {
+      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Erro ao buscar farmácias' } });
     }
   }
 }

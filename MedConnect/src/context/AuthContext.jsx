@@ -1,7 +1,33 @@
-import { createContext, useContext, useState, useEffect } from 'react';
-import { api, getSocket, setAccessToken } from '../services/api';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { api, getSocket, realtimeEnabled, setAccessToken } from '../services/api';
 
 const AuthContext = createContext(null);
+
+/** Exibida enquanto a sessão é restaurada pelo cookie (evita tela em branco) */
+function SessionSplash() {
+  return (
+    <div role="status" aria-live="polite" className="flex min-h-dvh flex-1 flex-col items-center justify-center gap-4 bg-background">
+      <svg viewBox="0 0 40 40" aria-hidden="true" className="size-12 animate-pulse-soft">
+        <rect width="40" height="40" rx="12" fill="var(--primary)" />
+        <g transform="rotate(-45 20 20)">
+          <rect x="9" y="14.5" width="22" height="11" rx="5.5" fill="white" />
+        </g>
+      </svg>
+      <span className="text-sm text-muted-foreground">Carregando o MedConnect…</span>
+    </div>
+  );
+}
+
+/** Tela inicial de cada papel */
+export const ROLE_HOME = {
+  PATIENT: '/dashboard',
+  PHARMACY: '/pharmacy',
+  ADMIN: '/admin',
+};
+
+export function homeFor(role) {
+  return ROLE_HOME[role] || '/';
+}
 
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
@@ -53,14 +79,27 @@ export function AuthProvider({ children }) {
 
   // Gerencia o ciclo de vida do WebSocket com base no usuário logado
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || !realtimeEnabled) return;
 
     const socket = getSocket();
     socket.connect();
     socket.emit('join_room', currentUser.id);
 
     const handleNewQuote = (data) => {
-      alert(`Notificação em Tempo Real! ${data.message} Preço: R$${data.quote.price}`);
+      const price = data?.quote?.price
+        ? Number(data.quote.price).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+        : null;
+      window.dispatchEvent(
+        new CustomEvent('app:toast', {
+          detail: {
+            type: 'success',
+            title: 'Nova cotação recebida',
+            message:
+              [data?.message, price && `Valor: ${price}`].filter(Boolean).join(' · ') ||
+              'Uma farmácia respondeu à sua receita.',
+          },
+        })
+      );
     };
 
     socket.on('new_quote', handleNewQuote);
@@ -78,21 +117,17 @@ export function AuthProvider({ children }) {
     return response.data;
   };
 
-  const login = async (email, password, type = 'user') => {
-    try {
-      const response = await api.post('/auth/login', { email, password, type });
-      const { token, accessToken, user } = response.data;
-      const activeToken = accessToken || token;
+  // Erros sobem para a tela tratar (sem log no console: o erro do axios carrega o e-mail digitado)
+  const login = async (email, password, type = 'patient') => {
+    const response = await api.post('/auth/login', { email, password, type });
+    const { token, accessToken, user } = response.data;
+    const activeToken = accessToken || token;
 
-      setAccessToken(activeToken);
-      setCurrentUser(user);
-      setUserType(user.role);
+    setAccessToken(activeToken);
+    setCurrentUser(user);
+    setUserType(user.role);
 
-      return { user, token: activeToken };
-    } catch (error) {
-      console.error('Login error', error);
-      throw error;
-    }
+    return { user, token: activeToken };
   };
 
   const logout = async () => {
@@ -108,6 +143,11 @@ export function AuthProvider({ children }) {
     }
   };
 
+  /** Atualiza nome/e-mail exibidos após edição de perfil */
+  const updateCurrentUser = useCallback((patch) => {
+    setCurrentUser((prev) => (prev ? { ...prev, ...patch } : prev));
+  }, []);
+
   const isAuthenticated = !!currentUser;
 
   return (
@@ -119,10 +159,11 @@ export function AuthProvider({ children }) {
         login,
         register,
         logout,
-        loading
+        loading,
+        updateCurrentUser
       }}
     >
-      {!loading && children}
+      {loading ? <SessionSplash /> : children}
     </AuthContext.Provider>
   );
 }

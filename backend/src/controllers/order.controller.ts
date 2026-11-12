@@ -277,14 +277,23 @@ export class OrderController {
           include: {
             quote: {
               include: {
+                // Minimização (LGPD): a listagem não traz o arquivo da receita nem o contato do paciente
+                // (que estão cifrados no banco). Ambos ficam no detalhe auditado: GET /orders/:id e
+                // GET /prescriptions/:id/view-url.
                 prescription: {
-                  include: {
-                    patient: { select: { id: true, name: true, phone: true, address: true } }
+                  select: {
+                    id: true,
+                    status: true,
+                    createdAt: true,
+                    updatedAt: true,
+                    patientId: true,
+                    patient: { select: { id: true, name: true } }
                   }
                 }
               }
             },
-            history: { orderBy: { createdAt: 'desc' } }
+            history: { orderBy: { createdAt: 'desc' } },
+            review: { select: { id: true, rating: true, createdAt: true } }
           },
           orderBy: { createdAt: 'desc' }
         });
@@ -301,7 +310,8 @@ export class OrderController {
                 pharmacy: { select: { id: true, name: true, phone: true, address: true } }
               }
             },
-            history: { orderBy: { createdAt: 'desc' } }
+            history: { orderBy: { createdAt: 'desc' } },
+            review: { select: { id: true, rating: true, createdAt: true } }
           },
           orderBy: { createdAt: 'desc' }
         });
@@ -347,7 +357,8 @@ export class OrderController {
               }
             }
           },
-          history: { orderBy: { createdAt: 'asc' } }
+          history: { orderBy: { createdAt: 'asc' } },
+          review: { select: { id: true, rating: true, comment: true, createdAt: true } }
         }
       });
 

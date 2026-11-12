@@ -26,11 +26,18 @@ import notificationRoutes from './routes/notification.routes';
 import healthRoutes from './routes/health.routes';
 import consentRoutes from './routes/consent.routes';
 import lgpdRoutes from './routes/lgpd.routes';
+import supportRoutes from './routes/support.routes';
 
 // Inicializa Sentry se SENTRY_DSN estiver configurado
 initSentry();
 
 const app = express();
+
+// Atrás do proxy da Vercel o IP real do cliente chega em X-Forwarded-For (sobrescrito pela própria Vercel).
+// Sem isto, todos os visitantes anônimos compartilhariam o mesmo limite de requisições.
+if (process.env.VERCEL) {
+  app.set('trust proxy', 1);
+}
 
 // Configuração estrita de CORS baseada em CORS_ORIGINS
 const corsOptions: cors.CorsOptions = {
@@ -97,6 +104,7 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/consent', consentRoutes);
 app.use('/api/lgpd', lgpdRoutes);
+app.use('/api/support', supportRoutes);
 
 // Bloqueio explícito de mutação em trilhas de auditoria (Imutabilidade LGPD)
 app.use('/api/audit-logs', (req, res) => {

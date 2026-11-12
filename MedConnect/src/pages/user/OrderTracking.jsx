@@ -1,241 +1,219 @@
-import React from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import Header from '../../components/Header';
-import BottomNav from '../../components/BottomNav';
-import StarRating from '../../components/StarRating';
-import { orderStatuses } from '../../constants/status';
-import { Check, Clock, Phone, MessageCircle, MapPin, Package, Loader2, Sparkles, ShieldCheck, FileText, Star, AlertCircle } from 'lucide-react';
-import { api } from '../../services/api';
+import { ArrowLeft, Clock3, FileLock2, MapPin, Phone, Star, Store, XCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import PageHeader from '@/components/shared/PageHeader';
+import StatusBadge from '@/components/shared/StatusBadge';
+import OrderTimeline from '@/components/shared/OrderTimeline';
+import ErrorState from '@/components/ErrorState';
+import LoadingState from '@/components/LoadingState';
+import { FadeUp } from '@/components/motion';
+import { patientApi } from '@/services/endpoints';
+import { formatDateTime, formatPhone } from '@/lib/format';
+import ViewPrescriptionButton from './components/ViewPrescriptionButton';
+import { canReview, deliveryLabel, errorStatus, formatQuotePrice, shortId } from './components/patient-utils';
 
+const HEADLINES = {
+  PRODUCTION: { title: 'Sua fórmula está sendo manipulada', text: 'A farmácia já recebeu a receita e está preparando o seu pedido.' },
+  DELIVERY: { title: 'Seu pedido saiu para entrega', text: 'Fique atento: a entrega está a caminho do endereço combinado.' },
+  DELIVERED: { title: 'Pedido entregue', text: 'Esperamos que esteja tudo certo com a sua fórmula.' },
+  CANCELLED: { title: 'Pedido cancelado', text: 'Este pedido foi cancelado e não seguirá para manipulação.' },
+};
+
+function BackButton() {
+  return (
+    <Button asChild variant="ghost" size="sm">
+      <Link to="/orders"><ArrowLeft aria-hidden="true" /> Meus pedidos</Link>
+    </Button>
+  );
+}
+
+/** Acompanhamento de um pedido do paciente */
 export default function OrderTracking() {
-    const { id } = useParams();
-    const navigate = useNavigate();
+  const { id } = useParams();
+  const { data: order, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ['order', id],
+    queryFn: () => patientApi.order(id),
+    enabled: !!id,
+  });
 
-    // Consulta de detalhes reais do pedido via TanStack Query
-    const {
-        data: orderData,
-        isLoading,
-        isError
-    } = useQuery({
-        queryKey: ['order', id],
-        queryFn: async () => {
-            const res = await api.get(`/orders/${id}`);
-            return res.data;
-        },
-        enabled: !!id
-    });
-
-    // Consulta da URL assinada de visualização segura da receita (5 min com auditoria compulsória)
-    const prescriptionId = orderData?.quote?.prescriptionId || orderData?.quote?.prescription?.id;
-    const { data: signedPrescriptionData } = useQuery({
-        queryKey: ['prescriptionViewUrl', prescriptionId],
-        queryFn: async () => {
-            const res = await api.get(`/prescriptions/${prescriptionId}/view-url`);
-            return res.data;
-        },
-        enabled: !!prescriptionId
-    });
-
-    if (isLoading) {
-        return (
-            <div className="aurora-container" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-                <Header title="Rastreamento em Tempo Real" showBack />
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-                    <Loader2 className="animate-spin" size={40} color="var(--primary-600)" />
-                </div>
-            </div>
-        );
-    }
-
-    if (isError || !orderData) {
-        return (
-            <div className="aurora-container" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-                <Header title="Rastreamento em Tempo Real" showBack />
-                <div className="page" style={{ maxWidth: '500px', margin: '40px auto', textAlign: 'center' }}>
-                    <div className="glass-card" style={{ padding: '32px' }}>
-                        <AlertCircle size={40} color="var(--error)" style={{ margin: '0 auto 12px' }} />
-                        <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px' }}>Pedido não encontrado</h3>
-                        <p style={{ color: 'var(--gray-600)', marginBottom: '16px' }}>Não foi possível carregar os dados deste pedido.</p>
-                        <button className="btn btn-primary" onClick={() => navigate('/orders')}>Voltar aos Pedidos</button>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    const currentStatus = orderData.status || 'PRODUCTION';
-    const statusConfig = orderStatuses[currentStatus] || orderStatuses.PRODUCTION;
-
-    const steps = [
-        { key: 'PRODUCTION', label: 'Em Manipulação / Produção', desc: 'Sua fórmula está sendo manipulada no laboratório farmacêutico.' },
-        { key: 'DELIVERY', label: 'Saiu para Entrega', desc: 'O mensageiro está a caminho do seu endereço de entrega.' },
-        { key: 'DELIVERED', label: 'Pedido Entregue', desc: 'Entregue com sucesso e insumos verificados.' }
-    ];
-
-    const stepIndex = steps.findIndex((s) => s.key === currentStatus);
-    const activeIndex = stepIndex >= 0 ? stepIndex : 0;
-
-    const pharmacy = orderData.quote?.pharmacy;
-    const pharmacyName = pharmacy?.name || 'Farmácia Parceira';
-    const pharmacyInitials = pharmacyName.slice(0, 2).toUpperCase();
-    const formattedPrice = orderData.quote?.price || (orderData.quote?.priceCents ? (orderData.quote.priceCents / 100).toFixed(2) : '0.00');
-
+  if (isLoading) {
     return (
-        <div className="aurora-container" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-            <div className="aurora-blob aurora-blob-1" />
-            <div className="aurora-blob aurora-blob-2" />
-
-            <div style={{ position: 'relative', zIndex: 1, flex: 1 }}>
-                <Header title="Rastreamento em Tempo Real" showBack />
-
-                <div className="page" style={{ maxWidth: '640px', margin: '0 auto' }}>
-                    {/* Hero Card */}
-                    <div className="glass-card-dark animate-scale-in" style={{
-                        padding: 'var(--space-6)',
-                        marginBottom: 'var(--space-6)',
-                        position: 'relative',
-                        overflow: 'hidden'
-                    }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-                            <div>
-                                <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                                    Pedido de Manipulação
-                                </span>
-                                <h2 style={{ fontSize: '22px', fontWeight: 800, color: 'white', margin: '4px 0 0' }}>
-                                    #{orderData.id.slice(0, 8).toUpperCase()}
-                                </h2>
-                            </div>
-                            <span className={`badge badge-dot badge-${statusConfig.color}`} style={{ padding: '6px 12px', fontSize: '12px' }}>
-                                {statusConfig.label}
-                            </span>
-                        </div>
-
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '14px' }}>
-                            <div>
-                                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', display: 'block' }}>Valor Total</span>
-                                <span style={{ fontSize: '18px', fontWeight: 800, color: '#34d399' }}>
-                                    R$ {formattedPrice}
-                                </span>
-                            </div>
-                            {signedPrescriptionData?.signedUrl && (
-                                <a
-                                    href={signedPrescriptionData.signedUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="btn btn-outline"
-                                    style={{
-                                        color: 'white',
-                                        borderColor: 'rgba(255,255,255,0.3)',
-                                        fontSize: '12px',
-                                        padding: '4px 10px',
-                                        gap: '6px'
-                                    }}
-                                >
-                                    <FileText size={14} /> Ver Receita Segura
-                                </a>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Timeline */}
-                    <div className="glass-card animate-slide-up" style={{ padding: 'var(--space-6)', marginBottom: 'var(--space-6)' }}>
-                        <h3 style={{ fontSize: 'var(--font-base)', fontWeight: 800, marginBottom: '20px', color: 'var(--gray-900)' }}>
-                            Status da Entrega
-                        </h3>
-
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', position: 'relative' }}>
-                            {steps.map((st, idx) => {
-                                const isDone = idx <= activeIndex;
-                                const isCurrent = idx === activeIndex;
-
-                                return (
-                                    <div key={st.key} style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-                                        <div style={{
-                                            width: '32px',
-                                            height: '32px',
-                                            borderRadius: '50%',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            background: isDone ? 'var(--primary-600)' : 'var(--gray-200)',
-                                            color: isDone ? 'white' : 'var(--gray-500)',
-                                            flexShrink: 0,
-                                            boxShadow: isCurrent ? '0 0 0 4px rgba(20, 184, 166, 0.25)' : 'none'
-                                        }}>
-                                            {isDone ? <Check size={16} /> : <Clock size={16} />}
-                                        </div>
-                                        <div style={{ flex: 1 }}>
-                                            <p style={{
-                                                fontSize: '14px',
-                                                fontWeight: isCurrent ? 800 : 600,
-                                                color: isCurrent ? 'var(--primary-700)' : isDone ? 'var(--gray-900)' : 'var(--gray-500)',
-                                                margin: '0 0 2px'
-                                            }}>
-                                                {st.label}
-                                            </p>
-                                            <p style={{ fontSize: '12px', color: 'var(--gray-500)', margin: 0, lineHeight: 1.4 }}>
-                                                {st.desc}
-                                            </p>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-
-                    {/* Review Button if Delivered */}
-                    {currentStatus === 'DELIVERED' && (
-                        <div className="glass-card animate-scale-in" style={{
-                            padding: 'var(--space-5)',
-                            marginBottom: 'var(--space-6)',
-                            background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
-                            border: '1px solid #f59e0b',
-                            textAlign: 'center'
-                        }}>
-                            <Star size={32} color="#b45309" fill="#f59e0b" style={{ margin: '0 auto 8px' }} />
-                            <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#78350f', marginBottom: '4px' }}>
-                                Seu pedido foi entregue!
-                            </h3>
-                            <p style={{ fontSize: '13px', color: '#92400e', marginBottom: '14px' }}>
-                                Avalie sua experiência com a {pharmacyName} para ajudar outros pacientes.
-                            </p>
-                            <button
-                                className="btn btn-primary"
-                                style={{ background: '#b45309', borderColor: '#b45309' }}
-                                onClick={() => navigate(`/review/${orderData.id}`)}
-                            >
-                                Avaliar Atendimento
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Pharmacy Information */}
-                    {pharmacy && (
-                        <div className="glass-card animate-slide-up" style={{ padding: 'var(--space-5)', marginBottom: 'var(--space-6)' }}>
-                            <h3 style={{ fontSize: 'var(--font-sm)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--gray-500)', marginBottom: '12px' }}>
-                                Farmácia Responsável
-                            </h3>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                                <div className="avatar avatar-lg" style={{ background: 'var(--gradient-primary)', color: 'white', fontWeight: 700 }}>
-                                    {pharmacyInitials}
-                                </div>
-                                <div style={{ flex: 1 }}>
-                                    <h4 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 2px' }}>{pharmacyName}</h4>
-                                    <p style={{ fontSize: '12px', color: 'var(--gray-500)', margin: '0 0 4px' }}>{pharmacy.address || 'São Paulo, SP'}</p>
-                                    {pharmacy.phone && (
-                                        <p style={{ fontSize: '12px', color: 'var(--primary-700)', fontWeight: 600, margin: 0 }}>
-                                            Telefone: {pharmacy.phone}
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            <BottomNav />
-        </div>
+      <>
+        <PageHeader eyebrow="Pedido" title="Carregando pedido…" actions={<BackButton />} />
+        <LoadingState variant="detail" message="Carregando os dados do pedido…" />
+      </>
     );
+  }
+
+  if (isError || !order) {
+    const status = errorStatus(error);
+    const notFound = status === 404 || status === 403 || (!isError && !order);
+    return (
+      <>
+        <PageHeader eyebrow="Pedido" title="Acompanhar pedido" actions={<BackButton />} />
+        <ErrorState
+          title={notFound ? 'Pedido não encontrado' : 'Erro ao carregar o pedido'}
+          message={
+            notFound
+              ? 'Não encontramos este pedido na sua conta. Confira o link ou volte para a lista de pedidos.'
+              : 'Não foi possível buscar os dados deste pedido agora. Verifique sua conexão e tente novamente.'
+          }
+          onRetry={notFound ? undefined : refetch}
+        />
+      </>
+    );
+  }
+
+  const quote = order.quote || {};
+  const pharmacy = quote.pharmacy || null;
+  const pharmacyName = pharmacy?.name || 'Farmácia credenciada';
+  const prescriptionId = quote.prescriptionId || quote.prescription?.id;
+  const headline = HEADLINES[order.status] || HEADLINES.PRODUCTION;
+  const history = Array.isArray(order.history) ? order.history : [];
+  const phone = pharmacy?.phone ? formatPhone(pharmacy.phone) : null;
+
+  return (
+    <>
+      <PageHeader
+        eyebrow={`Pedido ${shortId(order.id)}`}
+        title={headline.title}
+        description={headline.text}
+        actions={<BackButton />}
+      />
+
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="space-y-6">
+          <FadeUp duration={0.4} y={12}>
+            <Card>
+              <CardHeader className="flex flex-row items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <CardTitle className="font-heading text-base font-semibold">Acompanhamento</CardTitle>
+                  <CardDescription>Atualizado {formatDateTime(order.updatedAt || order.createdAt)}</CardDescription>
+                </div>
+                <StatusBadge kind="order" status={order.status} />
+              </CardHeader>
+              <CardContent>
+                <OrderTimeline status={order.status} createdAt={order.createdAt} history={history} />
+              </CardContent>
+            </Card>
+          </FadeUp>
+
+          {order.status === 'CANCELLED' && (
+            <div role="status" className="flex items-start gap-3 rounded-2xl border border-[color-mix(in_oklab,var(--coral)_35%,var(--border))] bg-coral-wash/60 p-4 text-sm">
+              <XCircle className="mt-0.5 size-5 shrink-0 text-coral" aria-hidden="true" />
+              <p className="leading-relaxed text-foreground">
+                Se você não esperava o cancelamento, fale com a farmácia ou com o{' '}
+                <Link to="/support" className="font-medium text-primary underline underline-offset-2">atendimento MedConnect</Link>.
+              </p>
+            </div>
+          )}
+
+          {canReview(order) && (
+            <FadeUp duration={0.4} y={12} delay={0.1}>
+              <div className="flex flex-col gap-4 rounded-2xl border border-border bg-mint-wash p-5 sm:flex-row sm:items-center">
+                <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-background text-primary">
+                  <Star className="size-5" aria-hidden="true" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-heading text-[0.9375rem] font-semibold text-foreground">Como foi seu pedido?</p>
+                  <p className="text-sm text-muted-foreground">Avalie {pharmacyName}. Sua opinião ajuda outros pacientes a escolher.</p>
+                </div>
+                <Button asChild>
+                  <Link to={`/review/${order.id}`}>Avaliar pedido</Link>
+                </Button>
+              </div>
+            </FadeUp>
+          )}
+          {order.status === 'DELIVERED' && order.review && (
+            <p className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Star className="size-4 fill-amber text-amber" aria-hidden="true" /> Você já avaliou este pedido. Obrigado!
+            </p>
+          )}
+          <FadeUp duration={0.4} y={12} delay={0.12}>
+            <section aria-labelledby="sua-receita" className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-xs sm:flex-row sm:items-center">
+              <span className="hidden size-11 shrink-0 items-center justify-center rounded-full bg-accent text-primary sm:inline-flex">
+                <FileLock2 className="size-5" aria-hidden="true" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h2 id="sua-receita" className="font-heading text-[0.9375rem] font-semibold text-foreground">Sua receita</h2>
+                <p className="flex items-start gap-1.5 text-sm leading-relaxed text-muted-foreground">
+                  <Clock3 className="mt-1 size-3.5 shrink-0" aria-hidden="true" />
+                  Por segurança, a receita abre em um link temporário, válido por 5 minutos. Cada acesso fica registrado.
+                </p>
+              </div>
+              <ViewPrescriptionButton prescriptionId={prescriptionId} className="self-start sm:self-center" />
+            </section>
+          </FadeUp>
+        </div>
+
+        <aside className="space-y-6" aria-label="Detalhes do pedido">
+          <FadeUp duration={0.4} y={12} delay={0.05}>
+            <Card className="gap-4">
+              <CardHeader>
+                <CardTitle className="font-heading text-base font-semibold">Resumo</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <dl className="divide-y divide-border rounded-xl border border-border">
+                  {[
+                    ['Valor total', <span key="v" className="text-base">{formatQuotePrice(quote)}</span>],
+                    ['Prazo informado', deliveryLabel(quote.deliveryDays)],
+                    ['Aprovado em', formatDateTime(order.createdAt)],
+                  ].map(([label, value]) => (
+                    <div key={label} className="flex items-baseline justify-between gap-4 px-4 py-3">
+                      <dt className="text-sm text-muted-foreground">{label}</dt>
+                      <dd className="num text-right text-sm text-foreground">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+                {quote.notes && (
+                  <div className="mt-4">
+                    <p className="text-xs font-medium text-muted-foreground">Observações da farmácia</p>
+                    <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-foreground">{quote.notes}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </FadeUp>
+
+          <FadeUp duration={0.4} y={12} delay={0.1}>
+            <Card className="gap-4">
+              <CardHeader>
+                <CardTitle className="font-heading text-base font-semibold">Farmácia</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <p className="flex items-center gap-3 font-medium text-foreground">
+                  <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-primary">
+                    <Store className="size-[18px]" aria-hidden="true" />
+                  </span>
+                  {pharmacyName}
+                </p>
+                {phone && (
+                  <p className="flex items-center gap-2">
+                    <Phone className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                    <a href={`tel:${String(pharmacy.phone).replace(/[^\d+]/g, '')}`} className="num font-medium text-primary underline-offset-2 hover:underline">
+                      {phone}
+                    </a>
+                  </p>
+                )}
+                {pharmacy?.address && (
+                  <p className="flex items-start gap-2 text-foreground">
+                    <MapPin className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                    <span className="min-w-0 break-words">{pharmacy.address}</span>
+                  </p>
+                )}
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  {phone || pharmacy?.address
+                    ? 'O contato da farmácia fica visível porque você aprovou a cotação dela.'
+                    : 'A farmácia ainda não informou telefone ou endereço. Fale com o atendimento se precisar.'}
+                </p>
+              </CardContent>
+            </Card>
+          </FadeUp>
+
+        </aside>
+      </div>
+    </>
+  );
 }

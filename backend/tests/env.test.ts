@@ -38,6 +38,22 @@ describe('Environment Configuration & JWT Secret Validation', () => {
     expect(() => parseEnv(prodEnvWithoutCloudinary)).toThrow(/CLOUDINARY/i);
   });
 
+  it('should accept Supabase Storage instead of Cloudinary in production', () => {
+    const parsed = parseEnv({
+      ...validBaseEnv,
+      NODE_ENV: 'production',
+      SUPABASE_URL: 'https://abcdefghijklmnop.supabase.co',
+      SUPABASE_SECRET_KEY: 'sb_secret_test_only',
+    });
+    expect(parsed.SUPABASE_STORAGE_BUCKET).toBe('prescriptions');
+  });
+
+  it('should require SUPABASE_SECRET_KEY in production when SUPABASE_URL is set', () => {
+    expect(() =>
+      parseEnv({ ...validBaseEnv, NODE_ENV: 'production', SUPABASE_URL: 'https://abcdefghijklmnop.supabase.co' })
+    ).toThrow(/SUPABASE_SECRET_KEY/);
+  });
+
   it('should succeed validation when all required variables are valid', () => {
     const parsed = parseEnv(validBaseEnv);
     expect(parsed.JWT_SECRET).toBe(validBaseEnv.JWT_SECRET);

@@ -1,0 +1,25 @@
+# MedConnect — https://medconnect-ashen.vercel.app
+# Páginas públicas liberadas; áreas logadas, links de token e a API ficam fora dos buscadores.
+
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /api-docs
+Disallow: /dashboard
+Disallow: /new-quote
+Disallow: /quote-offers
+Disallow: /orders
+Disallow: /order/
+Disallow: /review/
+Disallow: /profile
+Disallow: /privacy-center
+Disallow: /notifications
+Disallow: /support
+Disallow: /pharmacy$
+Disallow: /pharmacy/
+Disallow: /admin
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /verify-email
+
+Sitemap: https://medconnect-ashen.vercel.app/sitemap.xml

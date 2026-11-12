@@ -28,7 +28,8 @@ export class SubjectRightsService {
           }
         },
         reviews: true,
-        consents: true
+        consents: true,
+        supportTickets: { orderBy: { createdAt: 'desc' } }
       }
     });
 
@@ -87,6 +88,7 @@ export class SubjectRightsService {
         id: p.id,
         status: p.status,
         dataEnvio: p.createdAt,
+        observacoes: decryptFieldSafe(p.notes),
         quantidadeCotacoes: p.quotes.length,
         pedidosAssociados: p.quotes.filter((q) => q.order).map((q) => ({
           pedidoId: q.order?.id,
@@ -105,6 +107,16 @@ export class SubjectRightsService {
         receitaId: log.prescriptionId,
         tipoAcesso: log.accessedByType,
         dataAcesso: log.createdAt
+      })),
+      chamadosSuporte: user.supportTickets.map((t) => ({
+        protocolo: t.protocol,
+        categoria: t.category,
+        assunto: t.subject,
+        mensagem: t.message,
+        status: t.status,
+        resolucao: t.resolution,
+        dataAbertura: t.createdAt,
+        dataResolucao: t.resolvedAt
       }))
     };
   }
@@ -159,6 +171,19 @@ export class SubjectRightsService {
       }
     });
 
+    // 1.1 Chamados de suporte vinculados: remove identificação e texto livre (pode conter dado de saúde),
+    // preservando apenas protocolo, categoria, status e datas para estatística e prestação de contas.
+    const anonymizedTickets = await prisma.supportTicket.updateMany({
+      where: { userId },
+      data: {
+        name: 'Titular Anonimizado (Direito de Exclusão LGPD)',
+        email: anonymizedEmail,
+        subject: '[Assunto removido]',
+        message: '[Conteúdo removido a pedido do titular — LGPD art. 18, VI]',
+        resolution: null
+      }
+    });
+
     // 2. Revogar todos os consentimentos ativos
     await ConsentService.revokeConsent({
       userId,
@@ -181,11 +206,15 @@ export class SubjectRightsService {
           where: { id: prescription.id },
           data: {
             status: 'CANCELLED',
-            fileUrl: 'ARQUIVO_EXPURGADO_EXCLUSAO_TITULAR'
+            fileUrl: 'ARQUIVO_EXPURGADO_EXCLUSAO_TITULAR',
+            notes: null
           }
         });
         purgedFilesCount++;
       } else {
+        // O arquivo fica retido por dever sanitário; as observações livres do titular não fazem parte
+        // desse registro e são apagadas.
+        await prisma.prescription.update({ where: { id: prescription.id }, data: { notes: null } });
         retainedRegulatoryCount++;
       }
     }
@@ -202,6 +231,7 @@ export class SubjectRightsService {
       details: {
         purgedFilesCount,
         retainedRegulatoryCount,
+        anonymizedSupportTicketsCount: anonymizedTickets.count,
         retencaoMinimaAviso: '[PENDENTE DE VALIDAÇÃO JURÍDICA: Retenção mínima obrigatória de receitas dispensadas conforme RDC ANVISA 44/2009 e Portaria 344/1998]'
       },
       ipAddress,

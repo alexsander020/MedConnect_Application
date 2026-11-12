@@ -1,267 +1,222 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import ErrorState from '../../components/ErrorState';
-import LoadingState from '../../components/LoadingState';
-import EmptyState from '../../components/EmptyState';
-import { Clock, MapPin, Eye, Send, FileText } from 'lucide-react';
-import { api } from '../../services/api';
+import { useQuery } from '@tanstack/react-query';
+import { Clock, Eye, FileText, Inbox, Lock, RefreshCw, Send } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Spinner } from '@/components/ui/spinner';
+import PageHeader from '@/components/shared/PageHeader';
+import StatusBadge from '@/components/shared/StatusBadge';
+import SearchField from '@/components/shared/SearchField';
+import EmptyState from '@/components/EmptyState';
+import ErrorState from '@/components/ErrorState';
+import LoadingState from '@/components/LoadingState';
+import { LiftCard, Stagger, StaggerItem } from '@/components/motion';
+import { pharmacyApi } from '@/services/endpoints';
+import { formatDateTime, formatRelative } from '@/lib/format';
+import { NotVerifiedState } from './components/VerificationNotice';
+import { usePrescriptionViewer } from './components/usePrescriptionViewer';
+import {
+  RELEASE_NOTICE, canViewPrescription, deliveryDaysLabel, errorCode, isRecent, patientAlias, quotePriceLabel, shortId,
+} from './components/utils';
 
-export default function Requests() {
-    const navigate = useNavigate();
-    const [requests, setRequests] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [activeTab, setActiveTab] = useState('pending');
+const myQuote = (p) => (Array.isArray(p?.quotes) && p.quotes.length > 0 ? p.quotes[0] : null);
 
-    const fetchRequests = useCallback(() => {
-        setLoading(true);
-        setError(null);
-        api.get('/prescriptions/pharmacy')
-            .then(res => {
-                if (Array.isArray(res.data)) {
-                    const formatted = res.data.map(p => {
-                        const isQuoted = p.quotes && p.quotes.length > 0;
-                        const myQuote = isQuoted ? p.quotes[0] : null;
-                        const patientName = p.patient?.anonymousId || 'Paciente Anônimo';
-                        const initials = 'PA';
-
-                        return {
-                            id: p.id,
-                            user: {
-                                name: patientName,
-                                initials: initials
-                            },
-                            location: 'Região do Paciente (Oculta até aprovação)',
-                            prescription: 'Fórmula Médica Solicitada',
-                            medications: [p.notes || 'Fórmula sob prescrição médica'],
-                            createdAt: new Date(p.createdAt).toLocaleDateString('pt-BR'),
-                            status: isQuoted ? 'quoted' : 'pending',
-                            quotedPrice: myQuote?.price || 0,
-                            fileUrl: null
-                        };
-                    });
-                    setRequests(formatted);
-                } else {
-                    setRequests([]);
-                }
-            })
-            .catch(err => {
-                console.error('Erro ao buscar receitas para farmácia:', err);
-                setError(err?.response?.data?.error || 'Não foi possível carregar as oportunidades de receita. Tente novamente.');
-                setRequests([]);
-            })
-            .finally(() => setLoading(false));
-    }, []);
-
-    useEffect(() => {
-        fetchRequests();
-    }, [fetchRequests]);
-
-    const filtered = requests.filter(r =>
-        activeTab === 'pending' ? r.status === 'pending' : r.status === 'quoted'
-    );
-
-    const pendingCount = requests.filter(r => r.status === 'pending').length;
-    const quotedCount = requests.filter(r => r.status === 'quoted').length;
-
-    return (
-        <div className="space-y-6 pb-24 md:pb-6">
-            {/* Header / Filter bar */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-                <div>
-                    <h2 style={{ fontSize: 'var(--font-2xl)', fontWeight: 800, color: 'var(--gray-900)', letterSpacing: '-0.02em' }}>
-                        Mural de Oportunidades
-                    </h2>
-                    <p style={{ fontSize: 'var(--font-sm)', color: 'var(--gray-500)', marginTop: 2 }}>
-                        Receitas médicas de pacientes aguardando propostas de manipulação
-                    </p>
-                </div>
-
-                {/* Tabs */}
-                <div className="glass-tab-container" style={{ width: 'auto', minWidth: '280px' }}>
-                    <div 
-                        className={`glass-tab ${activeTab === 'pending' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('pending')}
-                    >
-                        Pendentes ({pendingCount})
-                    </div>
-                    <div 
-                        className={`glass-tab ${activeTab === 'quoted' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('quoted')}
-                    >
-                        Cotadas ({quotedCount})
-                    </div>
-                </div>
-            </div>
-
-            {/* Requests Area */}
-            {loading ? (
-                <LoadingState message="Carregando receitas para cotação..." />
-            ) : error ? (
-                <ErrorState
-                    title="Erro ao carregar receitas"
-                    message={error}
-                    onRetry={fetchRequests}
-                />
-            ) : filtered.length === 0 ? (
-                <EmptyState
-                    icon={FileText}
-                    title={`Nenhuma receita ${activeTab === 'pending' ? 'pendente' : 'cotada'}`}
-                    description="Novas solicitações de pacientes aparecerão aqui em tempo real."
-                />
-            ) : (
-                <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-                    gap: 'var(--space-5)'
-                }}>
-                    {filtered.map((req) => (
-                        <div 
-                            key={req.id} 
-                            className="glass-card animate-slide-up"
-                            style={{
-                                padding: 'var(--space-5)',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: 'var(--space-3)'
-                            }}
-                        >
-                            {/* Card Header */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                                <div style={{
-                                    width: 44, height: 44, borderRadius: '12px',
-                                    background: 'linear-gradient(135deg, #0d9488 0%, #2dd4bf 100%)',
-                                    color: 'white', display: 'flex', alignItems: 'center',
-                                    justifyContent: 'center', fontWeight: 800, fontSize: '15px',
-                                    boxShadow: '0 4px 12px rgba(13, 148, 136, 0.2)'
-                                }}>
-                                    {req.user.initials}
-                                </div>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                    <h4 style={{ fontWeight: 700, fontSize: 'var(--font-base)', color: 'var(--gray-900)' }} className="truncate">
-                                        {req.user.name}
-                                    </h4>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2, fontSize: 'var(--font-xs)', color: 'var(--gray-500)' }}>
-                                        <MapPin size={12} color="var(--gray-400)" />
-                                        <span className="truncate">{req.location}</span>
-                                    </div>
-                                </div>
-
-                                {req.status === 'pending' ? (
-                                    <span style={{
-                                        background: 'rgba(239, 68, 68, 0.1)', color: 'var(--error)',
-                                        border: '1px solid rgba(239, 68, 68, 0.2)', padding: '3px 8px',
-                                        borderRadius: 'var(--radius-full)', fontSize: '10px', fontWeight: 700
-                                    }}>
-                                        NOVA
-                                    </span>
-                                ) : (
-                                    <span style={{
-                                        background: 'rgba(99, 102, 241, 0.1)', color: 'var(--secondary-600)',
-                                        border: '1px solid rgba(99, 102, 241, 0.2)', padding: '3px 8px',
-                                        borderRadius: 'var(--radius-full)', fontSize: '10px', fontWeight: 700
-                                    }}>
-                                        COTADA
-                                    </span>
-                                )}
-                            </div>
-
-                            {/* Prescription info */}
-                            <div className="glass-panel" style={{
-                                padding: 'var(--space-3) var(--space-4)',
-                                background: 'rgba(255, 255, 255, 0.65)',
-                                borderRadius: 'var(--radius-md)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 8
-                            }}>
-                                <FileText size={18} color="var(--primary-600)" />
-                                <span style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--gray-800)' }}>
-                                    {req.prescription}
-                                </span>
-                            </div>
-
-                            {/* Medications tags */}
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '2px 0' }}>
-                                {req.medications.map((med, i) => (
-                                    <span 
-                                        key={i} 
-                                        style={{
-                                            background: 'rgba(20, 184, 166, 0.08)',
-                                            color: 'var(--primary-800)',
-                                            padding: '4px 10px',
-                                            borderRadius: 'var(--radius-md)',
-                                            fontSize: 'var(--font-xs)',
-                                            fontWeight: 600
-                                        }}
-                                    >
-                                        {med}
-                                    </span>
-                                ))}
-                            </div>
-
-                            {/* Timestamp */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--gray-400)', fontSize: '11px' }}>
-                                <Clock size={12} />
-                                <span>Publicada em {req.createdAt}</span>
-                            </div>
-
-                            {/* Quoted Price if already sent */}
-                            {req.status === 'quoted' && (
-                                <div style={{
-                                    padding: 'var(--space-3)',
-                                    background: 'rgba(20, 184, 166, 0.08)',
-                                    borderRadius: 'var(--radius-md)',
-                                    border: '1px solid rgba(20, 184, 166, 0.2)',
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center'
-                                }}>
-                                    <span style={{ fontSize: '12px', color: 'var(--gray-600)', fontWeight: 600 }}>Proposta Enviada:</span>
-                                    <span style={{ fontSize: 'var(--font-lg)', fontWeight: 800, color: 'var(--primary-700)' }}>
-                                        R$ {req.quotedPrice.toFixed(2).replace('.', ',')}
-                                    </span>
-                                </div>
-                            )}
-
-                            {/* Action Buttons */}
-                            <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'auto', paddingTop: 'var(--space-3)', borderTop: '1px solid rgba(226, 232, 240, 0.8)' }}>
-                                <button 
-                                    className="btn btn-outline" 
-                                    style={{
-                                        flex: 1, padding: '8px 12px', fontSize: 'var(--font-xs)', fontWeight: 600,
-                                        borderRadius: 'var(--radius-lg)', background: 'white'
-                                    }}
-                                    onClick={() => {
-                                        if (req.fileUrl) {
-                                            window.open(req.fileUrl, '_blank');
-                                        } else {
-                                            alert('Conforme as normas de privacidade (LGPD), a imagem da receita e os dados de contato são liberados após o paciente aprovar sua cotação.');
-                                        }
-                                    }}
-                                >
-                                    <Eye size={15} />
-                                    Ver Receita
-                                </button>
-
-                                {req.status === 'pending' && (
-                                    <button 
-                                        className="btn btn-glass-primary" 
-                                        style={{
-                                            flex: 1.2, padding: '8px 14px', fontSize: 'var(--font-xs)', fontWeight: 700,
-                                            borderRadius: 'var(--radius-lg)'
-                                        }}
-                                        onClick={() => navigate(`/pharmacy/send-quote/${req.id}`)}
-                                    >
-                                        <Send size={15} />
-                                        Enviar Cotação
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
+function RequestCard({ prescription: p, onQuote, onView, viewing }) {
+  const quote = myQuote(p);
+  const fresh = !quote && isRecent(p.createdAt);
+  const canView = canViewPrescription(p, quote);
+  return (
+    <LiftCard as="article" className="flex h-full flex-col rounded-2xl border border-border bg-card p-5 shadow-[0_1px_2px_hsl(190_30%_12%/0.04)]" aria-labelledby={`req-${p.id}`}>
+      <div className="flex items-start gap-3">
+        <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-accent text-primary">
+          <FileText className="size-5" aria-hidden="true" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h3 id={`req-${p.id}`} className="truncate font-heading text-[0.9375rem] font-medium text-foreground">
+            {patientAlias(p)}
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            Receita <span className="num">#{shortId(p.id)}</span>
+          </p>
         </div>
+        {fresh ? (
+          <StatusBadge tone="primary" dot={false} className="tracking-wide">NOVA</StatusBadge>
+        ) : quote ? (
+          <StatusBadge kind="quote" status={quote.status} />
+        ) : null}
+      </div>
+
+      <p className="mt-4 flex items-center gap-1.5 text-sm text-muted-foreground" title={formatDateTime(p.createdAt)}>
+        <Clock className="size-4 shrink-0" aria-hidden="true" />
+        Enviada {formatRelative(p.createdAt)}
+      </p>
+
+      {p.notes && (
+        <div className="mt-3 rounded-xl border border-border px-3 py-2.5">
+          <p className="text-xs font-medium text-muted-foreground">Observações do paciente</p>
+          <p className="mt-0.5 line-clamp-3 whitespace-pre-line text-sm text-foreground">{p.notes}</p>
+        </div>
+      )}
+
+      {quote ? (
+        <div className="mt-3 rounded-xl border border-border bg-mint-wash px-4 py-3">
+          <p className="text-xs font-medium text-muted-foreground">Sua proposta</p>
+          <p className="mt-0.5 flex flex-wrap items-baseline gap-x-2">
+            <span className="num text-lg text-foreground">{quotePriceLabel(quote)}</span>
+            <span className="text-xs text-muted-foreground">{deliveryDaysLabel(quote.deliveryDays)}</span>
+          </p>
+        </div>
+      ) : null}
+
+      {!canView && (
+        <p className="mt-3 flex items-start gap-2 rounded-xl bg-muted/70 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
+          <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          {RELEASE_NOTICE}
+        </p>
+      )}
+
+      {(canView || !quote) && (
+        <div className="mt-auto flex flex-wrap gap-2 pt-4 [&>button]:flex-1">
+          {canView && (
+            <Button variant="outline" size="sm" onClick={() => onView(p.id)} disabled={viewing} aria-label={`Ver receita ${shortId(p.id)}`}>
+              {viewing ? <Spinner /> : <Eye aria-hidden="true" />} Ver receita
+            </Button>
+          )}
+          {!quote && (
+            <Button size="sm" onClick={() => onQuote(p.id)}>
+              <Send aria-hidden="true" /> Enviar cotação
+            </Button>
+          )}
+        </div>
+      )}
+    </LiftCard>
+  );
+}
+
+/** Mural de solicitações (/pharmacy/requests): receitas PENDING/QUOTED com dados do paciente anonimizados */
+export default function Requests() {
+  const navigate = useNavigate();
+  const viewer = usePrescriptionViewer();
+  const [tab, setTab] = useState('pending');
+  const [search, setSearch] = useState('');
+  const [sort, setSort] = useState('recent');
+
+  const me = useQuery({ queryKey: ['pharmacyMe'], queryFn: pharmacyApi.me, staleTime: 5 * 60_000 });
+  const knownUnverified = Boolean(me.data?.verificationStatus) && me.data.verificationStatus !== 'VERIFIED';
+
+  const query = useQuery({
+    queryKey: ['availablePrescriptions'],
+    queryFn: pharmacyApi.availablePrescriptions,
+    enabled: !knownUnverified,
+  });
+  const blocked = knownUnverified || errorCode(query.error) === 'PHARMACY_NOT_VERIFIED';
+
+  const all = useMemo(() => (Array.isArray(query.data) ? query.data : []), [query.data]);
+  const pending = all.filter((p) => !myQuote(p));
+  const quoted = all.filter((p) => myQuote(p));
+  const freshCount = pending.filter((p) => isRecent(p.createdAt)).length;
+
+  const list = useMemo(() => {
+    const base = tab === 'pending' ? all.filter((p) => !myQuote(p)) : all.filter((p) => myQuote(p));
+    const term = search.trim().toLowerCase().replace(/^#/, '');
+    const filtered = term
+      ? base.filter((p) => p.id.toLowerCase().includes(term) || patientAlias(p).toLowerCase().includes(term))
+      : base;
+    return [...filtered].sort((a, b) => {
+      const diff = new Date(b.createdAt) - new Date(a.createdAt);
+      return sort === 'recent' ? diff : -diff;
+    });
+  }, [all, tab, search, sort]);
+
+  let content;
+  if (blocked) {
+    content = <NotVerifiedState status={me.data?.verificationStatus} rejectionReason={me.data?.rejectionReason} title="O mural de receitas está bloqueado" />;
+  } else if (query.isLoading) {
+    content = <LoadingState variant="cards" rows={6} message="Carregando receitas para cotação…" />;
+  } else if (query.isError) {
+    content = (
+      <ErrorState
+        title="Erro ao carregar receitas"
+        message="Não foi possível carregar o mural de receitas. Verifique sua conexão e tente novamente."
+        onRetry={query.refetch}
+      />
     );
+  } else if (list.length === 0) {
+    content = search ? (
+      <EmptyState icon={Inbox} title="Nenhuma receita encontrada" description="Confira o código digitado ou limpe a busca." />
+    ) : tab === 'pending' ? (
+      <EmptyState icon={Inbox} title="Nenhuma receita aguardando cotação" description="Novas solicitações de pacientes aparecem aqui assim que são enviadas." />
+    ) : (
+      <EmptyState icon={Send} title="Você ainda não enviou propostas" description="As receitas que você cotar aparecem nesta aba enquanto o paciente decide." />
+    );
+  } else {
+    content = (
+      <Stagger key={`${tab}-${sort}`} step={0.06} inView={false} className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {list.map((p) => (
+          <StaggerItem key={p.id} y={14} className="min-w-0">
+            <RequestCard
+              prescription={p}
+              onQuote={(id) => navigate(`/pharmacy/send-quote/${id}`)}
+              onView={viewer.open}
+              viewing={viewer.pendingId === p.id}
+            />
+          </StaggerItem>
+        ))}
+      </Stagger>
+    );
+  }
+
+  return (
+    <>
+      <PageHeader
+        eyebrow="Operação"
+        title="Solicitações de cotação"
+        description="Receitas de pacientes aguardando proposta. O paciente aparece só pelo pseudônimo até aceitar a sua proposta (LGPD)."
+        actions={
+          !blocked && (
+            <Button variant="outline" onClick={() => query.refetch()} disabled={query.isFetching}>
+              {query.isFetching ? <Spinner /> : <RefreshCw aria-hidden="true" />} Atualizar
+            </Button>
+          )
+        }
+      />
+
+      {!blocked && query.isSuccess && (
+        <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <Tabs value={tab} onValueChange={setTab}>
+            <TabsList className="w-full sm:w-fit">
+              <TabsTrigger value="pending">
+                Aguardando cotação <span className="num text-xs text-muted-foreground">({pending.length})</span>
+              </TabsTrigger>
+              <TabsTrigger value="quoted">
+                Já cotadas <span className="num text-xs text-muted-foreground">({quoted.length})</span>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <SearchField value={search} onChange={setSearch} placeholder="Buscar pelo código" label="Buscar receita pelo código" />
+            <Select value={sort} onValueChange={setSort}>
+              <SelectTrigger className="w-full data-[size=default]:h-10 sm:w-48" aria-label="Ordenar receitas">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="recent">Mais recentes primeiro</SelectItem>
+                <SelectItem value="oldest">Mais antigas primeiro</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
+
+      {!blocked && query.isSuccess && tab === 'pending' && freshCount > 0 && (
+        <p className="mb-4 text-sm text-muted-foreground" aria-live="polite">
+          <span className="num text-foreground">{freshCount}</span> {freshCount === 1 ? 'receita chegou' : 'receitas chegaram'} nas últimas 24 horas.
+        </p>
+      )}
+
+      {content}
+    </>
+  );
 }

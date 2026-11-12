@@ -1,319 +1,298 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { api } from '../../services/api';
-import { orderStatuses } from '../../constants/status';
-import { Clock, CheckCircle2, TrendingUp, AlertTriangle, ShieldCheck, Loader2, ArrowRight, Package, Building2 } from 'lucide-react';
+import {
+  Inbox, Send, Percent, Truck, Wallet, Star, ArrowRight, FileText, FlaskConical, ShieldAlert, PackageCheck,
+} from 'lucide-react';
+import { cn } from 'cn';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardAction } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import PageHeader from '@/components/shared/PageHeader';
+import StatCard from '@/components/shared/StatCard';
+import StatusBadge from '@/components/shared/StatusBadge';
+import ErrorState from '@/components/ErrorState';
+import { FadeUp, Stagger, StaggerItem } from '@/components/motion';
+import { useAuth } from '@/context/AuthContext';
+import { pharmacyApi } from '@/services/endpoints';
+import { formatCents, formatDate, formatRelative, firstName } from '@/lib/format';
+import { VerificationBanner } from './components/VerificationNotice';
+import HoursSummaryCard from './components/HoursSummaryCard';
+import { isRecent, orderDeadline, orderPatient, orderPriceLabel, patientAlias, shortId } from './components/utils';
 
-export default function PharmacyDashboard() {
-    const navigate = useNavigate();
+const hasMyQuote = (p) => Array.isArray(p?.quotes) && p.quotes.length > 0;
 
-    // 1. Estatísticas consolidadas da farmácia autenticada
-    const {
-        data: stats = {},
-        isLoading: isLoadingStats
-    } = useQuery({
-        queryKey: ['pharmacyStats'],
-        queryFn: async () => {
-            const res = await api.get('/pharmacy/stats');
-            return res.data;
-        }
-    });
+function KpiLink({ to, children }) {
+  if (!to) return children;
+  return (
+    <Link
+      to={to}
+      className="block h-full rounded-2xl transition-shadow hover:shadow-[0_6px_20px_hsl(190_30%_12%/0.07)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+    >
+      {children}
+    </Link>
+  );
+}
 
-    // 2. Receitas disponíveis para envio de cotação
-    const {
-        data: availablePrescriptions = [],
-        isLoading: isLoadingRequests
-    } = useQuery({
-        queryKey: ['availablePrescriptions'],
-        queryFn: async () => {
-            try {
-                const res = await api.get('/prescriptions/pharmacy');
-                return Array.isArray(res.data) ? res.data : [];
-            } catch {
-                return [];
-            }
-        }
-    });
-
-    // 3. Pedidos em andamento / produção
-    const {
-        data: pharmacyOrders = [],
-        isLoading: isLoadingOrders
-    } = useQuery({
-        queryKey: ['pharmacyOrders'],
-        queryFn: async () => {
-            try {
-                const res = await api.get('/orders/my');
-                return Array.isArray(res.data) ? res.data : [];
-            } catch {
-                return [];
-            }
-        }
-    });
-
-    const isPendingVerification = stats.verificationStatus === 'PENDING_VERIFICATION';
-    const isRejected = stats.verificationStatus === 'REJECTED';
-
-    const pendingCount = stats.pendingQuotes ?? availablePrescriptions.length;
-    const inProductionCount = stats.inProgressOrders ?? pharmacyOrders.filter(o => o.status !== 'DELIVERED').length;
-    const revenueFormatted = stats.totalRevenue ? `R$ ${stats.totalRevenue}` : 'R$ 0,00';
-    const ratingDisplay = stats.averageRating ? `${stats.averageRating}/5.0` : '5.0/5.0';
-
+function KpiRow({ stats, pendingRequests, verified }) {
+  if (stats.isLoading) {
     return (
-        <div className="max-w-container-max mx-auto space-y-lg pb-24 md:pb-0" style={{ padding: '24px 16px' }}>
-            {/* Regulatory Banner if not VERIFIED */}
-            {isPendingVerification && (
-                <div className="glass-card animate-slide-down" style={{
-                    padding: '16px 20px',
-                    marginBottom: '24px',
-                    background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
-                    border: '1px solid #f59e0b',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '14px'
-                }}>
-                    <AlertTriangle size={24} color="#d97706" style={{ flexShrink: 0 }} />
-                    <div style={{ flex: 1 }}>
-                        <h4 style={{ fontSize: '15px', fontWeight: 800, color: '#92400e', margin: '0 0 2px' }}>
-                            Cadastro em Análise Regulatória
-                        </h4>
-                        <p style={{ fontSize: '13px', color: '#b45309', margin: 0, lineHeight: 1.4 }}>
-                            Sua licença sanitária e registro de responsável técnico estão sendo validados pela administração do MedConnect. Assim que aprovada, você poderá visualizar receitas e enviar propostas.
-                        </p>
-                    </div>
-                </div>
-            )}
-
-            {isRejected && (
-                <div className="glass-card animate-slide-down" style={{
-                    padding: '16px 20px',
-                    marginBottom: '24px',
-                    background: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)',
-                    border: '1px solid #ef4444',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '14px'
-                }}>
-                    <AlertTriangle size={24} color="#dc2626" style={{ flexShrink: 0 }} />
-                    <div style={{ flex: 1 }}>
-                        <h4 style={{ fontSize: '15px', fontWeight: 800, color: '#991b1b', margin: '0 0 2px' }}>
-                            Credenciamento Recusado
-                        </h4>
-                        <p style={{ fontSize: '13px', color: '#b91c1c', margin: 0, lineHeight: 1.4 }}>
-                            Motivo: {stats.rejectionReason || 'Documentação em desacordo com as exigências sanitárias vigentes.'}
-                        </p>
-                    </div>
-                </div>
-            )}
-
-            {/* 1. Summary Section (KPIs) */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                gap: '16px',
-                marginBottom: '24px'
-            }}>
-                {/* KPI Card: Pending Quotes */}
-                <div
-                    className="card animate-slide-up"
-                    style={{ padding: '20px', cursor: 'pointer', background: 'white' }}
-                    onClick={() => navigate('/pharmacy/requests')}
-                >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                        <span style={{ fontSize: '13px', color: 'var(--gray-500)', fontWeight: 600 }}>Cotações Disponíveis</span>
-                        <div style={{ padding: '8px', background: 'rgba(20, 184, 166, 0.1)', borderRadius: '8px' }}>
-                            <Clock size={18} color="var(--primary-600)" />
-                        </div>
-                    </div>
-                    <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--gray-900)', marginBottom: '4px' }}>
-                        {isLoadingStats ? '-' : pendingCount}
-                    </div>
-                    <div style={{ fontSize: '12px', color: 'var(--primary-600)', fontWeight: 600 }}>
-                        Aguardando orçamento
-                    </div>
-                </div>
-
-                {/* KPI Card: In Production */}
-                <div
-                    className="card animate-slide-up"
-                    style={{ padding: '20px', cursor: 'pointer', background: 'white' }}
-                    onClick={() => navigate('/pharmacy/orders')}
-                >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                        <span style={{ fontSize: '13px', color: 'var(--gray-500)', fontWeight: 600 }}>Em Produção / Entrega</span>
-                        <div style={{ padding: '8px', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '8px' }}>
-                            <Package size={18} color="var(--warning)" />
-                        </div>
-                    </div>
-                    <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--gray-900)', marginBottom: '4px' }}>
-                        {isLoadingStats ? '-' : inProductionCount}
-                    </div>
-                    <div style={{ fontSize: '12px', color: 'var(--warning)', fontWeight: 600 }}>
-                        Fórmulas ativas
-                    </div>
-                </div>
-
-                {/* KPI Card: Total Revenue */}
-                <div className="card animate-slide-up" style={{ padding: '20px', background: 'white' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                        <span style={{ fontSize: '13px', color: 'var(--gray-500)', fontWeight: 600 }}>Faturamento Total</span>
-                        <div style={{ padding: '8px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '8px' }}>
-                            <TrendingUp size={18} color="var(--success)" />
-                        </div>
-                    </div>
-                    <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--gray-900)', marginBottom: '4px' }}>
-                        {isLoadingStats ? '-' : revenueFormatted}
-                    </div>
-                    <div style={{ fontSize: '12px', color: 'var(--success)', fontWeight: 600 }}>
-                        {stats.deliveredOrders || 0} pedidos entregues
-                    </div>
-                </div>
-
-                {/* KPI Card: Average Rating */}
-                <div
-                    className="card animate-slide-up"
-                    style={{ padding: '20px', cursor: 'pointer', background: 'white' }}
-                    onClick={() => navigate('/pharmacy/reviews')}
-                >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                        <span style={{ fontSize: '13px', color: 'var(--gray-500)', fontWeight: 600 }}>Nota de Avaliação</span>
-                        <div style={{ padding: '8px', background: 'rgba(234, 179, 8, 0.1)', borderRadius: '8px' }}>
-                            ⭐
-                        </div>
-                    </div>
-                    <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--gray-900)', marginBottom: '4px' }}>
-                        {isLoadingStats ? '-' : ratingDisplay}
-                    </div>
-                    <div style={{ fontSize: '12px', color: 'var(--gray-500)' }}>
-                        {stats.reviewsCount || 0} avaliações recebidas
-                    </div>
-                </div>
-            </div>
-
-            {/* Layout: Recent Quotes and Production Queue */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-                gap: '24px'
-            }}>
-                {/* 2. Recent Quote Requests */}
-                <div className="card animate-slide-up" style={{ padding: '20px', background: 'white' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                        <h3 style={{ fontSize: '16px', fontWeight: 800, margin: 0, color: 'var(--gray-900)' }}>
-                            Receitas Recentes para Cotar
-                        </h3>
-                        <button
-                            onClick={() => navigate('/pharmacy/requests')}
-                            className="section-link"
-                            style={{ fontSize: '13px' }}
-                        >
-                            Ver todas <ArrowRight size={14} style={{ display: 'inline' }} />
-                        </button>
-                    </div>
-
-                    {isLoadingRequests ? (
-                        <div style={{ padding: '30px', textAlign: 'center' }}>
-                            <Loader2 size={24} className="animate-spin" color="var(--primary-600)" style={{ margin: '0 auto' }} />
-                        </div>
-                    ) : availablePrescriptions.length === 0 ? (
-                        <div style={{ padding: '30px 16px', textAlign: 'center', background: 'rgba(249, 250, 251, 0.6)', borderRadius: '8px' }}>
-                            <p style={{ fontSize: '13px', color: 'var(--gray-500)', margin: 0 }}>
-                                Nenhuma receita aguardando cotação no momento.
-                            </p>
-                        </div>
-                    ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                            {availablePrescriptions.slice(0, 4).map((p) => (
-                                <div
-                                    key={p.id}
-                                    style={{
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                        padding: '12px',
-                                        background: 'rgba(243, 244, 246, 0.6)',
-                                        borderRadius: '8px',
-                                        cursor: 'pointer'
-                                    }}
-                                    onClick={() => navigate(`/pharmacy/send-quote/${p.id}`)}
-                                >
-                                    <div>
-                                        <p style={{ fontSize: '14px', fontWeight: 700, margin: '0 0 2px', color: 'var(--gray-900)' }}>
-                                            {p.patient?.anonymousId || `Receita #${p.id.slice(0, 6).toUpperCase()}`}
-                                        </p>
-                                        <p style={{ fontSize: '12px', color: 'var(--gray-500)', margin: 0 }}>
-                                            {p.notes || 'Fórmula sob prescrição médica'}
-                                        </p>
-                                    </div>
-                                    <button className="btn btn-primary" style={{ padding: '4px 12px', fontSize: '12px' }}>
-                                        Cotar
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-
-                {/* 3. Orders in Production */}
-                <div className="card animate-slide-up" style={{ padding: '20px', background: 'white' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                        <h3 style={{ fontSize: '16px', fontWeight: 800, margin: 0, color: 'var(--gray-900)' }}>
-                            Fórmulas em Manipulação
-                        </h3>
-                        <button
-                            onClick={() => navigate('/pharmacy/orders')}
-                            className="section-link"
-                            style={{ fontSize: '13px' }}
-                        >
-                            Gerenciar <ArrowRight size={14} style={{ display: 'inline' }} />
-                        </button>
-                    </div>
-
-                    {isLoadingOrders ? (
-                        <div style={{ padding: '30px', textAlign: 'center' }}>
-                            <Loader2 size={24} className="animate-spin" color="var(--primary-600)" style={{ margin: '0 auto' }} />
-                        </div>
-                    ) : pharmacyOrders.length === 0 ? (
-                        <div style={{ padding: '30px 16px', textAlign: 'center', background: 'rgba(249, 250, 251, 0.6)', borderRadius: '8px' }}>
-                            <p style={{ fontSize: '13px', color: 'var(--gray-500)', margin: 0 }}>
-                                Nenhum pedido em manipulação ativa no momento.
-                            </p>
-                        </div>
-                    ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                            {pharmacyOrders.slice(0, 4).map((o) => {
-                                const statusCfg = orderStatuses[o.status] || orderStatuses.PRODUCTION;
-                                return (
-                                    <div
-                                        key={o.id}
-                                        style={{
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            alignItems: 'center',
-                                            padding: '12px',
-                                            background: 'rgba(243, 244, 246, 0.6)',
-                                            borderRadius: '8px'
-                                        }}
-                                    >
-                                        <div>
-                                            <p style={{ fontSize: '14px', fontWeight: 700, margin: '0 0 2px', color: 'var(--gray-900)' }}>
-                                                #{o.id.slice(0, 8).toUpperCase()}
-                                            </p>
-                                            <p style={{ fontSize: '12px', color: 'var(--gray-500)', margin: 0 }}>
-                                                {o.quote?.prescription?.notes || 'Fórmula Manipulada'}
-                                            </p>
-                                        </div>
-                                        <span className={`badge badge-dot badge-${statusCfg.color}`}>
-                                            {statusCfg.label}
-                                        </span>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-busy="true">
+        {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-[132px] rounded-2xl" />)}
+        <span className="sr-only">Carregando indicadores…</span>
+      </div>
     );
+  }
+  if (stats.isError) {
+    return (
+      <ErrorState
+        title="Não foi possível carregar os indicadores"
+        message="Os números da farmácia estão indisponíveis agora. As demais seções continuam funcionando."
+        onRetry={stats.refetch}
+        className="py-8"
+      />
+    );
+  }
+  const s = stats.data || {};
+  const total = s.totalQuotes ?? 0;
+  const acceptance = total > 0 ? Math.round(((s.acceptedQuotes ?? 0) / total) * 100) : null;
+  const hasReviews = (s.reviewsCount ?? 0) > 0;
+
+  const items = [
+    {
+      key: 'requests', to: '/pharmacy/requests', icon: Inbox, label: 'Solicitações pendentes',
+      value: verified ? pendingRequests : undefined,
+      display: verified ? undefined : '—',
+      hint: verified ? 'Receitas aguardando a sua proposta' : 'Disponível após o credenciamento',
+    },
+    {
+      key: 'quotes', icon: Send, tone: 'info', label: 'Cotações enviadas', value: total,
+      hint: `${s.pendingQuotes ?? 0} aguardando decisão do paciente`,
+    },
+    {
+      key: 'acceptance', icon: Percent, label: 'Taxa de aceite',
+      value: acceptance ?? undefined, display: acceptance === null ? '—' : undefined, suffix: acceptance === null ? undefined : '%',
+      hint: acceptance === null ? 'Aparece depois da primeira cotação' : `${s.acceptedQuotes ?? 0} de ${total} propostas aceitas`,
+    },
+    {
+      key: 'orders', to: '/pharmacy/orders', icon: Truck, tone: 'amber', label: 'Em produção / entrega',
+      value: s.inProgressOrders ?? 0,
+      hint: `${s.productionOrders ?? 0} em manipulação · ${s.deliveryOrders ?? 0} em entrega`,
+    },
+    {
+      key: 'revenue', icon: Wallet, label: 'Faturamento entregue', display: formatCents(s.totalRevenueCents ?? 0),
+      hint: `${s.deliveredOrders ?? 0} ${s.deliveredOrders === 1 ? 'pedido entregue' : 'pedidos entregues'}`,
+    },
+    {
+      key: 'rating', to: '/pharmacy/reviews', icon: Star, tone: 'amber', label: 'Nota média',
+      value: hasReviews ? Number(s.averageRating) : undefined, display: hasReviews ? undefined : '—',
+      decimals: 1, suffix: hasReviews ? 'de 5' : undefined,
+      hint: hasReviews ? `${s.reviewsCount} ${s.reviewsCount === 1 ? 'avaliação' : 'avaliações'}` : 'Sem avaliações ainda',
+    },
+  ];
+
+  return (
+    <Stagger step={0.06} inView={false} className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      {items.map(({ key, to, ...card }) => (
+        <StaggerItem key={key} y={12} className="min-w-0">
+          <KpiLink to={to}>
+            <StatCard {...card} className="h-full" />
+          </KpiLink>
+        </StaggerItem>
+      ))}
+    </Stagger>
+  );
+}
+
+function SectionCard({ title, description, action, children, className }) {
+  return (
+    <Card className={cn('rounded-2xl', className)}>
+      <CardHeader>
+        <CardTitle className="text-[1.0625rem]">{title}</CardTitle>
+        {description && <CardDescription>{description}</CardDescription>}
+        {action && <CardAction>{action}</CardAction>}
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </Card>
+  );
+}
+
+function ListSkeleton({ rows = 3 }) {
+  return (
+    <div className="space-y-3" aria-busy="true">
+      {Array.from({ length: rows }).map((_, i) => <Skeleton key={i} className="h-14 rounded-xl" />)}
+    </div>
+  );
+}
+
+function Muted({ icon: Icon, children }) {
+  return (
+    <p className="flex items-center gap-3 rounded-xl border border-dashed border-border bg-mint-wash/50 px-4 py-5 text-sm text-muted-foreground">
+      {Icon && <Icon className="size-5 shrink-0 text-primary" aria-hidden="true" />}
+      {children}
+    </p>
+  );
+}
+
+function NewRequests({ query, verification, checking }) {
+  const latest = (query.data || []).filter((p) => !hasMyQuote(p)).slice(0, 5);
+  let body;
+  if (verification && verification !== 'VERIFIED') {
+    body = <Muted icon={ShieldAlert}>O mural de receitas é liberado quando o credenciamento for aprovado.</Muted>;
+  } else if (!verification) {
+    body = checking ? <ListSkeleton /> : <Muted icon={Inbox}>Não foi possível consultar o mural agora. Abra a página de solicitações para tentar de novo.</Muted>;
+  } else if (query.isLoading) {
+    body = <ListSkeleton />;
+  } else if (query.isError) {
+    body = <ErrorState title="Erro ao carregar solicitações" message="Tente novamente em instantes." onRetry={query.refetch} className="py-8" />;
+  } else if (latest.length === 0) {
+    body = <Muted icon={Inbox}>Nenhuma receita aguardando a sua cotação agora. Avisaremos quando chegar uma nova.</Muted>;
+  } else {
+    body = (
+      <Stagger as="ul" step={0.04} inView={false} className="-my-1 divide-y divide-border">
+        {latest.map((p) => (
+          <StaggerItem as="li" key={p.id} y={8} className="flex items-center gap-3 py-3">
+            <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-primary">
+              <FileText className="size-[18px]" aria-hidden="true" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
+                <span className="truncate">{patientAlias(p)}</span>
+                {isRecent(p.createdAt) && <StatusBadge tone="primary" dot={false} className="h-5 px-2 text-[0.6875rem] tracking-wide">NOVA</StatusBadge>}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Receita <span className="num">#{shortId(p.id)}</span> · enviada {formatRelative(p.createdAt)}
+              </p>
+            </div>
+            <Button asChild size="sm">
+              <Link to={`/pharmacy/send-quote/${p.id}`} aria-label={`Enviar cotação para a receita ${shortId(p.id)}`}>
+                Cotar
+              </Link>
+            </Button>
+          </StaggerItem>
+        ))}
+      </Stagger>
+    );
+  }
+  return (
+    <SectionCard
+      title="Novas solicitações"
+      description="As receitas mais recentes que ainda não receberam proposta sua."
+      action={
+        <Button asChild variant="ghost" size="sm">
+          <Link to="/pharmacy/requests">Ver todas <ArrowRight aria-hidden="true" /></Link>
+        </Button>
+      }
+    >
+      {body}
+    </SectionCard>
+  );
+}
+
+function OrdersNeedingAction({ query }) {
+  const active = (query.data || [])
+    .filter((o) => o.status === 'PRODUCTION' || o.status === 'DELIVERY')
+    .map((o) => ({ order: o, deadline: orderDeadline(o) }))
+    .sort((a, b) => (a.deadline?.date?.getTime() ?? Infinity) - (b.deadline?.date?.getTime() ?? Infinity))
+    .slice(0, 5);
+
+  let body;
+  if (query.isLoading) body = <ListSkeleton />;
+  else if (query.isError) body = <ErrorState title="Erro ao carregar os pedidos" message="Tente novamente em instantes." onRetry={query.refetch} className="py-8" />;
+  else if (active.length === 0) body = <Muted icon={PackageCheck}>Nenhum pedido em manipulação ou entrega no momento.</Muted>;
+  else {
+    body = (
+      <Stagger as="ul" step={0.04} inView={false} className="-my-1 divide-y divide-border">
+        {active.map(({ order, deadline }) => {
+          const Icon = order.status === 'DELIVERY' ? Truck : FlaskConical;
+          const name = firstName(orderPatient(order)?.name) || 'Paciente';
+          return (
+            <StaggerItem as="li" key={order.id} y={8} className="flex items-center gap-3 py-3">
+              <span className={cn('inline-flex size-10 shrink-0 items-center justify-center rounded-full', order.status === 'DELIVERY' ? 'bg-info-wash text-info' : 'bg-amber-wash text-amber')}>
+                <Icon className="size-[18px]" aria-hidden="true" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
+                  <span className="truncate">{name}</span>
+                  <span className="num text-xs font-normal text-muted-foreground">#{shortId(order.id)}</span>
+                </p>
+                <p className={cn('text-xs', deadline?.overdue ? 'font-medium text-[hsl(4_62%_42%)]' : 'text-muted-foreground')}>
+                  {deadline
+                    ? deadline.overdue
+                      ? `Prazo vencido em ${formatDate(deadline.date, { day: '2-digit', month: 'short' })}`
+                      : `Previsão: até ${formatDate(deadline.date, { weekday: 'short', day: '2-digit', month: 'short' })}`
+                    : 'Prazo não informado'}
+                  {' · '}<span className="num">{orderPriceLabel(order)}</span>
+                </p>
+              </div>
+              <StatusBadge kind="order" status={order.status} className="hidden sm:inline-flex" />
+            </StaggerItem>
+          );
+        })}
+      </Stagger>
+    );
+  }
+  return (
+    <SectionCard
+      title="Pedidos que precisam de ação"
+      description="Em manipulação ou a caminho, ordenados pelo prazo prometido ao paciente."
+      action={
+        <Button asChild variant="ghost" size="sm">
+          <Link to="/pharmacy/orders">Gerenciar <ArrowRight aria-hidden="true" /></Link>
+        </Button>
+      }
+    >
+      {body}
+    </SectionCard>
+  );
+}
+
+/** Visão geral da farmácia (/pharmacy) */
+export default function PharmacyDashboard() {
+  const { currentUser } = useAuth();
+  const me = useQuery({ queryKey: ['pharmacyMe'], queryFn: pharmacyApi.me, staleTime: 5 * 60_000 });
+  const stats = useQuery({ queryKey: ['pharmacyStats'], queryFn: pharmacyApi.stats });
+  const verification = me.data?.verificationStatus || stats.data?.verificationStatus;
+  const verified = verification === 'VERIFIED';
+  const prescriptions = useQuery({
+    queryKey: ['availablePrescriptions'],
+    queryFn: pharmacyApi.availablePrescriptions,
+    enabled: verified,
+  });
+  const orders = useQuery({ queryKey: ['pharmacyOrders'], queryFn: pharmacyApi.orders });
+
+  const pendingRequests = prescriptions.data ? prescriptions.data.filter((p) => !hasMyQuote(p)).length : undefined;
+  const name = me.data?.name || currentUser?.name;
+
+  return (
+    <>
+      <PageHeader
+        eyebrow="Painel da farmácia"
+        title={name ? `Olá, ${name}` : 'Visão geral'}
+        description="Solicitações de pacientes, pedidos em andamento e a reputação da sua farmácia em um só lugar."
+        actions={
+          <Button asChild>
+            <Link to="/pharmacy/requests"><Inbox aria-hidden="true" /> Ver solicitações</Link>
+          </Button>
+        }
+      >
+        {verification && <StatusBadge kind="verification" status={verification} className="mt-1" />}
+      </PageHeader>
+
+      <VerificationBanner status={verification} rejectionReason={me.data?.rejectionReason} />
+
+      <section aria-label="Indicadores" className="mb-6">
+        <KpiRow stats={stats} pendingRequests={pendingRequests} verified={verified} />
+      </section>
+
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <FadeUp duration={0.45} y={12} delay={0.1} className="min-w-0 space-y-6">
+          <NewRequests query={prescriptions} verification={verification} checking={me.isLoading || stats.isLoading} />
+          <OrdersNeedingAction query={orders} />
+        </FadeUp>
+        <FadeUp duration={0.45} y={12} delay={0.16} className="min-w-0">
+          <HoursSummaryCard pharmacy={me.data} loading={me.isLoading} className="lg:sticky lg:top-24" />
+        </FadeUp>
+      </div>
+    </>
+  );
 }

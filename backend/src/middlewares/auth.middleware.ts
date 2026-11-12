@@ -44,3 +44,23 @@ export function roleMiddleware(allowedRoles: string[]) {
     next();
   };
 }
+
+/**
+ * Autenticação opcional: se vier `Authorization: Bearer <token válido>`, preenche req.user;
+ * caso contrário (ausente, malformado ou expirado) segue como visitante anônimo.
+ * Usado em rotas públicas que se beneficiam de saber quem é o titular (ex.: abertura de chamado).
+ */
+export function optionalAuthMiddleware(req: AuthRequest, res: Response, next: NextFunction): void {
+  const authHeader = req.headers.authorization;
+  const parts = authHeader ? authHeader.split(' ') : [];
+
+  if (parts.length === 2 && parts[0] === 'Bearer') {
+    try {
+      const decoded = jwt.verify(parts[1], env.JWT_SECRET) as any;
+      req.user = decoded;
+    } catch {
+      req.user = undefined;
+    }
+  }
+  next();
+}

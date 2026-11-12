@@ -19,6 +19,7 @@
     "build": "npm run build -w MedConnect && npm run build -w backend",
     "build:frontend": "npm run build -w MedConnect",
     "build:backend": "npm run build -w backend",
+    "build:vercel": "npm run db:generate -w backend && npm run build -w backend && VITE_BASE_PATH=/ VITE_API_URL=/api VITE_ENABLE_REALTIME=false VITE_VERCEL_ANALYTICS=true npm run build -w MedConnect",
     "lint": "npm run lint -w MedConnect",
     "db:up": "npm run db:up -w backend",
     "db:migrate": "npm run db:migrate -w backend",
@@ -35,5 +36,13 @@
   },
   "overrides": {
     "deepmerge-ts": "^8.0.2"
+  },
+  "allowScripts": {
+    "prisma@6.19.3": true,
+    "@prisma/client@6.19.3": true,
+    "@prisma/engines@6.19.3": true,
+    "bcrypt": true,
+    "esbuild@0.21.5": true,
+    "unrs-resolver": true
   }
 }

@@ -9,6 +9,9 @@ import { generateSignedPrescriptionUrl, verifyLocalSignedUrl } from '../services
 import { formatPriceCentsToDecimal } from '../lib/money';
 import { ConsentService } from '../services/consentService';
 import { AuditLogService } from '../services/auditLogService';
+import { decryptFieldSafe, encryptField } from '../lib/fieldEncryption';
+
+const NOTES_MAX_LENGTH = 1000;
 
 export class PrescriptionController {
   async create(req: AuthRequest, res: Response): Promise<void> {
@@ -66,6 +69,15 @@ export class PrescriptionController {
         return;
       }
 
+      // Observações do paciente (dado de saúde): até 1000 caracteres, gravadas cifradas
+      const rawNotes = typeof req.body?.notes === 'string' ? req.body.notes.trim() : '';
+      if (rawNotes.length > NOTES_MAX_LENGTH) {
+        res.status(400).json({
+          error: { code: 'NOTES_TOO_LONG', message: `As observações devem ter no máximo ${NOTES_MAX_LENGTH} caracteres.` }
+        });
+        return;
+      }
+
       // Validação de magic bytes, sanitização e armazenamento privado
       const uploadResult = await processAndSavePrescriptionFile(req.file);
 
@@ -73,6 +85,7 @@ export class PrescriptionController {
         data: {
           patientId: req.user.id,
           fileUrl: uploadResult.fileIdentifier,
+          notes: rawNotes ? encryptField(rawNotes) : null,
           status: PrescriptionStatus.PENDING
         }
       });
@@ -90,7 +103,7 @@ export class PrescriptionController {
         userAgent: req.headers['user-agent']
       });
 
-      res.status(201).json(prescription);
+      res.status(201).json({ ...prescription, notes: decryptFieldSafe(prescription.notes) });
     } catch (error: any) {
       if (error?.status) {
         res.status(error.status).json({
@@ -151,6 +164,31 @@ export class PrescriptionController {
           });
           return;
         }
+
+        // LGPD (ADR 008): na cotação aberta a farmácia vê só metadados, o pseudônimo do paciente e as
+        // PRÓPRIAS cotações — nunca o arquivo (fileUrl), o contato do paciente ou propostas concorrentes.
+        // Nome e telefone só são liberados depois que o paciente aceita a cotação desta farmácia.
+        const pharmacyId = req.user.id;
+        const ownQuotes = prescription.quotes.filter((q) => q.pharmacyId === pharmacyId);
+        const contactReleased = ownQuotes.some((q) => q.status === QuoteStatus.ACCEPTED);
+
+        res.json({
+          id: prescription.id,
+          status: prescription.status,
+          createdAt: prescription.createdAt,
+          updatedAt: prescription.updatedAt,
+          contactReleased,
+          notes: decryptFieldSafe(prescription.notes),
+          patient: contactReleased
+            ? {
+                id: prescription.patient.id,
+                name: prescription.patient.name,
+                phone: decryptFieldSafe(prescription.patient.phone)
+              }
+            : { anonymousId: `Paciente #${prescription.patientId.slice(0, 5).toUpperCase()}` },
+          quotes: ownQuotes.map((q) => ({ ...q, price: formatPriceCentsToDecimal(q.priceCents) }))
+        });
+        return;
       }
 
       // Formata preços das cotações
@@ -161,6 +199,7 @@ export class PrescriptionController {
 
       res.json({
         ...prescription,
+        notes: decryptFieldSafe(prescription.notes),
         quotes: formattedQuotes
       });
     } catch (error) {
@@ -349,6 +388,7 @@ export class PrescriptionController {
 
       const formatted = prescriptions.map((p) => ({
         ...p,
+        notes: decryptFieldSafe(p.notes),
         quotes: p.quotes.map((q) => ({
           ...q,
           price: formatPriceCentsToDecimal(q.priceCents)
@@ -402,6 +442,8 @@ export class PrescriptionController {
         id: p.id,
         createdAt: p.createdAt,
         status: p.status,
+        // Observações escritas pelo paciente para as farmácias cotarem (sem arquivo, sem contato)
+        notes: decryptFieldSafe(p.notes),
         patient: {
           anonymousId: `Paciente #${p.patientId.slice(0, 5).toUpperCase()}`
         },

@@ -1,0 +1,21 @@
+# Nunca enviar segredos locais nem arquivos de receitas de desenvolvimento para o deploy
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+backend/uploads
+uploads
+
+# Artefatos locais (o build roda na própria Vercel)
+node_modules
+**/node_modules
+MedConnect/dist
+backend/dist
+coverage
+backend/coverage
+test-results
+playwright-report
+.pgdata*
+*.log

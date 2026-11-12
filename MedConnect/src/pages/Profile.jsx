@@ -1,368 +1,262 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import Header from '../components/Header';
-import BottomNav from '../components/BottomNav';
-import {
-    User, Mail, Phone, MapPin, Shield, Bell, HelpCircle,
-    FileText, LogOut, ChevronRight, Building2, Star,
-    Download, Trash2, AlertTriangle, CheckCircle, RefreshCw
-} from 'lucide-react';
-import { api } from '../services/api';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { BadgeCheck, ChevronRight, FileText, MailWarning, Package, Save, ShieldCheck, Star, UserRound } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Spinner } from '@/components/ui/spinner';
+import PageHeader from '@/components/shared/PageHeader';
+import StatusBadge from '@/components/shared/StatusBadge';
+import ChangePasswordCard from '@/components/account/ChangePasswordCard';
+import ErrorState from '@/components/ErrorState';
+import LoadingState from '@/components/LoadingState';
+import { FadeUp, Stagger, StaggerItem } from '@/components/motion';
+import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
+import { patientApi } from '@/services/endpoints';
+import { formatDate, formatDateTime, formatNumber, initials } from '@/lib/format';
+import { friendlyError, maskPhone } from './user/components/patient-utils';
 
-export default function Profile() {
-    const navigate = useNavigate();
-    const { currentUser, userType, logout } = useAuth();
+const toForm = (p) => ({ name: p?.name || '', phone: maskPhone(p?.phone || ''), address: p?.address || '' });
 
-    const [consentStatus, setConsentStatus] = useState(null);
-    const [lgpdLoading, setLgpdLoading] = useState(false);
-    const [lgpdMessage, setLgpdMessage] = useState(null);
+function ProfileForm({ profile }) {
+  const queryClient = useQueryClient();
+  const { updateCurrentUser } = useAuth();
+  const toast = useToast();
+  const [form, setForm] = useState(() => toForm(profile));
+  const [errors, setErrors] = useState({});
 
-    const initials = currentUser?.name
-        ? currentUser.name.split(' ').map(n => n[0]).join('').slice(0, 2)
-        : '?';
+  const initial = toForm(profile);
+  const dirty = form.name.trim() !== initial.name.trim() || form.phone !== initial.phone || form.address.trim() !== initial.address.trim();
 
-    const handleLogout = () => {
-        logout();
-        navigate('/', { replace: true });
-    };
+  const mutation = useMutation({
+    mutationFn: (payload) => patientApi.updateMe(payload),
+    onSuccess: (data) => {
+      if (data && typeof data === 'object') queryClient.setQueryData(['patientMe'], data);
+      else queryClient.invalidateQueries({ queryKey: ['patientMe'] });
+      const name = data?.name || form.name.trim();
+      updateCurrentUser({ name });
+      setForm(toForm(data && typeof data === 'object' ? data : { ...profile, ...form, name }));
+      toast.success('Seus dados foram atualizados.', 'Dados salvos');
+    },
+    onError: (err) => toast.error(friendlyError(err, 'Não foi possível salvar seus dados. Tente novamente.')),
+  });
 
-    useEffect(() => {
-        if (currentUser && userType !== 'admin') {
-            api.get('/consent/status')
-                .then(res => setConsentStatus(res.data))
-                .catch(() => {});
-        }
-    }, [currentUser, userType]);
+  const validate = () => {
+    const next = {};
+    const name = form.name.trim();
+    if (name.length < 2) next.name = 'Informe seu nome completo (mínimo de 2 letras).';
+    else if (name.length > 120) next.name = 'O nome pode ter no máximo 120 caracteres.';
+    const digits = form.phone.replace(/\D/g, '');
+    if (digits && (digits.length < 10 || digits.length > 11)) next.phone = 'Informe o telefone com DDD, ex.: (11) 98765-4321.';
+    if (form.address.trim().length > 300) next.address = 'O endereço pode ter no máximo 300 caracteres.';
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  };
 
-    const handleExportData = async () => {
-        setLgpdLoading(true);
-        setLgpdMessage(null);
-        try {
-            const res = await api.get('/lgpd/export');
-            const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(res.data, null, 2));
-            const downloadAnchor = document.createElement('a');
-            downloadAnchor.setAttribute('href', dataStr);
-            downloadAnchor.setAttribute('download', `meus-dados-medconnect-${currentUser?.id || 'titular'}.json`);
-            document.body.appendChild(downloadAnchor);
-            downloadAnchor.click();
-            downloadAnchor.remove();
-            setLgpdMessage({ type: 'success', text: 'Dados exportados com sucesso em arquivo JSON!' });
-        } catch (err) {
-            setLgpdMessage({ type: 'error', text: err.response?.data?.error?.message || 'Erro ao exportar dados.' });
-        } finally {
-            setLgpdLoading(false);
-        }
-    };
+  const onSubmit = (e) => {
+    e.preventDefault();
+    if (!validate()) return;
+    mutation.mutate({ name: form.name.trim(), phone: form.phone.trim(), address: form.address.trim() });
+  };
 
-    const handleRevokeConsent = async () => {
-        if (!window.confirm('Atenção: Revogar o consentimento bloqueará novos envios de receitas e iniciará o fluxo de exclusão/anonimização. Deseja prosseguir?')) {
-            return;
-        }
+  const set = (key) => (e) => {
+    const value = key === 'phone' ? maskPhone(e.target.value) : e.target.value;
+    setForm((f) => ({ ...f, [key]: value }));
+    if (errors[key]) setErrors((er) => ({ ...er, [key]: undefined }));
+  };
 
-        setLgpdLoading(true);
-        setLgpdMessage(null);
-        try {
-            const res = await api.post('/consent/revoke', { reason: 'Revogado pelo titular nas configurações' });
-            setLgpdMessage({ type: 'warning', text: res.data.message || 'Consentimento revogado. Novos usos foram bloqueados.' });
-            const updated = await api.get('/consent/status');
-            setConsentStatus(updated.data);
-        } catch (err) {
-            setLgpdMessage({ type: 'error', text: err.response?.data?.error?.message || 'Erro ao revogar consentimento.' });
-        } finally {
-            setLgpdLoading(false);
-        }
-    };
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 font-heading">
+          <UserRound className="size-5 text-primary" aria-hidden="true" /> Dados pessoais
+        </CardTitle>
+        <CardDescription>Usados para a farmácia escolhida entregar seu pedido. Telefone e endereço ficam cifrados.</CardDescription>
+      </CardHeader>
+      <form onSubmit={onSubmit} noValidate>
+        <CardContent className="grid gap-5">
+          <div className="grid gap-2">
+            <Label htmlFor="profile-name">Nome completo</Label>
+            <Input
+              id="profile-name"
+              autoComplete="name"
+              value={form.name}
+              onChange={set('name')}
+              maxLength={120}
+              aria-invalid={!!errors.name}
+              aria-describedby={errors.name ? 'profile-name-error' : undefined}
+            />
+            {errors.name && <p id="profile-name-error" className="text-xs font-medium text-destructive">{errors.name}</p>}
+          </div>
 
-    const handleDeleteAccount = async () => {
-        if (!window.confirm('Aviso Crítico: Deseja solicitar a exclusão e anonimização definitiva da sua conta? Registros regulatórios mínimos exigidos por lei sanitária serão preservados.')) {
-            return;
-        }
-
-        setLgpdLoading(true);
-        setLgpdMessage(null);
-        try {
-            const res = await api.post('/lgpd/anonymize');
-            setLgpdMessage({ type: 'success', text: res.data.mensagem || 'Conta e dados anonimizados com sucesso.' });
-            setTimeout(() => {
-                logout();
-                navigate('/', { replace: true });
-            }, 2500);
-        } catch (err) {
-            setLgpdMessage({ type: 'error', text: err.response?.data?.error?.message || 'Erro ao processar anonimização.' });
-            setLgpdLoading(false);
-        }
-    };
-
-    const menuItems = [
-        { icon: <User size={20} />, label: 'Editar Perfil', color: 'var(--primary-500)' },
-        { icon: <Bell size={20} />, label: 'Notificações', color: 'var(--info)' },
-        { icon: <Shield size={20} />, label: 'Privacidade & Termos', color: 'var(--success)' },
-        { icon: <HelpCircle size={20} />, label: 'Ajuda & Suporte', color: 'var(--warning)' },
-    ];
-
-    return (
-        <div className="app-container">
-            <Header title="Perfil" />
-
-            <div className="page">
-                {/* Profile card */}
-                <div className="card-dark animate-scale-in" style={{ marginBottom: 'var(--space-6)', textAlign: 'center' }}>
-                    <div style={{ position: 'relative', zIndex: 1 }}>
-                        <div className="avatar avatar-xl" style={{
-                            margin: '0 auto var(--space-3)',
-                            background: userType === 'pharmacy' ? 'var(--gradient-secondary)' : 'var(--gradient-primary)',
-                            border: '3px solid rgba(255,255,255,0.2)',
-                        }}>
-                            {initials}
-                        </div>
-                        <h2 style={{ fontSize: 'var(--font-xl)', fontWeight: 700, marginBottom: '2px' }}>
-                            {currentUser?.name}
-                        </h2>
-                        <p style={{ fontSize: 'var(--font-sm)', opacity: 0.7 }}>
-                            {currentUser?.email}
-                        </p>
-                        {userType === 'pharmacy' && currentUser?.rating && (
-                            <div className="flex items-center justify-center gap-2 mt-2">
-                                <Star size={14} fill="#fbbf24" color="#fbbf24" />
-                                <span className="font-semibold text-sm">{currentUser.rating}</span>
-                                <span style={{ fontSize: 'var(--font-xs)', opacity: 0.6 }}>
-                                    ({currentUser.totalReviews} avaliações)
-                                </span>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* Info cards */}
-                <div className="stagger" style={{
-                    display: 'flex', flexDirection: 'column', gap: 'var(--space-3)',
-                    marginBottom: 'var(--space-6)',
-                }}>
-                    <div className="card animate-slide-up" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                        <div style={{
-                            width: '40px', height: '40px', borderRadius: 'var(--radius-lg)',
-                            background: 'var(--primary-50)', display: 'flex',
-                            alignItems: 'center', justifyContent: 'center',
-                            color: 'var(--primary-600)',
-                        }}>
-                            <Mail size={18} />
-                        </div>
-                        <div>
-                            <p className="text-xs text-gray">E-mail</p>
-                            <p className="text-sm font-semibold">{currentUser?.email}</p>
-                        </div>
-                    </div>
-
-                    <div className="card animate-slide-up" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                        <div style={{
-                            width: '40px', height: '40px', borderRadius: 'var(--radius-lg)',
-                            background: 'var(--success-light)', display: 'flex',
-                            alignItems: 'center', justifyContent: 'center',
-                            color: 'var(--success)',
-                        }}>
-                            <Phone size={18} />
-                        </div>
-                        <div>
-                            <p className="text-xs text-gray">Telefone</p>
-                            <p className="text-sm font-semibold">{currentUser?.phone}</p>
-                        </div>
-                    </div>
-
-                    <div className="card animate-slide-up" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                        <div style={{
-                            width: '40px', height: '40px', borderRadius: 'var(--radius-lg)',
-                            background: 'var(--info-light)', display: 'flex',
-                            alignItems: 'center', justifyContent: 'center',
-                            color: 'var(--info)',
-                        }}>
-                            <MapPin size={18} />
-                        </div>
-                        <div>
-                            <p className="text-xs text-gray">Endereço</p>
-                            <p className="text-sm font-semibold">{currentUser?.address}</p>
-                        </div>
-                    </div>
-
-                    {userType === 'pharmacy' && (
-                        <div className="card animate-slide-up" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                            <div style={{
-                                width: '40px', height: '40px', borderRadius: 'var(--radius-lg)',
-                                background: 'var(--warning-light)', display: 'flex',
-                                alignItems: 'center', justifyContent: 'center',
-                                color: 'var(--warning)',
-                            }}>
-                                <Building2 size={18} />
-                            </div>
-                            <div>
-                                <p className="text-xs text-gray">CNPJ</p>
-                                <p className="text-sm font-semibold">{currentUser?.cnpj}</p>
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* Menu */}
-                <div style={{ marginBottom: 'var(--space-6)' }}>
-                    {menuItems.map((item, i) => (
-                        <button
-                            key={i}
-                            className="animate-slide-up"
-                            style={{
-                                width: '100%', display: 'flex', alignItems: 'center',
-                                gap: 'var(--space-3)', padding: 'var(--space-4)',
-                                borderBottom: '1px solid var(--gray-100)',
-                                background: 'none', cursor: 'pointer',
-                                transition: 'background var(--transition-fast)',
-                                animationDelay: `${i * 60}ms`,
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.background = 'var(--gray-50)'}
-                            onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
-                        >
-                            <div style={{
-                                width: '36px', height: '36px', borderRadius: 'var(--radius-lg)',
-                                background: `${item.color}15`, display: 'flex',
-                                alignItems: 'center', justifyContent: 'center',
-                                color: item.color,
-                            }}>
-                                {item.icon}
-                            </div>
-                            <span className="text-sm font-semibold" style={{ flex: 1, textAlign: 'left' }}>
-                                {item.label}
-                            </span>
-                            <ChevronRight size={16} color="var(--gray-400)" />
-                        </button>
-                    ))}
-                </div>
-
-                {/* Painel de Privacidade e Direitos do Titular (LGPD Art. 18) */}
-                <div className="card animate-slide-up" style={{
-                    marginBottom: 'var(--space-6)',
-                    padding: 'var(--space-5)',
-                    background: 'rgba(255, 255, 255, 0.85)',
-                    border: '1px solid rgba(13, 148, 136, 0.2)',
-                    borderRadius: 'var(--radius-xl)'
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 'var(--space-3)' }}>
-                        <div style={{
-                            width: 32, height: 32, borderRadius: 'var(--radius-md)',
-                            background: 'rgba(13, 148, 136, 0.1)', color: 'var(--primary-600)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center'
-                        }}>
-                            <Shield size={18} />
-                        </div>
-                        <div>
-                            <h3 style={{ fontSize: 'var(--font-base)', fontWeight: 700, margin: 0, color: 'var(--gray-900)' }}>
-                                Privacidade e Seus Dados (LGPD)
-                            </h3>
-                            <p style={{ fontSize: 'var(--font-xs)', color: 'var(--gray-500)', margin: 0 }}>
-                                Gerencie seus consentimentos e direitos de titular
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* Status do consentimento */}
-                    <div style={{
-                        padding: '10px 12px',
-                        borderRadius: 'var(--radius-md)',
-                        background: consentStatus?.hasActiveHealthConsent ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)',
-                        border: `1px solid ${consentStatus?.hasActiveHealthConsent ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)'}`,
-                        marginBottom: 'var(--space-4)',
-                        fontSize: 'var(--font-xs)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between'
-                    }}>
-                        <span>Consentimento de Saúde:</span>
-                        <strong style={{ color: consentStatus?.hasActiveHealthConsent ? '#059669' : '#dc2626' }}>
-                            {consentStatus?.hasActiveHealthConsent ? '✓ Ativo (v1.0.0)' : '✕ Revogado / Ausente'}
-                        </strong>
-                    </div>
-
-                    {lgpdMessage && (
-                        <div style={{
-                            padding: '10px 12px',
-                            borderRadius: 'var(--radius-md)',
-                            marginBottom: 'var(--space-4)',
-                            fontSize: 'var(--font-xs)',
-                            background: lgpdMessage.type === 'error' ? '#fef2f2' : lgpdMessage.type === 'warning' ? '#fffbeb' : '#ecfdf5',
-                            color: lgpdMessage.type === 'error' ? '#b91c1c' : lgpdMessage.type === 'warning' ? '#b45309' : '#047857',
-                            border: `1px solid ${lgpdMessage.type === 'error' ? '#fecaca' : lgpdMessage.type === 'warning' ? '#fde68a' : '#a7f3d0'}`
-                        }}>
-                            {lgpdMessage.text}
-                        </div>
-                    )}
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        <button
-                            type="button"
-                            onClick={handleExportData}
-                            disabled={lgpdLoading}
-                            style={{
-                                width: '100%', padding: '10px', borderRadius: 'var(--radius-md)',
-                                border: '1px solid var(--primary-600)', background: 'rgba(13, 148, 136, 0.05)',
-                                color: 'var(--primary-700)', fontWeight: 600, fontSize: 'var(--font-xs)',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                                cursor: 'pointer'
-                            }}
-                        >
-                            <Download size={14} />
-                            Exportar Meus Dados (JSON - Art. 18 LGPD)
-                        </button>
-
-                        {consentStatus?.hasActiveHealthConsent && (
-                            <button
-                                type="button"
-                                onClick={handleRevokeConsent}
-                                disabled={lgpdLoading}
-                                style={{
-                                    width: '100%', padding: '10px', borderRadius: 'var(--radius-md)',
-                                    border: '1px solid #f59e0b', background: 'rgba(245, 158, 11, 0.05)',
-                                    color: '#b45309', fontWeight: 600, fontSize: 'var(--font-xs)',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                <AlertTriangle size={14} />
-                                Revogar Consentimento de Saúde
-                            </button>
-                        )}
-
-                        <button
-                            type="button"
-                            onClick={handleDeleteAccount}
-                            disabled={lgpdLoading}
-                            style={{
-                                width: '100%', padding: '10px', borderRadius: 'var(--radius-md)',
-                                border: '1px solid #ef4444', background: 'rgba(239, 68, 68, 0.05)',
-                                color: '#b91c1c', fontWeight: 600, fontSize: 'var(--font-xs)',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                                cursor: 'pointer'
-                            }}
-                        >
-                            <Trash2 size={14} />
-                            Solicitar Exclusão da Conta e Anonimização
-                        </button>
-                    </div>
-                </div>
-
-                {/* Logout */}
-                <button className="btn btn-block animate-slide-up" style={{
-                    color: 'var(--error)', border: '2px solid var(--error-light)',
-                    borderRadius: 'var(--radius-xl)', padding: 'var(--space-3)',
-                    fontWeight: 600,
-                }} onClick={handleLogout}>
-                    <LogOut size={18} />
-                    Sair da Conta
-                </button>
-
-                {/* Version */}
-                <p className="text-xs text-gray text-center mt-6">
-                    MedConnect v1.0.0
-                </p>
+          <div className="grid gap-5 sm:grid-cols-2">
+            <div className="grid content-start gap-2">
+              <Label htmlFor="profile-email">E-mail</Label>
+              <Input id="profile-email" type="email" value={profile.email || ''} readOnly aria-describedby="profile-email-help" className="bg-muted/60 text-muted-foreground" />
+              <div id="profile-email-help" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                {profile.emailVerified ? (
+                  <StatusBadge tone="success" dot={false}><BadgeCheck className="size-3.5" aria-hidden="true" /> Verificado</StatusBadge>
+                ) : (
+                  <StatusBadge tone="warning" dot={false}><MailWarning className="size-3.5" aria-hidden="true" /> Não verificado</StatusBadge>
+                )}
+                <span>
+                  Para trocar o e-mail, fale com o{' '}
+                  <Link to="/support" className="font-medium text-primary underline-offset-2 hover:underline">atendimento</Link>.
+                </span>
+              </div>
             </div>
+            <div className="grid content-start gap-2">
+              <Label htmlFor="profile-cpf">CPF</Label>
+              <Input id="profile-cpf" value={profile.cpf || 'Não informado'} readOnly aria-describedby="profile-cpf-help" className="num bg-muted/60 text-muted-foreground" />
+              <p id="profile-cpf-help" className="text-xs text-muted-foreground">Por segurança, mostramos só os últimos dígitos.</p>
+            </div>
+          </div>
 
-            <BottomNav />
+          <div className="grid gap-2 sm:max-w-xs">
+            <Label htmlFor="profile-phone">Telefone ou WhatsApp</Label>
+            <Input
+              id="profile-phone"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel-national"
+              placeholder="(11) 98765-4321"
+              value={form.phone}
+              onChange={set('phone')}
+              aria-invalid={!!errors.phone}
+              aria-describedby={errors.phone ? 'profile-phone-error' : undefined}
+              className="num"
+            />
+            {errors.phone && <p id="profile-phone-error" className="text-xs font-medium text-destructive">{errors.phone}</p>}
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="profile-address">Endereço de entrega</Label>
+            <Textarea
+              id="profile-address"
+              autoComplete="street-address"
+              rows={2}
+              maxLength={300}
+              placeholder="Rua, número, complemento, bairro, cidade e UF"
+              value={form.address}
+              onChange={set('address')}
+              aria-invalid={!!errors.address}
+              aria-describedby={errors.address ? 'profile-address-error' : undefined}
+              className="min-h-20 resize-y"
+            />
+            {errors.address && <p id="profile-address-error" className="text-xs font-medium text-destructive">{errors.address}</p>}
+          </div>
+        </CardContent>
+        <CardFooter className="mt-2 flex flex-wrap items-center justify-end gap-2">
+          {dirty && (
+            <Button type="button" variant="ghost" onClick={() => { setForm(initial); setErrors({}); }} disabled={mutation.isPending}>
+              Descartar alterações
+            </Button>
+          )}
+          <Button type="submit" disabled={!dirty || mutation.isPending}>
+            {mutation.isPending ? <Spinner /> : <Save aria-hidden="true" />} Salvar alterações
+          </Button>
+        </CardFooter>
+      </form>
+    </Card>
+  );
+}
+
+function AccountSummary({ profile }) {
+  const counts = profile.counts || {};
+  const items = [
+    { icon: FileText, label: 'Receitas', value: counts.prescriptions },
+    { icon: Package, label: 'Pedidos', value: counts.orders },
+    { icon: Star, label: 'Avaliações', value: counts.reviews },
+  ];
+  return (
+    <Card>
+      <CardContent className="space-y-5">
+        <div className="flex items-center gap-3">
+          <Avatar className="size-14">
+            <AvatarFallback className="bg-accent font-heading text-lg font-semibold text-primary">{initials(profile.name)}</AvatarFallback>
+          </Avatar>
+          <div className="min-w-0">
+            <p className="truncate font-heading text-base font-semibold text-foreground">{profile.name}</p>
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              <StatusBadge kind="role" status={profile.role || 'PATIENT'} />
+              {profile.status && <StatusBadge kind="account" status={profile.status} />}
+            </div>
+          </div>
         </div>
-    );
+        <Stagger as="ul" step={0.06} inView={false} className="grid grid-cols-3 gap-2" aria-label="Sua atividade">
+          {items.map((it) => (
+            <StaggerItem as="li" key={it.label} y={8} className="rounded-xl border border-border bg-mint-wash/60 p-3 text-center">
+              <it.icon className="mx-auto size-4 text-primary" aria-hidden="true" />
+              <span className="num mt-1 block text-xl leading-none text-foreground">{formatNumber(it.value ?? 0)}</span>
+              <span className="mt-1 block text-[0.6875rem] text-muted-foreground">{it.label}</span>
+            </StaggerItem>
+          ))}
+        </Stagger>
+        <dl className="space-y-2 text-sm">
+          <div className="flex justify-between gap-3">
+            <dt className="text-muted-foreground">Conta criada</dt>
+            <dd className="num text-right text-foreground">{formatDate(profile.createdAt)}</dd>
+          </div>
+          <div className="flex justify-between gap-3">
+            <dt className="text-muted-foreground">Último acesso</dt>
+            <dd className="num text-right text-foreground">{profile.lastLoginAt ? formatDateTime(profile.lastLoginAt) : '—'}</dd>
+          </div>
+        </dl>
+        <Link
+          to="/privacy-center"
+          className="flex items-center gap-3 rounded-xl border border-border p-3 text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          <ShieldCheck className="size-5 shrink-0 text-primary" aria-hidden="true" />
+          <span className="min-w-0 flex-1">
+            <span className="block font-medium text-foreground">Privacidade e dados</span>
+            <span className="block text-xs text-muted-foreground">Consentimentos, exportação e exclusão da conta</span>
+          </span>
+          <ChevronRight className="size-4 text-muted-foreground" aria-hidden="true" />
+        </Link>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** "Meus dados" do paciente — GET/PATCH /users/me + troca de senha */
+export default function Profile() {
+  const { data, isLoading, isError, refetch } = useQuery({ queryKey: ['patientMe'], queryFn: patientApi.me });
+
+  return (
+    <>
+      <PageHeader
+        eyebrow="Conta"
+        title="Meus dados"
+        description="Mantenha seu contato e endereço de entrega atualizados. Você controla o que compartilhamos em Privacidade e dados."
+      />
+      {isLoading ? (
+        <LoadingState variant="detail" message="Carregando seus dados…" />
+      ) : isError || !data ? (
+        <ErrorState
+          title="Erro ao carregar seus dados"
+          message="Não foi possível buscar os dados da sua conta agora. Verifique sua conexão e tente novamente."
+          onRetry={refetch}
+        />
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="min-w-0 space-y-6">
+            <FadeUp duration={0.4} y={12}>
+              <ProfileForm key={data.id} profile={data} />
+            </FadeUp>
+            <FadeUp duration={0.4} y={12} delay={0.08}>
+              <ChangePasswordCard />
+            </FadeUp>
+          </div>
+          <FadeUp duration={0.4} y={12} delay={0.04} className="lg:order-none">
+            <AccountSummary profile={data} />
+          </FadeUp>
+        </div>
+      )}
+    </>
+  );
 }

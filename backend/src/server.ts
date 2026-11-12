@@ -72,7 +72,8 @@ io.on('connection', (socket) => {
 // Exporta o io para usar nos controllers
 export { io, server };
 
-if (process.env.NODE_ENV !== 'test') {
+// Na Vercel o app roda como função serverless (api/index.ts): não há servidor HTTP próprio nem WebSocket.
+if (process.env.NODE_ENV !== 'test' && !process.env.VERCEL) {
   server.listen(env.PORT, () => {
     console.log(`Server is running on port ${env.PORT}`);
     console.log(`Swagger docs available at http://localhost:${env.PORT}/api-docs`);

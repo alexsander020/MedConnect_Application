@@ -23,6 +23,8 @@ export function setupSocketQueryInvalidation() {
 
         socket.on('notification', (payload) => {
             queryClient.invalidateQueries({ queryKey: ['notifications'] });
+            queryClient.invalidateQueries({ queryKey: ['mySupportTickets'] });
+            queryClient.invalidateQueries({ queryKey: ['pharmacyMe'] });
             queryClient.invalidateQueries({ queryKey: ['myPrescriptions'] });
             queryClient.invalidateQueries({ queryKey: ['myOrders'] });
             queryClient.invalidateQueries({ queryKey: ['pharmacyStats'] });
@@ -49,13 +51,16 @@ export function setupSocketQueryInvalidation() {
 
         socket.on('quote_accepted', () => {
             queryClient.invalidateQueries({ queryKey: ['myOrders'] });
+            queryClient.invalidateQueries({ queryKey: ['pharmacyOrders'] });
             queryClient.invalidateQueries({ queryKey: ['pharmacyStats'] });
+            queryClient.invalidateQueries({ queryKey: ['availablePrescriptions'] });
             queryClient.invalidateQueries({ queryKey: ['notifications'] });
         });
 
         socket.on('order_status_updated', () => {
             queryClient.invalidateQueries({ queryKey: ['myOrders'] });
             queryClient.invalidateQueries({ queryKey: ['order'] });
+            queryClient.invalidateQueries({ queryKey: ['pharmacyOrders'] });
             queryClient.invalidateQueries({ queryKey: ['pharmacyStats'] });
         });
     } catch (err) {

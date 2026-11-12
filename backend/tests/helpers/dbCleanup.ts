@@ -4,6 +4,10 @@ import { PrismaClient } from '@prisma/client';
  * Limpa todas as tabelas do banco de teste em ordem segura de integridade referencial.
  */
 export async function cleanDatabase(prisma: PrismaClient): Promise<void> {
+  // Chamados usam onDelete: SetNull e sobreviveriam à remoção das contas; horários já caem em cascata,
+  // mas são removidos explicitamente para deixar a ordem clara.
+  await prisma.supportTicket.deleteMany();
+  await prisma.pharmacyBusinessHour.deleteMany();
   await prisma.review.deleteMany();
   await prisma.notification.deleteMany();
   await prisma.prescriptionAccessLog.deleteMany();

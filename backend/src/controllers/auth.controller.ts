@@ -11,6 +11,11 @@ import {
   clearRefreshTokenCookie
 } from '../lib/authTokens';
 import { emailSender } from '../services/email';
+import { env } from '../config/env';
+import { AuthRequest } from '../middlewares/auth.middleware';
+import { AuditLogService } from '../services/auditLogService';
+import { getClientIp, getUserAgent } from '../lib/requestContext';
+import { AccountStatus, Role } from '@prisma/client';
 
 // Hash fictício pré-computado para comparação em tempo constante contra enumeração de contas
 const DUMMY_HASH = bcrypt.hashSync('dummy_password_constant_time_defense_secret', 10);
@@ -48,6 +53,24 @@ export class AuthController {
       if (!account || !validPassword) {
         res.status(401).json({ error: { code: 'INVALID_CREDENTIALS', message: 'Credenciais inválidas' } });
         return;
+      }
+
+      // Conta suspensa: só é revelado DEPOIS da senha correta, para não vazar a existência da conta
+      if (account.status === AccountStatus.SUSPENDED) {
+        res.status(403).json({
+          error: {
+            code: 'ACCOUNT_SUSPENDED',
+            message: 'Esta conta está suspensa. Entre em contato com o suporte da MedConnect.'
+          }
+        });
+        return;
+      }
+
+      const loginAt = new Date();
+      if (isPharmacy) {
+        await prisma.pharmacy.update({ where: { id: account.id }, data: { lastLoginAt: loginAt } });
+      } else {
+        await prisma.user.update({ where: { id: account.id }, data: { lastLoginAt: loginAt } });
       }
 
       // Gera tokens (Access Token 15m + Refresh Token rotativo)
@@ -102,6 +125,35 @@ export class AuthController {
         return;
       }
 
+      // Recupera os dados da conta (User ou Pharmacy)
+      let account: any = null;
+      let role = '';
+
+      if (existingToken.userId) {
+        account = await prisma.user.findUnique({ where: { id: existingToken.userId } });
+        role = account?.role || 'PATIENT';
+      } else if (existingToken.pharmacyId) {
+        account = await prisma.pharmacy.findUnique({ where: { id: existingToken.pharmacyId } });
+        role = 'PHARMACY';
+      }
+
+      // Conta suspensa: encerra a família e não renova a sessão. Verificado antes da detecção de
+      // reuso porque a suspensão já revoga os tokens — o cliente precisa saber o motivo real.
+      if (account?.status === AccountStatus.SUSPENDED) {
+        await prisma.refreshToken.updateMany({
+          where: { familyId: existingToken.familyId },
+          data: { isRevoked: true }
+        });
+        clearRefreshTokenCookie(res);
+        res.status(401).json({
+          error: {
+            code: 'ACCOUNT_SUSPENDED',
+            message: 'Esta conta está suspensa. Entre em contato com o suporte da MedConnect.'
+          }
+        });
+        return;
+      }
+
       // DETECÇÃO DE REUSO DE TOKEN:
       // Se o token já estiver revogado, significa que houve tentativa de reuso malicioso!
       // Revoga imediatamente toda a família de tokens associada
@@ -129,18 +181,6 @@ export class AuthController {
         clearRefreshTokenCookie(res);
         res.status(401).json({ error: { code: 'REFRESH_TOKEN_EXPIRED', message: 'Sessão expirada' } });
         return;
-      }
-
-      // Recupera os dados da conta (User ou Pharmacy)
-      let account: any = null;
-      let role = '';
-
-      if (existingToken.userId) {
-        account = await prisma.user.findUnique({ where: { id: existingToken.userId } });
-        role = account?.role || 'PATIENT';
-      } else if (existingToken.pharmacyId) {
-        account = await prisma.pharmacy.findUnique({ where: { id: existingToken.pharmacyId } });
-        role = 'PHARMACY';
       }
 
       if (!account) {
@@ -246,7 +286,11 @@ export class AuthController {
         await emailSender.sendEmail({
           to: normalizedEmail,
           subject: 'Recuperação de Senha - MedConnect',
-          text: `Olá ${targetAccount.name},\n\nPara redefinir sua senha, utilize o token: ${rawResetToken}\nEste token expira em 1 hora.\n\nSe você não solicitou, ignore este e-mail.`
+          text:
+            `Olá ${targetAccount.name},\n\n` +
+            `Para redefinir sua senha, acesse:\n${env.FRONTEND_URL}/reset-password?token=${rawResetToken}\n\n` +
+            `Se preferir, cole este código na tela de redefinição: ${rawResetToken}\n` +
+            `O link e o código expiram em 1 hora.\n\nSe você não solicitou, ignore este e-mail.`
         });
       } else {
         // Simulação de tempo para evitar enumeração de contas
@@ -397,6 +441,90 @@ export class AuthController {
       res.json({ message: 'E-mail verificado com sucesso.' });
     } catch (error) {
       res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Erro ao verificar e-mail' } });
+    }
+  }
+
+  /**
+   * Troca de senha pelo próprio titular autenticado (qualquer papel).
+   * Exige a senha atual; revoga as demais sessões (refresh tokens), mantendo apenas
+   * a família da sessão atual quando o cookie de refresh for enviado.
+   */
+  async changePassword(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      const isPharmacy = req.user!.role === Role.PHARMACY;
+
+      const account = isPharmacy
+        ? await prisma.pharmacy.findUnique({ where: { id: req.user!.id } })
+        : await prisma.user.findUnique({ where: { id: req.user!.id } });
+
+      if (!account) {
+        res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Conta não encontrada' } });
+        return;
+      }
+
+      const validPassword = await bcrypt.compare(currentPassword, account.password);
+      if (!validPassword) {
+        res.status(400).json({ error: { code: 'INVALID_CURRENT_PASSWORD', message: 'A senha atual está incorreta' } });
+        return;
+      }
+
+      if (!ehSenhaForte(newPassword)) {
+        res.status(400).json({
+          error: {
+            code: 'WEAK_PASSWORD',
+            message: 'Senha fraca. A senha deve ter no mínimo 8 caracteres, incluindo letra maiúscula, número e caractere especial.'
+          }
+        });
+        return;
+      }
+
+      // Identifica a sessão atual (se o cookie de refresh veio junto) para preservá-la
+      const rawToken = req.cookies?.refreshToken;
+      const currentToken = rawToken
+        ? await prisma.refreshToken.findUnique({ where: { tokenHash: hashToken(rawToken) } })
+        : null;
+      const ownerFilter = isPharmacy ? { pharmacyId: account.id } : { userId: account.id };
+      const currentFamilyId =
+        currentToken && !currentToken.isRevoked &&
+        (isPharmacy ? currentToken.pharmacyId === account.id : currentToken.userId === account.id)
+          ? currentToken.familyId
+          : null;
+
+      const newPasswordHash = await bcrypt.hash(newPassword, 10);
+
+      const revoked = await prisma.$transaction(async (tx) => {
+        if (isPharmacy) {
+          await tx.pharmacy.update({ where: { id: account.id }, data: { password: newPasswordHash } });
+        } else {
+          await tx.user.update({ where: { id: account.id }, data: { password: newPasswordHash } });
+        }
+        return tx.refreshToken.updateMany({
+          where: {
+            ...ownerFilter,
+            isRevoked: false,
+            ...(currentFamilyId ? { familyId: { not: currentFamilyId } } : {})
+          },
+          data: { isRevoked: true }
+        });
+      });
+
+      await AuditLogService.log({
+        actorId: account.id,
+        actorType: req.user!.role as Role,
+        actorEmail: account.email,
+        action: 'PASSWORD_CHANGED',
+        resource: isPharmacy ? 'Pharmacy' : 'User',
+        resourceId: account.id,
+        reason: 'TITULAR_PASSWORD_CHANGE',
+        details: { revokedSessions: revoked.count, keptCurrentSession: Boolean(currentFamilyId) },
+        ipAddress: getClientIp(req),
+        userAgent: getUserAgent(req)
+      });
+
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Erro ao alterar senha' } });
     }
   }
 }

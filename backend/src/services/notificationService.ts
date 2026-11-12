@@ -4,7 +4,14 @@ import { io } from '../server';
 export interface CreateNotificationOptions {
   userId?: string;
   pharmacyId?: string;
-  type: 'NEW_QUOTE' | 'QUOTE_ACCEPTED' | 'ORDER_STATUS_UPDATE' | 'PHARMACY_VERIFIED' | 'NEW_ORDER';
+  type:
+    | 'NEW_QUOTE'
+    | 'QUOTE_ACCEPTED'
+    | 'ORDER_STATUS_UPDATE'
+    | 'PHARMACY_VERIFIED'
+    | 'NEW_ORDER'
+    | 'ACCOUNT_STATUS_UPDATE'
+    | 'SUPPORT_TICKET_UPDATE';
   title: string;
   message: string;
 }

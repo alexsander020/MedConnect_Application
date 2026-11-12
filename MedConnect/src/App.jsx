@@ -1,94 +1,155 @@
-import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { lazy, Suspense, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
+import { MotionConfig } from 'motion/react';
+import { AnimateUIProvider } from '@animate-ui/react/provider';
 import { queryClient, setupSocketQueryInvalidation } from './lib/queryClient';
 import { ToastProvider } from './context/ToastContext';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthProvider, useAuth, homeFor } from './context/AuthContext';
+import { TooltipProvider } from './components/ui/tooltip';
+import PublicLayout from './components/layout/PublicLayout';
+import AppShell from './components/layout/AppShell';
+import LoadingState from './components/LoadingState';
+import { Analytics } from '@vercel/analytics/react';
+import { stripSensitiveUrlParts } from './lib/analytics';
 
-// Pages
-import Welcome from './pages/Welcome';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import Profile from './pages/Profile';
+// Vercel Web Analytics só no build da Vercel: em outros hosts (GitHub Pages, dev) o script /_vercel/insights não existe
+const vercelAnalyticsEnabled = import.meta.env.VITE_VERCEL_ANALYTICS === 'true';
 
-// User pages
-import UserDashboard from './pages/user/Dashboard';
-import NewQuote from './pages/user/NewQuote';
-import QuoteOffers from './pages/user/QuoteOffers';
-import OrderTracking from './pages/user/OrderTracking';
-import Orders from './pages/user/Orders';
-import Review from './pages/user/Review';
+// Público
+const Welcome = lazy(() => import('./pages/Welcome'));
+const Pharmacies = lazy(() => import('./pages/public/Pharmacies'));
+const Help = lazy(() => import('./pages/public/Help'));
+const NotFound = lazy(() => import('./pages/public/NotFound'));
+const PrivacyPolicy = lazy(() => import('./pages/legal/PrivacyPolicy'));
+const TermsOfUse = lazy(() => import('./pages/legal/TermsOfUse'));
+const PharmacyTerms = lazy(() => import('./pages/legal/PharmacyTerms'));
 
-// Pharmacy pages
-import PharmacyLayout from './components/PharmacyLayout';
-import PharmacyDashboard from './pages/pharmacy/Dashboard';
-import Requests from './pages/pharmacy/Requests';
-import SendQuote from './pages/pharmacy/SendQuote';
-import OrderManagement from './pages/pharmacy/OrderManagement';
-import Reviews from './pages/pharmacy/Reviews';
+// Autenticação
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+const ForgotPassword = lazy(() => import('./pages/auth/ForgotPassword'));
+const ResetPassword = lazy(() => import('./pages/auth/ResetPassword'));
+const VerifyEmail = lazy(() => import('./pages/auth/VerifyEmail'));
 
-// Admin pages
-import AdminDashboard from './pages/admin/AdminDashboard';
+// Compartilhadas (áreas logadas)
+const NotificationsPage = lazy(() => import('./pages/shared/NotificationsPage'));
+const SupportPage = lazy(() => import('./pages/shared/SupportPage'));
+
+// Paciente
+const UserDashboard = lazy(() => import('./pages/user/Dashboard'));
+const NewQuote = lazy(() => import('./pages/user/NewQuote'));
+const QuoteOffers = lazy(() => import('./pages/user/QuoteOffers'));
+const OrderTracking = lazy(() => import('./pages/user/OrderTracking'));
+const Orders = lazy(() => import('./pages/user/Orders'));
+const Review = lazy(() => import('./pages/user/Review'));
+const Profile = lazy(() => import('./pages/Profile'));
+const PrivacyCenter = lazy(() => import('./pages/user/PrivacyCenter'));
+
+// Farmácia
+const PharmacyDashboard = lazy(() => import('./pages/pharmacy/Dashboard'));
+const Requests = lazy(() => import('./pages/pharmacy/Requests'));
+const SendQuote = lazy(() => import('./pages/pharmacy/SendQuote'));
+const OrderManagement = lazy(() => import('./pages/pharmacy/OrderManagement'));
+const Reviews = lazy(() => import('./pages/pharmacy/Reviews'));
+const PharmacySettings = lazy(() => import('./pages/pharmacy/Settings'));
+
+// Administração
+const AdminOverview = lazy(() => import('./pages/admin/Overview'));
+const AdminPharmacies = lazy(() => import('./pages/admin/Pharmacies'));
+const AdminUsers = lazy(() => import('./pages/admin/Users'));
+const AdminOrders = lazy(() => import('./pages/admin/Orders'));
+const AdminPrescriptions = lazy(() => import('./pages/admin/Prescriptions'));
+const AdminSupportTickets = lazy(() => import('./pages/admin/SupportTickets'));
+const AdminAuditLogs = lazy(() => import('./pages/admin/AuditLogs'));
+const AdminPilotMetrics = lazy(() => import('./pages/admin/PilotMetrics'));
+const AdminAccount = lazy(() => import('./pages/admin/Account'));
 
 function ProtectedRoute({ children, requiredType }) {
   const { isAuthenticated, userType } = useAuth();
-  if (!isAuthenticated) return <Navigate to="/" replace />;
-  if (requiredType && userType !== requiredType) return <Navigate to="/" replace />;
+  const location = useLocation();
+  if (!isAuthenticated) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
+  if (requiredType && userType !== requiredType) return <Navigate to={homeFor(userType)} replace />;
   return children;
+}
+
+function PageFallback() {
+  return (
+    <div className="container-page py-10">
+      <LoadingState variant="detail" message="Carregando página..." />
+    </div>
+  );
 }
 
 function AppRoutes() {
   return (
-    <Routes>
-      {/* Public */}
-      <Route path="/" element={<Welcome />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
+    <Suspense fallback={<PageFallback />}>
+      <Routes>
+        {/* Site público */}
+        <Route element={<PublicLayout />}>
+          <Route path="/" element={<Welcome />} />
+          <Route path="/pharmacies" element={<Pharmacies />} />
+          <Route path="/help" element={<Help />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
+          <Route path="/terms" element={<TermsOfUse />} />
+          <Route path="/pharmacy-terms" element={<PharmacyTerms />} />
+        </Route>
 
-      {/* User routes */}
-      <Route path="/dashboard" element={
-        <ProtectedRoute requiredType="PATIENT"><UserDashboard /></ProtectedRoute>
-      } />
-      <Route path="/new-quote" element={
-        <ProtectedRoute requiredType="PATIENT"><NewQuote /></ProtectedRoute>
-      } />
-      <Route path="/quote-offers" element={
-        <ProtectedRoute requiredType="PATIENT"><QuoteOffers /></ProtectedRoute>
-      } />
-      <Route path="/order/:id" element={
-        <ProtectedRoute requiredType="PATIENT"><OrderTracking /></ProtectedRoute>
-      } />
-      <Route path="/orders" element={
-        <ProtectedRoute requiredType="PATIENT"><Orders /></ProtectedRoute>
-      } />
-      <Route path="/review/:id" element={
-        <ProtectedRoute requiredType="PATIENT"><Review /></ProtectedRoute>
-      } />
+        {/* Autenticação (layout próprio) */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
 
-      {/* Pharmacy routes */}
-      <Route path="/pharmacy" element={
-        <ProtectedRoute requiredType="PHARMACY"><PharmacyLayout /></ProtectedRoute>
-      }>
-        <Route index element={<PharmacyDashboard />} />
-        <Route path="requests" element={<Requests />} />
-        <Route path="send-quote/:id" element={<SendQuote />} />
-        <Route path="orders" element={<OrderManagement />} />
-        <Route path="reviews" element={<Reviews />} />
-      </Route>
+        {/* Paciente */}
+        <Route element={<ProtectedRoute requiredType="PATIENT"><AppShell role="PATIENT" /></ProtectedRoute>}>
+          <Route path="/dashboard" element={<UserDashboard />} />
+          <Route path="/new-quote" element={<NewQuote />} />
+          <Route path="/quote-offers" element={<QuoteOffers />} />
+          <Route path="/orders" element={<Orders />} />
+          <Route path="/order/:id" element={<OrderTracking />} />
+          <Route path="/review/:id" element={<Review />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/privacy-center" element={<PrivacyCenter />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
+          <Route path="/support" element={<SupportPage />} />
+        </Route>
 
-      {/* Admin routes */}
-      <Route path="/admin" element={
-        <ProtectedRoute requiredType="ADMIN"><AdminDashboard /></ProtectedRoute>
-      } />
+        {/* Farmácia */}
+        <Route path="/pharmacy" element={<ProtectedRoute requiredType="PHARMACY"><AppShell role="PHARMACY" /></ProtectedRoute>}>
+          <Route index element={<PharmacyDashboard />} />
+          <Route path="requests" element={<Requests />} />
+          <Route path="send-quote/:id" element={<SendQuote />} />
+          <Route path="orders" element={<OrderManagement />} />
+          <Route path="reviews" element={<Reviews />} />
+          <Route path="settings" element={<PharmacySettings />} />
+          <Route path="notifications" element={<NotificationsPage />} />
+          <Route path="support" element={<SupportPage />} />
+        </Route>
 
-      {/* Shared */}
-      <Route path="/profile" element={
-        <ProtectedRoute><Profile /></ProtectedRoute>
-      } />
+        {/* Administração */}
+        <Route path="/admin" element={<ProtectedRoute requiredType="ADMIN"><AppShell role="ADMIN" /></ProtectedRoute>}>
+          <Route index element={<AdminOverview />} />
+          <Route path="pharmacies" element={<AdminPharmacies />} />
+          <Route path="users" element={<AdminUsers />} />
+          <Route path="orders" element={<AdminOrders />} />
+          <Route path="prescriptions" element={<AdminPrescriptions />} />
+          <Route path="support" element={<AdminSupportTickets />} />
+          <Route path="audit" element={<AdminAuditLogs />} />
+          <Route path="metrics" element={<AdminPilotMetrics />} />
+          <Route path="account" element={<AdminAccount />} />
+        </Route>
 
-      {/* Fallback */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        {/* Rotas antigas */}
+        <Route path="/admin-dashboard" element={<Navigate to="/admin" replace />} />
+
+        {/* 404 */}
+        <Route element={<PublicLayout showMobileCta={false} />}>
+          <Route path="*" element={<NotFound />} />
+        </Route>
+      </Routes>
+    </Suspense>
   );
 }
 
@@ -99,13 +160,20 @@ export default function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ToastProvider>
-        <BrowserRouter basename={import.meta.env.BASE_URL}>
-          <AuthProvider>
-            <AppRoutes />
-          </AuthProvider>
-        </BrowserRouter>
-      </ToastProvider>
+      <MotionConfig reducedMotion="user">
+        <AnimateUIProvider>
+          <TooltipProvider delayDuration={250}>
+            <ToastProvider>
+              <BrowserRouter basename={import.meta.env.BASE_URL}>
+                <AuthProvider>
+                  <AppRoutes />
+                </AuthProvider>
+              </BrowserRouter>
+              {vercelAnalyticsEnabled && <Analytics beforeSend={stripSensitiveUrlParts} />}
+            </ToastProvider>
+          </TooltipProvider>
+        </AnimateUIProvider>
+      </MotionConfig>
     </QueryClientProvider>
   );
 }

@@ -3,6 +3,10 @@ import { io } from 'socket.io-client';
 
 const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
+// Notificações em tempo real (Socket.IO). Desligadas onde não há servidor WebSocket,
+// como na Vercel (funções serverless): as telas continuam atualizando pelas consultas normais.
+export const realtimeEnabled = import.meta.env.VITE_ENABLE_REALTIME !== 'false';
+
 // Armazena o access token exclusivamente em memória (NUNCA no localStorage)
 let inMemoryAccessToken = null;
 

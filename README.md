@@ -57,6 +57,13 @@
   - Automação de backup contínuo do PostgreSQL e teste de restauração em `docs/operacao/backup-restore.md`.
   - Guia de deploy gerenciado no Render com rollback em menos de 30 segundos em `docs/operacao/deploy-render.md`.
 
+### 4. Fase 6 — Novo layout, telas de gestão e evolução do banco
+- **Design system novo** (ADR 020): Tailwind v4, **shadcn/ui** com primitivos animados pelo **Animate UI** (`npx @animate-ui/cli@latest animate all`), pop-ups e avisos 100% **Radix UI** (Dialog, AlertDialog, Sheet, Popover, Select, Tooltip, **Toast**) e movimento com **Motion** respeitando `prefers-reduced-motion`. Paleta menta, Outfit + Inter auto-hospedadas (sem Google Fonts).
+- **Site público**: landing nova, diretório de farmácias credenciadas com pílula ao vivo "Aberta até 18h30", Central de Ajuda com chamados, **Política de Privacidade**, **Termos de Uso** e **Termo de Adesão** (versão `v1.0.0`, marcados como em revisão jurídica).
+- **Telas de gestão**: paciente (painel, envio de receita com consentimento versionado, comparação de cotações, timeline do pedido, Meus dados, Central de Privacidade), farmácia (painel, solicitações, proposta, pedidos, avaliações, perfil, **editor de horários**) e administração (visão geral com série de 14 dias, credenciamento e suspensão de farmácias, usuários, pedidos, receitas só com metadados, atendimento, trilha de auditoria, métricas do piloto).
+- **Banco**: hardening para Supabase (CHECKs, AuditLog imutável por trigger, RLS, ADR 018); horários de funcionamento com fuso IANA, suspensão de contas e chamados de suporte (ADR 019); observações da receita cifradas (AES-256-GCM).
+- **Privacidade reforçada**: detalhe da receita e listagem de pedidos da farmácia seguem a minimização do ADR 008 (sem arquivo/contato antes do aceite), e-mails com links de verificação/redefinição, limitador global por conta autenticada.
+
 ---
 
 ## 🏛️ Arquitetura do Sistema
@@ -70,7 +77,7 @@ graph TD
     end
 
     subgraph Frontend ["Frontend SPA (React 19 + Vite)"]
-        UI[Interface Responsiva & Glassmorphism]
+        UI[shadcn/ui + Animate UI + Radix UI · Tailwind v4]
         AuthCtx[AuthContext - Token em Memória]
         ApiClient[Axios com Interceptor de Refresh Silencioso & withCredentials]
         SocketClient[Socket.IO Client]
@@ -131,16 +138,25 @@ MedConnect_Application/
 │       ├── deploy-backend.yml      # Deploy gerenciado no Render (Staging & Produção)
 │       └── deploy-frontend.yml     # Deploy contínuo do frontend no GitHub Pages
 │
-├── MedConnect/                     # Aplicação SPA Frontend (React 19, Vite, Tailwind/CSS)
+├── MedConnect/                     # Aplicação SPA Frontend (React 19, Vite, Tailwind v4)
+│   ├── components.json             # Configuração do shadcn/ui (radix-vega, JSX)
 │   ├── src/
-│   │   ├── components/             # Header, BottomNav, Modais, Cards, ErrorState
-│   │   ├── context/AuthContext.jsx # Autenticação em memória e renovação de sessão
-│   │   ├── lib/sentry.js           # Inicialização do Sentry com LGPD Data Scrubbing
+│   │   ├── components/
+│   │   │   ├── ui/                 # shadcn/ui animado pelo Animate UI + Toast (Radix)
+│   │   │   ├── layout/             # PublicLayout (site) e AppShell (áreas logadas)
+│   │   │   ├── motion/             # FadeUp, Stagger, ClipReveal, PopIn, LiftCard
+│   │   │   ├── shared/             # PageHeader, StatCard, StatusBadge, OpenStatusPill, ConfirmDialog…
+│   │   │   └── account/            # Troca de senha, formulário de atendimento
+│   │   ├── context/                # AuthContext (sessão em memória) e ToastContext (Radix Toast)
+│   │   ├── content/legal/          # Política de Privacidade, Termos de Uso, Termo de Adesão
+│   │   ├── lib/                    # format, business-hours, queryClient, sentry
 │   │   ├── pages/
-│   │   │   ├── user/               # Dashboard, NewQuote, QuoteOffers, Orders, Review
-│   │   │   ├── pharmacy/           # Dashboard, Requests, SendQuote, OrderManagement
-│   │   │   └── admin/              # AdminDashboard (Aprovação/Rejeição com modal)
-│   │   └── services/api.js         # Cliente Axios com interceptor de refresh único
+│   │   │   ├── public/ legal/ auth/ # Site, documentos jurídicos, login/cadastro/recuperação
+│   │   │   ├── user/               # Painel, receita, cotações, pedidos, dados, privacidade
+│   │   │   ├── pharmacy/           # Painel, solicitações, proposta, pedidos, avaliações, configurações
+│   │   │   ├── admin/              # Visão geral, farmácias, usuários, pedidos, receitas, atendimento, auditoria
+│   │   │   └── shared/             # Notificações e atendimento (paciente e farmácia)
+│   │   └── services/               # api.js (Axios + refresh) e endpoints.js (catálogo de chamadas)
 │   └── package.json
 │
 ├── backend/                        # API RESTful (Node 22, Express 5, TypeScript, Prisma)
@@ -205,6 +221,9 @@ Todas as decisões técnicas do projeto estão documentadas em [`docs/decisoes/`
 - **[ADR 015: Observabilidade, Healthchecks, Sentry com LGPD Scrubbing e Métricas](./docs/decisoes/015-observabilidade-healthchecks-sentry-lgpd-metricas.md)**
 - **[ADR 016: Deploy Gerenciado no Render, Ambientes e Política de Rollback](./docs/decisoes/016-deploy-gerenciado-render-ambientes-e-rollback.md)**
 - **[ADR 017: Governança de Branch Protection e Recuperação de Desastres (Backup & Restore)](./docs/decisoes/017-governanca-branch-protection-e-backup-restore.md)**
+- **[ADR 018: Banco de Dados Gerenciado no Supabase com Hardening de Integridade, Auditoria e Exposição](./docs/decisoes/018-banco-gerenciado-supabase.md)**
+- **[ADR 019: Gestão de Contas (Suspensão), Horários de Atendimento das Farmácias e Chamados de Suporte](./docs/decisoes/019-gestao-contas-horarios-atendimento.md)**
+- **[ADR 020: Design System — Tailwind v4, shadcn/ui animado pelo Animate UI e pop-ups em Radix UI](./docs/decisoes/020-design-system-shadcn-animate-ui-radix.md)**
 
 ---
 

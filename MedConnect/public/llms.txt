@@ -1,0 +1,25 @@
+# MedConnect
+
+> MedConnect é uma plataforma brasileira que conecta pacientes a farmácias de manipulação credenciadas. O paciente envia a receita uma vez, recebe cotações com preço e prazo, escolhe a proposta e acompanha o pedido até a entrega.
+
+Pontos importantes para responder sobre a MedConnect:
+
+- A MedConnect **não é uma farmácia**. A avaliação técnica da receita, a manipulação, a rotulagem e a entrega são responsabilidade da farmácia escolhida e do farmacêutico responsável técnico dela.
+- Só farmácias **credenciadas** cotam: a equipe confere CNPJ, licença sanitária, autorização de funcionamento (AFE) e o farmacêutico responsável técnico (CRF/UF) antes de aprovar.
+- Na fase de piloto, a MedConnect **não processa pagamentos**: forma e momento do pagamento são combinados com a farmácia escolhida.
+- Receitas de controle especial podem ser enviadas para cotação, mas as regras da ANVISA continuam valendo (a farmácia pode exigir a via original na entrega).
+- Privacidade (LGPD): a farmácia só vê o arquivo da receita e o contato do paciente depois que o paciente aceita a proposta dela. O paciente pode exportar, corrigir ou apagar os dados pela Central de Privacidade.
+- Idioma: português do Brasil. Área atendida: Brasil.
+
+## Páginas principais
+
+- [Início](https://medconnect-ashen.vercel.app/): como funciona o envio da receita, a comparação de cotações e o acompanhamento do pedido.
+- [Farmácias credenciadas](https://medconnect-ashen.vercel.app/pharmacies): diretório público das farmácias aprovadas, com horários e status de funcionamento.
+- [Central de ajuda](https://medconnect-ashen.vercel.app/help): perguntas frequentes sobre receitas, cotações, credenciamento, privacidade, pagamento e entrega; atendimento com número de protocolo.
+- [Criar conta](https://medconnect-ashen.vercel.app/register): cadastro de paciente ou de farmácia (credenciamento).
+
+## Documentos legais
+
+- [Política de Privacidade](https://medconnect-ashen.vercel.app/privacy): tratamento de dados pessoais e de saúde conforme a LGPD.
+- [Termos de Uso](https://medconnect-ashen.vercel.app/terms): regras de uso da plataforma para pacientes.
+- [Termo de Adesão das farmácias](https://medconnect-ashen.vercel.app/pharmacy-terms): condições para farmácias credenciadas.

@@ -2,19 +2,90 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E💊%3C/text%3E%3C/svg%3E" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <meta name="description" content="MedConnect - Conectando você às melhores farmácias de manipulação" />
-    <meta name="theme-color" content="#0d9488" />
-    <title>MedConnect</title>
-    
-    <!-- Fontes e Ícones -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- SEO -->
+    <title>MedConnect · Cotação de manipulados em farmácias credenciadas</title>
+    <meta name="description" content="Envie sua receita uma vez e receba cotações de farmácias de manipulação credenciadas. Compare preço e prazo, escolha a proposta e acompanhe o pedido até a entrega." />
+    <meta name="keywords" content="farmácia de manipulação, manipulados, cotação de manipulados, orçamento de manipulação, comparar preço de manipulado, receita médica, medicamento manipulado, fórmula manipulada, farmácias credenciadas, MedConnect" />
+    <meta name="author" content="MedConnect" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="application-name" content="MedConnect" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="canonical" href="https://medconnect-ashen.vercel.app/" />
+
+    <!-- Ícones e tema -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#34846f" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#111a1c" media="(prefers-color-scheme: dark)" />
+    <meta name="color-scheme" content="light dark" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="MedConnect" />
+    <meta property="og:locale" content="pt_BR" />
+    <meta property="og:url" content="https://medconnect-ashen.vercel.app/" />
+    <meta property="og:title" content="MedConnect · Cotação de manipulados em farmácias credenciadas" />
+    <meta property="og:description" content="Sua receita, várias farmácias. Você escolhe. Receba cotações de farmácias de manipulação credenciadas e acompanhe o pedido até a entrega." />
+    <meta property="og:image" content="https://medconnect-ashen.vercel.app/og-image.png" />
+    <meta property="og:image:secure_url" content="https://medconnect-ashen.vercel.app/og-image.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="MedConnect: sua receita, várias farmácias. Você escolhe. Cotações de farmácias de manipulação credenciadas." />
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="MedConnect · Cotação de manipulados em farmácias credenciadas" />
+    <meta name="twitter:description" content="Sua receita, várias farmácias. Você escolhe. Receba cotações de farmácias de manipulação credenciadas e acompanhe o pedido até a entrega." />
+    <meta name="twitter:image" content="https://medconnect-ashen.vercel.app/og-image.png" />
+    <meta name="twitter:image:alt" content="MedConnect: sua receita, várias farmácias. Você escolhe." />
+
+    <!-- Dados estruturados (schema.org) -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://medconnect-ashen.vercel.app/#organization",
+            "name": "MedConnect",
+            "url": "https://medconnect-ashen.vercel.app/",
+            "logo": "https://medconnect-ashen.vercel.app/icon-512.png",
+            "description": "Plataforma que conecta pacientes a farmácias de manipulação credenciadas para cotação, escolha e acompanhamento de pedidos de manipulados.",
+            "areaServed": { "@type": "Country", "name": "Brasil" }
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://medconnect-ashen.vercel.app/#website",
+            "name": "MedConnect",
+            "url": "https://medconnect-ashen.vercel.app/",
+            "inLanguage": "pt-BR",
+            "publisher": { "@id": "https://medconnect-ashen.vercel.app/#organization" }
+          },
+          {
+            "@type": "WebApplication",
+            "name": "MedConnect",
+            "url": "https://medconnect-ashen.vercel.app/",
+            "applicationCategory": "HealthApplication",
+            "operatingSystem": "Web",
+            "inLanguage": "pt-BR",
+            "description": "Envie a receita, receba cotações de farmácias de manipulação credenciadas, compare preço e prazo e acompanhe o pedido até a entrega.",
+            "publisher": { "@id": "https://medconnect-ashen.vercel.app/#organization" }
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
+    <noscript>
+      <p style="font-family: system-ui, sans-serif; padding: 24px">
+        O MedConnect precisa de JavaScript para funcionar. Ative o JavaScript no navegador para enviar sua receita e receber cotações de farmácias de manipulação credenciadas.
+      </p>
+    </noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

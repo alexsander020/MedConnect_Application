@@ -315,6 +315,9 @@ test.describe('MedConnect E2E - Fluxo Completo Ponta a Ponta', () => {
       'Fórmula personalizada: Minoxidil 5% + Biotina 5mg'
     );
 
+    // Consentimento específico para dado de saúde (obrigatório, não vem marcado)
+    await patientPage.getByRole('checkbox', { name: /Autorizo o tratamento/ }).check();
+
     // Submete a cotação
     await patientPage.click('button:has-text("Solicitar Orçamento Agora")');
 
@@ -326,8 +329,8 @@ test.describe('MedConnect E2E - Fluxo Completo Ponta a Ponta', () => {
     // ─────────────────────────────────────────────────────────────
     await pharmacyPage.goto('/MedConnect_Application/login');
 
-    // Seleciona aba da Farmácia
-    await pharmacyPage.click('.glass-tab:has-text("Farmácia")');
+    // Seleciona o perfil Farmácia (Radix Tabs)
+    await pharmacyPage.getByRole('tab', { name: 'Farmácia' }).click();
     await pharmacyPage.fill('input[type="email"]', 'farmacia@medconnect.com');
     await pharmacyPage.fill('input[type="password"]', 'SenhaForte#123');
     await pharmacyPage.click('button[type="submit"]');
@@ -352,6 +355,8 @@ test.describe('MedConnect E2E - Fluxo Completo Ponta a Ponta', () => {
     );
 
     await pharmacyPage.click('button:has-text("Enviar Proposta ao Paciente")');
+    // Diálogo de confirmação (Radix AlertDialog) com o resumo da proposta
+    await pharmacyPage.getByRole('button', { name: 'Confirmar e enviar' }).click();
     await expect(pharmacyPage.locator('text=Proposta Enviada!')).toBeVisible();
 
     // ─────────────────────────────────────────────────────────────
@@ -367,6 +372,8 @@ test.describe('MedConnect E2E - Fluxo Completo Ponta a Ponta', () => {
 
     // Paciente aprova a proposta
     await patientPage.click('button:has-text("Aprovar Cotação e Fazer Pedido")');
+    // Diálogo de confirmação com preço e prazo
+    await patientPage.getByRole('button', { name: 'Confirmar pedido' }).click();
 
     // Deve redirecionar para a tela de pedido ou exibir confirmação
     await expect(patientPage).toHaveURL(/.*order/);
@@ -377,25 +384,27 @@ test.describe('MedConnect E2E - Fluxo Completo Ponta a Ponta', () => {
     await pharmacyPage.goto('/MedConnect_Application/pharmacy/orders');
 
     // Pedido aparece em produção
-    await expect(pharmacyPage.locator('.badge:has-text("Em Produção")')).toBeVisible();
+    await expect(pharmacyPage.locator('[data-status="PRODUCTION"]').first()).toBeVisible();
 
     // Farmácia despacha para entrega (PRODUCTION -> DELIVERY)
     await pharmacyPage.click('button:has-text("Despachar para Entrega")');
-    await expect(pharmacyPage.locator('.badge:has-text("Em Entrega")')).toBeVisible();
+    // Pedido migra para a aba "Em entrega"
+    await pharmacyPage.getByRole('tab', { name: /Em entrega/ }).click();
+    await expect(pharmacyPage.locator('[data-status="DELIVERY"]').first()).toBeVisible();
 
     // Farmácia confirma a entrega ao cliente (DELIVERY -> DELIVERED)
     await pharmacyPage.click('button:has-text("Confirmar Entrega")');
 
     // Pedido agora deve estar na aba de Concluídos
     await pharmacyPage.click('button:has-text("Concluídos")');
-    await expect(pharmacyPage.locator('.badge:has-text("Finalizado")')).toBeVisible();
+    await expect(pharmacyPage.locator('[data-status="DELIVERED"]').first()).toBeVisible();
 
     // ─────────────────────────────────────────────────────────────
     // PASSO 5: Paciente verifica pedido finalizado em sua conta
     // ─────────────────────────────────────────────────────────────
     await patientPage.goto('/MedConnect_Application/orders');
     await patientPage.click('button:has-text("Concluídos")');
-    await expect(patientPage.locator('.badge:has-text("Finalizado")')).toBeVisible();
+    await expect(patientPage.locator('[data-status="DELIVERED"]').first()).toBeVisible();
 
     // Fecha contextos
     await patientContext.close();

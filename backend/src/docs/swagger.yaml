@@ -141,6 +141,12 @@ components:
         address:
           type: string
           example: Av. Paulista, 1000, Apto 52 - SP
+        healthConsent:
+          type: boolean
+          description: false recusa expressamente o consentimento de dados de saúde (padrão = aceito)
+        termsAccepted:
+          type: boolean
+          description: Aceite dos Termos de Uso e Política de Privacidade (registra consentimento TERMS_AND_PRIVACY salvo se false)
 
     UserResponse:
       type: object
@@ -203,6 +209,16 @@ components:
         deliveryArea:
           type: string
           example: Grande São Paulo
+        city:
+          type: string
+          example: São Paulo
+        state:
+          type: string
+          example: SP
+          description: UF com 2 letras (normalizada para maiúsculas)
+        termsAccepted:
+          type: boolean
+          description: Aceite do Termo de Adesão; grava termsAcceptedAt e termsVersion = v1.0.0
 
     PharmacyResponse:
       type: object
@@ -399,6 +415,500 @@ components:
               type: string
               example: Paciente #A1B2C
 
+    PaginatedMeta:
+      type: object
+      properties:
+        total:
+          type: integer
+          example: 42
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        totalPages:
+          type: integer
+          example: 3
+
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+          format: password
+        newPassword:
+          type: string
+          format: password
+          description: Deve atender à política de senha forte (8+ caracteres, maiúscula, número e caractere especial)
+
+    AccountStatus:
+      type: string
+      enum: [ACTIVE, SUSPENDED]
+
+    AccountStatusUpdateRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          $ref: '#/components/schemas/AccountStatus'
+        reason:
+          type: string
+          minLength: 5
+          maxLength: 500
+          description: Obrigatório quando status = SUSPENDED
+
+    OwnUserProfile:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string }
+        role: { type: string, enum: [PATIENT, ADMIN] }
+        phone: { type: string, nullable: true }
+        address: { type: string, nullable: true }
+        cpf: { type: string, nullable: true, example: "***.***.***-43" }
+        status: { $ref: '#/components/schemas/AccountStatus' }
+        emailVerified: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        lastLoginAt: { type: string, format: date-time, nullable: true }
+        counts:
+          type: object
+          properties:
+            prescriptions: { type: integer }
+            orders: { type: integer }
+            reviews: { type: integer }
+
+    OwnUserProfileUpdateRequest:
+      type: object
+      properties:
+        name: { type: string, minLength: 2, maxLength: 120 }
+        phone: { type: string, nullable: true, maxLength: 30 }
+        address: { type: string, nullable: true, maxLength: 300 }
+
+    BusinessHour:
+      type: object
+      properties:
+        dayOfWeek:
+          type: integer
+          minimum: 0
+          maximum: 6
+          description: 0 = domingo … 6 = sábado
+        opensAt:
+          type: string
+          example: "09:00"
+        closesAt:
+          type: string
+          example: "18:30"
+          description: '"24:00" permitido somente no fechamento'
+
+    OpenStatus:
+      type: object
+      properties:
+        isOpen: { type: boolean }
+        closesAt: { type: string, nullable: true, example: "18:30" }
+        nextOpening:
+          type: object
+          nullable: true
+          properties:
+            dayOfWeek: { type: integer }
+            opensAt: { type: string, example: "09:00" }
+            isToday: { type: boolean }
+            isTomorrow: { type: boolean }
+
+    BusinessHoursUpdateRequest:
+      type: object
+      required: [hours]
+      properties:
+        timezone:
+          type: string
+          example: America/Sao_Paulo
+          description: Fuso IANA válido
+        hours:
+          type: array
+          maxItems: 28
+          items:
+            $ref: '#/components/schemas/BusinessHour'
+
+    BusinessHoursResponse:
+      type: object
+      properties:
+        timezone: { type: string }
+        businessHours:
+          type: array
+          items: { $ref: '#/components/schemas/BusinessHour' }
+        openStatus: { $ref: '#/components/schemas/OpenStatus' }
+
+    OwnPharmacyProfile:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string }
+        cnpj: { type: string }
+        phone: { type: string, nullable: true }
+        address: { type: string, nullable: true }
+        city: { type: string, nullable: true }
+        state: { type: string, nullable: true }
+        deliveryArea: { type: string, nullable: true }
+        description: { type: string, nullable: true }
+        services: { type: array, items: { type: string } }
+        timezone: { type: string }
+        verificationStatus: { type: string, enum: [PENDING_VERIFICATION, VERIFIED, REJECTED] }
+        verified: { type: boolean }
+        rejectionReason: { type: string, nullable: true }
+        status: { $ref: '#/components/schemas/AccountStatus' }
+        termsAcceptedAt: { type: string, format: date-time, nullable: true }
+        termsVersion: { type: string, nullable: true }
+        sanitaryLicense: { type: string, nullable: true }
+        operatingAuth: { type: string, nullable: true }
+        technicalResponsibleName: { type: string, nullable: true }
+        technicalResponsibleCrf: { type: string, nullable: true }
+        technicalResponsibleUf: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        businessHours:
+          type: array
+          items: { $ref: '#/components/schemas/BusinessHour' }
+        openStatus: { $ref: '#/components/schemas/OpenStatus' }
+
+    OwnPharmacyProfileUpdateRequest:
+      type: object
+      description: Nome, CNPJ e e-mail não são editáveis por esta rota
+      properties:
+        phone: { type: string, nullable: true }
+        address: { type: string, nullable: true }
+        city: { type: string, nullable: true }
+        state: { type: string, nullable: true, example: SP }
+        deliveryArea: { type: string, nullable: true }
+        description: { type: string, nullable: true, maxLength: 600 }
+        services:
+          type: array
+          maxItems: 12
+          items: { type: string, maxLength: 40 }
+
+    PublicPharmacy:
+      type: object
+      description: Sem e-mail, CNPJ, telefone ou endereço
+      properties:
+        id: { type: string }
+        name: { type: string }
+        city: { type: string, nullable: true }
+        state: { type: string, nullable: true }
+        deliveryArea: { type: string, nullable: true }
+        description: { type: string, nullable: true }
+        services: { type: array, items: { type: string } }
+        averageRating: { type: number, description: '0 quando não há avaliações' }
+        reviewsCount: { type: integer }
+        timezone: { type: string }
+        businessHours:
+          type: array
+          items: { $ref: '#/components/schemas/BusinessHour' }
+        openStatus: { $ref: '#/components/schemas/OpenStatus' }
+
+    SupportTicketCategory:
+      type: string
+      enum: [GENERAL, ORDER, PRESCRIPTION, PHARMACY_ONBOARDING, PRIVACY, TECHNICAL]
+
+    SupportTicketStatus:
+      type: string
+      enum: [OPEN, IN_PROGRESS, RESOLVED, CLOSED]
+
+    SupportTicketCreateRequest:
+      type: object
+      required: [subject, message]
+      properties:
+        name:
+          type: string
+          description: Obrigatório sem autenticação (com Bearer válido usa o nome da conta)
+        email:
+          type: string
+          format: email
+          description: Obrigatório sem autenticação (com Bearer válido usa o e-mail da conta)
+        category: { $ref: '#/components/schemas/SupportTicketCategory' }
+        subject: { type: string, minLength: 3, maxLength: 160 }
+        message: { type: string, minLength: 10, maxLength: 5000 }
+
+    SupportTicketCreated:
+      type: object
+      properties:
+        id: { type: string }
+        protocol: { type: string, example: MC-20261112-7KQ2M }
+        status: { $ref: '#/components/schemas/SupportTicketStatus' }
+        createdAt: { type: string, format: date-time }
+
+    SupportTicketOwnItem:
+      type: object
+      properties:
+        id: { type: string }
+        protocol: { type: string }
+        category: { $ref: '#/components/schemas/SupportTicketCategory' }
+        subject: { type: string }
+        status: { $ref: '#/components/schemas/SupportTicketStatus' }
+        resolution: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        resolvedAt: { type: string, format: date-time, nullable: true }
+
+    SupportTicketAdminItem:
+      type: object
+      properties:
+        id: { type: string }
+        protocol: { type: string }
+        requesterType: { type: string, nullable: true, enum: [PATIENT, PHARMACY, ADMIN] }
+        name: { type: string }
+        email: { type: string }
+        category: { $ref: '#/components/schemas/SupportTicketCategory' }
+        subject: { type: string }
+        preview: { type: string, description: Primeiros 140 caracteres da mensagem }
+        status: { $ref: '#/components/schemas/SupportTicketStatus' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        resolvedAt: { type: string, format: date-time, nullable: true }
+
+    SupportTicketAdminDetail:
+      allOf:
+        - $ref: '#/components/schemas/SupportTicketAdminItem'
+        - type: object
+          properties:
+            userId: { type: string, nullable: true }
+            pharmacyId: { type: string, nullable: true }
+            message: { type: string }
+            resolution: { type: string, nullable: true }
+            handledById: { type: string, nullable: true }
+
+    SupportTicketUpdateRequest:
+      type: object
+      description: Informe status e/ou resolution. RESOLVED/CLOSED preenche resolvedAt.
+      properties:
+        status: { $ref: '#/components/schemas/SupportTicketStatus' }
+        resolution: { type: string, nullable: true, maxLength: 5000 }
+
+    AdminOverview:
+      type: object
+      properties:
+        users:
+          type: object
+          properties:
+            patients: { type: integer }
+            admins: { type: integer }
+            suspended: { type: integer }
+            newLast30d: { type: integer, description: Pacientes cadastrados nos últimos 30 dias }
+        pharmacies:
+          type: object
+          properties:
+            total: { type: integer }
+            verified: { type: integer }
+            pending: { type: integer }
+            rejected: { type: integer }
+            suspended: { type: integer }
+        prescriptions:
+          type: object
+          properties:
+            total: { type: integer }
+            pending: { type: integer }
+            quoted: { type: integer }
+            accepted: { type: integer }
+            cancelled: { type: integer }
+        quotes:
+          type: object
+          properties:
+            total: { type: integer }
+            pending: { type: integer }
+            accepted: { type: integer }
+            rejected: { type: integer }
+            expired: { type: integer }
+        orders:
+          type: object
+          properties:
+            total: { type: integer }
+            production: { type: integer }
+            delivery: { type: integer }
+            delivered: { type: integer }
+            cancelled: { type: integer }
+            gmvDeliveredCents: { type: integer }
+        support:
+          type: object
+          properties:
+            open: { type: integer }
+            inProgress: { type: integer }
+        consents:
+          type: object
+          properties:
+            active: { type: integer }
+            revoked: { type: integer }
+        series:
+          type: array
+          description: Últimos 14 dias (fuso America/Sao_Paulo), inclusive dias zerados
+          items:
+            type: object
+            properties:
+              date: { type: string, example: "2026-11-01" }
+              prescriptions: { type: integer }
+              orders: { type: integer }
+
+    AdminUserItem:
+      type: object
+      description: Sem telefone/endereço na listagem (minimização)
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string }
+        role: { type: string, enum: [PATIENT, ADMIN] }
+        status: { $ref: '#/components/schemas/AccountStatus' }
+        emailVerified: { type: boolean }
+        isAnonymized: { type: boolean }
+        cpf: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        lastLoginAt: { type: string, format: date-time, nullable: true }
+        suspendedAt: { type: string, format: date-time, nullable: true }
+        counts:
+          type: object
+          properties:
+            prescriptions: { type: integer }
+            reviews: { type: integer }
+
+    AdminUserDetail:
+      allOf:
+        - $ref: '#/components/schemas/AdminUserItem'
+        - type: object
+          properties:
+            phone: { type: string, nullable: true }
+            address: { type: string, nullable: true }
+            suspensionReason: { type: string, nullable: true }
+            consents:
+              type: array
+              items:
+                type: object
+                properties:
+                  consentType: { type: string }
+                  textVersion: { type: string }
+                  consentedAt: { type: string, format: date-time }
+                  revokedAt: { type: string, format: date-time, nullable: true }
+
+    AdminPharmacyItem:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string }
+        cnpj: { type: string }
+        city: { type: string, nullable: true }
+        state: { type: string, nullable: true }
+        verificationStatus: { type: string, enum: [PENDING_VERIFICATION, VERIFIED, REJECTED] }
+        verified: { type: boolean }
+        status: { $ref: '#/components/schemas/AccountStatus' }
+        createdAt: { type: string, format: date-time }
+        verifiedAt: { type: string, format: date-time, nullable: true }
+        suspendedAt: { type: string, format: date-time, nullable: true }
+        averageRating: { type: number }
+        reviewsCount: { type: integer }
+        counts:
+          type: object
+          properties:
+            quotes: { type: integer }
+            orders: { type: integer }
+
+    AdminPharmacyDetail:
+      allOf:
+        - $ref: '#/components/schemas/OwnPharmacyProfile'
+        - type: object
+          properties:
+            documentUrl: { type: string, nullable: true }
+            cnpjData: { type: object, nullable: true, description: Evidência da consulta de CNPJ (JSON) }
+            verifiedById: { type: string, nullable: true }
+            verifiedAt: { type: string, format: date-time, nullable: true }
+            suspensionReason: { type: string, nullable: true }
+            stats:
+              type: object
+              properties:
+                quotes: { type: integer }
+                acceptedQuotes: { type: integer }
+                orders: { type: integer }
+                deliveredOrders: { type: integer }
+                gmvDeliveredCents: { type: integer }
+                averageRating: { type: number }
+                reviewsCount: { type: integer }
+
+    AdminOrderItem:
+      type: object
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [PRODUCTION, DELIVERY, DELIVERED, CANCELLED] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        priceCents: { type: integer }
+        price: { type: string, example: "125.50" }
+        deliveryDays: { type: integer, nullable: true }
+        pharmacy:
+          type: object
+          properties:
+            id: { type: string }
+            name: { type: string }
+        patient:
+          type: object
+          properties:
+            id: { type: string }
+            name: { type: string }
+        prescriptionId: { type: string }
+
+    AdminOrderDetail:
+      allOf:
+        - $ref: '#/components/schemas/AdminOrderItem'
+        - type: object
+          properties:
+            history:
+              type: array
+              items:
+                type: object
+                properties:
+                  fromStatus: { type: string }
+                  toStatus: { type: string }
+                  changedByType: { type: string }
+                  createdAt: { type: string, format: date-time }
+            review:
+              type: object
+              nullable: true
+              properties:
+                rating: { type: integer }
+                comment: { type: string, nullable: true }
+                createdAt: { type: string, format: date-time }
+
+    AdminPrescriptionItem:
+      type: object
+      description: Somente metadados — o arquivo (fileUrl) nunca é retornado
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [PENDING, QUOTED, ACCEPTED, CANCELLED] }
+        createdAt: { type: string, format: date-time }
+        quotesCount: { type: integer }
+        patient:
+          type: object
+          properties:
+            id: { type: string }
+            name: { type: string }
+
+  parameters:
+    PathId:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+    PageParam:
+      in: query
+      name: page
+      schema: { type: integer, minimum: 1, default: 1 }
+    LimitParam:
+      in: query
+      name: limit
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    SearchParam:
+      in: query
+      name: search
+      description: Busca case-insensitive (contains)
+      schema: { type: string }
+
 paths:
   /health:
     get:
@@ -510,6 +1020,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Conta suspensa (ACCOUNT_SUSPENDED) — informado somente após senha correta
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '429':
           description: Limite de tentativas de autenticação excedido (máximo 5 tentativas por 15 minutos)
           headers:
@@ -543,7 +1059,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/RefreshTokenResponse'
         '401':
-          description: Refresh token inválido, expirado ou reutilizado
+          description: Refresh token inválido, expirado, reutilizado ou conta suspensa (ACCOUNT_SUSPENDED, revoga a família)
           content:
             application/json:
               schema:
@@ -782,6 +1298,16 @@ paths:
                   type: string
                   format: binary
                   description: Arquivo da receita (imagem PNG/JPG ou PDF)
+                consent:
+                  type: string
+                  enum: ['true']
+                  description: Consentimento específico para o envio da receita (obrigatório se ainda não registrado)
+                notes:
+                  type: string
+                  maxLength: 1000
+                  description: |
+                    Observações do paciente sobre a fórmula (dado de saúde). Gravadas cifradas (AES-256-GCM);
+                    visíveis ao paciente e às farmácias verificadas na cotação, nunca ao ADMIN.
       responses:
         '201':
           description: Receita enviada com sucesso
@@ -790,7 +1316,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/PrescriptionResponse'
         '400':
-          description: Arquivo ausente ou formato inválido
+          description: Arquivo ausente, formato inválido ou observações acima de 1000 caracteres (NOTES_TOO_LONG)
           content:
             application/json:
               schema:
@@ -1046,6 +1572,12 @@ paths:
   /api/prescriptions/{id}:
     get:
       summary: Consulta detalhes de uma receita
+      description: |
+        Paciente dono e ADMIN recebem a receita com todas as cotações.
+        Farmácia verificada recebe a visão minimizada (ADR 008): sem `fileUrl`, sem `patientId`,
+        apenas as PRÓPRIAS cotações e o paciente pseudonimizado (`patient.anonymousId`).
+        Nome e telefone do paciente (`contactReleased: true`) só depois que a cotação desta farmácia é aceita.
+        O arquivo é acessado somente por `GET /api/prescriptions/{id}/view-url` (URL assinada e auditada).
       tags:
         - Receitas
       security:
@@ -1058,9 +1590,9 @@ paths:
             type: string
       responses:
         '200':
-          description: Dados da receita
+          description: Dados da receita (visão completa para o dono/ADMIN, minimizada para farmácias)
         '403':
-          description: Acesso não autorizado
+          description: Acesso não autorizado (outro paciente) ou farmácia não verificada (PHARMACY_NOT_VERIFIED)
         '404':
           description: Receita não encontrada
 
@@ -1210,4 +1742,609 @@ paths:
         '200':
           description: Todas as notificações foram marcadas como lidas
 
+  /api/auth/change-password:
+    post:
+      summary: Troca de senha pelo titular autenticado (qualquer papel)
+      description: Exige a senha atual. Revoga os demais refresh tokens do titular, preservando a sessão atual quando o cookie de refresh é enviado. Grava AuditLog PASSWORD_CHANGED.
+      tags:
+        - Autenticação
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '204':
+          description: Senha alterada
+        '400':
+          description: Senha atual incorreta (INVALID_CURRENT_PASSWORD), senha fraca (WEAK_PASSWORD) ou validação
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Não autenticado
+        '429':
+          description: Limite de tentativas excedido
 
+  /api/users/me:
+    get:
+      summary: Perfil do próprio paciente/admin (CPF mascarado e contadores)
+      tags:
+        - Usuários
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Perfil do titular
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnUserProfile'
+        '401':
+          description: Não autenticado
+        '403':
+          description: Somente PATIENT ou ADMIN
+    patch:
+      summary: Atualiza nome, telefone e endereço do próprio titular (telefone/endereço cifrados em repouso)
+      tags:
+        - Usuários
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnUserProfileUpdateRequest'
+      responses:
+        '200':
+          description: Perfil atualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnUserProfile'
+        '400':
+          description: Validação
+        '401':
+          description: Não autenticado
+        '403':
+          description: Somente PATIENT ou ADMIN
+
+  /api/pharmacy/me:
+    get:
+      summary: Perfil da farmácia autenticada, com horários e status de abertura
+      description: Também disponível em /api/pharmacies/me (mesmo router).
+      tags:
+        - Farmácias
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Perfil da farmácia
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnPharmacyProfile'
+        '401':
+          description: Não autenticado
+        '403':
+          description: Somente PHARMACY
+    patch:
+      summary: Atualiza dados operacionais da farmácia (nome, CNPJ e e-mail não são editáveis)
+      tags:
+        - Farmácias
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnPharmacyProfileUpdateRequest'
+      responses:
+        '200':
+          description: Perfil atualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnPharmacyProfile'
+        '400':
+          description: Validação
+        '401':
+          description: Não autenticado
+        '403':
+          description: Somente PHARMACY
+
+  /api/pharmacy/me/hours:
+    put:
+      summary: Substitui a grade semanal de horários (e o fuso, opcionalmente) numa transação
+      description: Valida formato HH:MM, fechamento > abertura, ausência de sobreposição e no máximo 4 intervalos por dia. Códigos de erro INVALID_TIME_FORMAT, INVALID_DAY_OF_WEEK, INVALID_INTERVAL, OVERLAPPING_INTERVALS, TOO_MANY_INTERVALS e INVALID_TIMEZONE.
+      tags:
+        - Farmácias
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BusinessHoursUpdateRequest'
+      responses:
+        '200':
+          description: Grade salva
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessHoursResponse'
+        '400':
+          description: Grade inválida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Não autenticado
+        '403':
+          description: Somente PHARMACY
+
+  /api/pharmacies/public:
+    get:
+      summary: Vitrine pública de farmácias verificadas e ativas (sem dados de contato)
+      tags:
+        - Farmácias
+      parameters:
+        - $ref: '#/components/parameters/SearchParam'
+        - in: query
+          name: city
+          schema: { type: string }
+        - in: query
+          name: openNow
+          schema: { type: boolean }
+          description: true filtra apenas as abertas agora
+      responses:
+        '200':
+          description: Farmácias públicas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PublicPharmacy'
+                  meta:
+                    type: object
+                    properties:
+                      total: { type: integer, description: Itens retornados }
+                      openNow: { type: integer, description: Quantos dos itens retornados estão abertos agora }
+
+  /api/support/tickets:
+    post:
+      summary: Abre chamado de suporte (público; Bearer opcional vincula ao titular)
+      description: Rate limit próprio de 5 chamados por 15 minutos por IP.
+      tags:
+        - Suporte
+      security:
+        - {}
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupportTicketCreateRequest'
+      responses:
+        '201':
+          description: Chamado aberto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportTicketCreated'
+        '400':
+          description: Validação
+        '429':
+          description: Muitos chamados a partir deste IP (TOO_MANY_REQUESTS)
+
+  /api/support/tickets/my:
+    get:
+      summary: Chamados do titular autenticado (qualquer papel)
+      tags:
+        - Suporte
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Chamados do titular
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SupportTicketOwnItem'
+        '401':
+          description: Não autenticado
+
+  /api/admin/overview:
+    get:
+      summary: Visão geral agregada da plataforma (ADMIN)
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Contagens e série diária de 14 dias
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminOverview'
+        '401':
+          description: Não autenticado
+        '403':
+          description: Acesso restrito a administradores
+
+  /api/admin/users:
+    get:
+      summary: Lista pacientes e administradores (ADMIN) — sem telefone/endereço
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SearchParam'
+        - in: query
+          name: role
+          schema: { type: string, enum: [PATIENT, ADMIN] }
+        - in: query
+          name: status
+          schema: { $ref: '#/components/schemas/AccountStatus' }
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Página de usuários
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedMeta'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/AdminUserItem'
+        '401':
+          description: Não autenticado
+        '403':
+          description: Acesso restrito a administradores
+
+  /api/admin/users/{id}:
+    get:
+      summary: Detalhe do usuário com contato decifrado e consentimentos (ADMIN, auditado ADMIN_VIEW_USER)
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: Usuário
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUserDetail'
+        '401':
+          description: Não autenticado
+        '403':
+          description: Acesso restrito a administradores
+        '404':
+          description: Usuário não encontrado (NOT_FOUND)
+
+  /api/admin/users/{id}/status:
+    patch:
+      summary: Suspende ou reativa usuário (ADMIN)
+      description: Suspender revoga os refresh tokens. Não é possível suspender a si mesmo (400 CANNOT_SUSPEND_SELF) nem outro ADMIN (403 CANNOT_SUSPEND_ADMIN). AuditLog ADMIN_SUSPEND_USER / ADMIN_REACTIVATE_USER.
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountStatusUpdateRequest'
+      responses:
+        '200':
+          description: Usuário atualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUserItem'
+        '400':
+          description: Validação ou CANNOT_SUSPEND_SELF
+        '401':
+          description: Não autenticado
+        '403':
+          description: Acesso restrito a administradores
+        '404':
+          description: Usuário não encontrado (NOT_FOUND)
+
+  /api/admin/pharmacies:
+    get:
+      summary: Lista farmácias com filtros (ADMIN)
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SearchParam'
+        - in: query
+          name: verificationStatus
+          schema: { type: string, enum: [PENDING_VERIFICATION, VERIFIED, REJECTED] }
+        - in: query
+          name: status
+          schema: { $ref: '#/components/schemas/AccountStatus' }
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Página de farmácias
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedMeta'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/AdminPharmacyItem'
+        '401':
+          description: Não autenticado
+        '403':
+          description: Acesso restrito a administradores
+
+  /api/admin/pharmacies/{id}:
+    get:
+      summary: Detalhe completo da farmácia com estatísticas (ADMIN, auditado ADMIN_VIEW_PHARMACY)
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: Farmácia
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminPharmacyDetail'
+        '401':
+          description: Não autenticado
+        '403':
+          description: Acesso restrito a administradores
+        '404':
+          description: Farmácia não encontrada (NOT_FOUND)
+
+  /api/admin/pharmacies/{id}/status:
+    patch:
+      summary: Suspende ou reativa farmácia (ADMIN)
+      description: Suspender revoga os refresh tokens e notifica a farmácia. AuditLog ADMIN_SUSPEND_PHARMACY / ADMIN_REACTIVATE_PHARMACY.
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountStatusUpdateRequest'
+      responses:
+        '200':
+          description: Farmácia atualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminPharmacyItem'
+        '400':
+          description: Validação
+        '401':
+          description: Não autenticado
+        '403':
+          description: Acesso restrito a administradores
+        '404':
+          description: Farmácia não encontrada (NOT_FOUND)
+
+  /api/admin/orders:
+    get:
+      summary: Lista pedidos (ADMIN); busca por nome da farmácia, do paciente ou id
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SearchParam'
+        - in: query
+          name: status
+          schema: { type: string, enum: [PRODUCTION, DELIVERY, DELIVERED, CANCELLED] }
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Página de pedidos
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedMeta'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/AdminOrderItem'
+        '401':
+          description: Não autenticado
+        '403':
+          description: Acesso restrito a administradores
+
+  /api/admin/orders/{id}:
+    get:
+      summary: Detalhe do pedido com histórico de status e avaliação (ADMIN)
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: Pedido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminOrderDetail'
+        '401':
+          description: Não autenticado
+        '403':
+          description: Acesso restrito a administradores
+        '404':
+          description: Pedido não encontrado (NOT_FOUND)
+
+  /api/admin/prescriptions:
+    get:
+      summary: Lista metadados de receitas (ADMIN) — nunca retorna o arquivo
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [PENDING, QUOTED, ACCEPTED, CANCELLED] }
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Página de receitas
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedMeta'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/AdminPrescriptionItem'
+        '401':
+          description: Não autenticado
+        '403':
+          description: Acesso restrito a administradores
+
+  /api/admin/support-tickets:
+    get:
+      summary: Lista chamados de suporte com prévia da mensagem (ADMIN)
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SearchParam'
+        - in: query
+          name: status
+          schema: { $ref: '#/components/schemas/SupportTicketStatus' }
+        - in: query
+          name: category
+          schema: { $ref: '#/components/schemas/SupportTicketCategory' }
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Página de chamados
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedMeta'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/SupportTicketAdminItem'
+        '401':
+          description: Não autenticado
+        '403':
+          description: Acesso restrito a administradores
+
+  /api/admin/support-tickets/{id}:
+    get:
+      summary: Chamado completo (ADMIN, auditado ADMIN_VIEW_SUPPORT_TICKET)
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: Chamado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportTicketAdminDetail'
+        '401':
+          description: Não autenticado
+        '403':
+          description: Acesso restrito a administradores
+        '404':
+          description: Chamado não encontrado (NOT_FOUND)
+    patch:
+      summary: Atualiza status/resolução do chamado e notifica o titular (ADMIN)
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupportTicketUpdateRequest'
+      responses:
+        '200':
+          description: Chamado atualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportTicketAdminDetail'
+        '400':
+          description: Validação
+        '401':
+          description: Não autenticado
+        '403':
+          description: Acesso restrito a administradores
+        '404':
+          description: Chamado não encontrado (NOT_FOUND)

@@ -40,26 +40,55 @@ enum PharmacyVerificationStatus {
   REJECTED
 }
 
+// Situação operacional da conta (independente da verificação regulatória da farmácia)
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum SupportTicketCategory {
+  GENERAL
+  ORDER
+  PRESCRIPTION
+  PHARMACY_ONBOARDING
+  PRIVACY
+  TECHNICAL
+}
+
 model User {
-  id            String         @id @default(uuid())
-  name          String
-  email         String         @unique
-  password      String
-  role          Role           @default(PATIENT)
-  phone         String?
-  address       String?
-  cpfEncrypted  String?
-  cpfHash       String?        @unique
-  cpfLastDigits String?
-  isAnonymized  Boolean        @default(false)
-  anonymizedAt  DateTime?
-  keyId         String?        @default("v1")
-  emailVerified Boolean        @default(false)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  prescriptions Prescription[]
-  reviews       Review[]
-  consents      Consent[]
+  id               String          @id @default(uuid())
+  name             String
+  email            String          @unique
+  password         String
+  role             Role            @default(PATIENT)
+  phone            String?
+  address          String?
+  cpfEncrypted     String?
+  cpfHash          String?         @unique
+  cpfLastDigits    String?
+  isAnonymized     Boolean         @default(false)
+  anonymizedAt     DateTime?
+  keyId            String?         @default("v1")
+  emailVerified    Boolean         @default(false)
+  status           AccountStatus   @default(ACTIVE)
+  suspendedAt      DateTime?
+  suspensionReason String?
+  lastLoginAt      DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  prescriptions    Prescription[]
+  reviews          Review[]
+  consents         Consent[]
+  supportTickets   SupportTicket[]
+
+  @@index([role, status])
 }
 
 model Pharmacy {
@@ -84,16 +113,75 @@ model Pharmacy {
   rejectionReason          String?
   cnpjData                 String?
   emailVerified            Boolean                    @default(false)
+  status                   AccountStatus              @default(ACTIVE)
+  suspendedAt              DateTime?
+  suspensionReason         String?
+  lastLoginAt              DateTime?
+  description              String?
+  city                     String?
+  state                    String?
+  timezone                 String                     @default("America/Sao_Paulo")
+  services                 String[]                   @default([])
+  termsAcceptedAt          DateTime?
+  termsVersion             String?
   createdAt                DateTime                   @default(now())
   updatedAt                DateTime                   @updatedAt
   quotes                   Quote[]
   reviews                  Review[]
+  businessHours            PharmacyBusinessHour[]
+  supportTickets           SupportTicket[]
+
+  @@index([verificationStatus, status])
+}
+
+// Intervalos semanais de atendimento. Minutos desde 00:00 no fuso `Pharmacy.timezone`.
+// Vários intervalos por dia são permitidos (ex.: pausa de almoço). Dia sem linhas = fechado.
+model PharmacyBusinessHour {
+  id         String   @id @default(uuid())
+  pharmacyId String
+  dayOfWeek  Int // 0 = domingo … 6 = sábado
+  opensAt    Int // 0..1439 (minutos)
+  closesAt   Int // 1..1440, > opensAt
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  pharmacy   Pharmacy @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+
+  @@unique([pharmacyId, dayOfWeek, opensAt])
+  @@index([pharmacyId])
+}
+
+// Chamados de atendimento/suporte. Podem conter dados de saúde relatados pelo titular.
+model SupportTicket {
+  id            String                @id @default(uuid())
+  protocol      String                @unique // "MC-AAAAMMDD-XXXXX"
+  requesterType Role? // null = visitante anônimo
+  userId        String?
+  pharmacyId    String?
+  name          String
+  email         String
+  category      SupportTicketCategory @default(GENERAL)
+  subject       String
+  message       String
+  status        SupportTicketStatus   @default(OPEN)
+  resolution    String?
+  handledById   String? // User ADMIN que tratou
+  resolvedAt    DateTime?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  user          User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  pharmacy      Pharmacy?             @relation(fields: [pharmacyId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([userId])
+  @@index([pharmacyId])
 }
 
 model Prescription {
   id         String                  @id @default(uuid())
   patientId  String
   fileUrl    String
+  /// Observações do paciente sobre a fórmula (dado de saúde) — cifradas pela aplicação (AES-256-GCM)
+  notes      String?
   status     PrescriptionStatus      @default(PENDING)
   createdAt  DateTime                @default(now())
   updatedAt  DateTime                @updatedAt
@@ -266,4 +354,3 @@ model AuditLog {
   @@index([action])
   @@index([createdAt])
 }
-

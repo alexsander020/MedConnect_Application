@@ -24,9 +24,31 @@ export const envSchema = z
     CLOUDINARY_API_KEY: z.string().optional(),
     CLOUDINARY_API_SECRET: z.string().optional(),
     SENTRY_DSN: z.string().optional(),
+    // Supabase Storage (bucket privado das receitas). A chave secreta é exclusiva do servidor.
+    SUPABASE_URL: z.string().url('SUPABASE_URL deve ser uma URL válida').optional(),
+    SUPABASE_SECRET_KEY: z.string().optional(),
+    SUPABASE_STORAGE_BUCKET: z.string().min(1).default('prescriptions'),
+    // URL pública do frontend (com o base path do Vite), usada nos links enviados por e-mail
+    FRONTEND_URL: z
+      .string()
+      .url('FRONTEND_URL deve ser uma URL válida')
+      .default('http://localhost:5173/MedConnect_Application')
+      .transform((val) => val.replace(/\/+$/, '')),
   })
   .superRefine((data, ctx) => {
     if (data.NODE_ENV === 'production') {
+      // Receitas precisam de armazenamento privado em nuvem: Supabase Storage ou Cloudinary
+      const hasSupabaseStorage = !!(data.SUPABASE_URL && data.SUPABASE_SECRET_KEY);
+      if (hasSupabaseStorage) return;
+
+      if (data.SUPABASE_URL && !data.SUPABASE_SECRET_KEY) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['SUPABASE_SECRET_KEY'],
+          message: 'SUPABASE_SECRET_KEY é obrigatória em produção quando SUPABASE_URL está definida',
+        });
+        return;
+      }
       if (!data.CLOUDINARY_CLOUD_NAME) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,

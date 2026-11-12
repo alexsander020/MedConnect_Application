@@ -5,6 +5,8 @@ import { ehEmailValido, ehSenhaForte, ehCPFValido } from '@medconnect/validation
 import { encryptCpf, hashCpf, getCpfLastDigits, maskCpf } from '../lib/cpfCrypto';
 import { encryptField, decryptFieldSafe, getCurrentKeyId } from '../lib/fieldEncryption';
 import { ConsentService } from '../services/consentService';
+import { sendVerificationEmail } from '../services/emailVerificationService';
+import { AuthRequest } from '../middlewares/auth.middleware';
 
 export class UserController {
   async create(req: Request, res: Response): Promise<void> {
@@ -71,10 +73,11 @@ export class UserController {
         }
       });
 
+      const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1';
+
       // Se o usuário não recusou expressamente, registra consentimento de saúde versionado
       const explicitOptOut = req.body.healthConsent === false || req.body.consent === false;
       if (!explicitOptOut) {
-        const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1';
         await ConsentService.recordConsent({
           userId: user.id,
           userType: 'PATIENT',
@@ -84,7 +87,20 @@ export class UserController {
         });
       }
 
+      // Aceite versionado dos Termos de Uso e da Política de Privacidade
+      if (req.body.termsAccepted !== false) {
+        await ConsentService.recordConsent({
+          userId: user.id,
+          userType: 'PATIENT',
+          consentType: 'TERMS_AND_PRIVACY',
+          ipAddress: clientIp,
+          userAgent: req.headers['user-agent']
+        });
+      }
+
       const { password: _, cpfEncrypted: __, cpfHash: ___, ...userWithoutSecrets } = user;
+      await sendVerificationEmail(user.email, user.name);
+
       res.status(201).json({
         ...userWithoutSecrets,
         phone: decryptFieldSafe(user.phone),
@@ -153,4 +169,96 @@ export class UserController {
       res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Erro ao buscar usuários' } });
     }
   }
+
+  /**
+   * Perfil do próprio titular (paciente ou admin). CPF sempre mascarado.
+   */
+  async getMe(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const profile = await buildOwnProfile(req.user!.id);
+      if (!profile) {
+        res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Usuário não encontrado' } });
+        return;
+      }
+      res.json(profile);
+    } catch (error) {
+      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Erro ao carregar perfil' } });
+    }
+  }
+
+  /**
+   * Atualização parcial do próprio perfil: nome, telefone e endereço (estes dois cifrados em repouso).
+   * E-mail, CPF e papel não são editáveis por esta rota.
+   */
+  async updateMe(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const existing = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { id: true } });
+      if (!existing) {
+        res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Usuário não encontrado' } });
+        return;
+      }
+
+      const { name, phone, address } = req.body as { name?: string; phone?: string | null; address?: string | null };
+      const currentKeyId = getCurrentKeyId();
+      const data: Record<string, unknown> = {};
+
+      if (name !== undefined) data.name = name;
+      if (phone !== undefined) data.phone = phone ? encryptField(phone, currentKeyId) : null;
+      if (address !== undefined) data.address = address ? encryptField(address, currentKeyId) : null;
+      if (data.phone || data.address) data.keyId = currentKeyId;
+
+      if (Object.keys(data).length > 0) {
+        await prisma.user.update({ where: { id: existing.id }, data });
+      }
+
+      res.json(await buildOwnProfile(existing.id));
+    } catch (error) {
+      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Erro ao atualizar perfil' } });
+    }
+  }
+}
+
+/**
+ * Monta o formato de GET/PATCH /users/me.
+ */
+async function buildOwnProfile(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      phone: true,
+      address: true,
+      cpfLastDigits: true,
+      status: true,
+      emailVerified: true,
+      createdAt: true,
+      lastLoginAt: true,
+      _count: { select: { prescriptions: true, reviews: true } }
+    }
+  });
+  if (!user) return null;
+
+  const orders = await prisma.order.count({ where: { quote: { prescription: { patientId: userId } } } });
+
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    phone: decryptFieldSafe(user.phone) ?? null,
+    address: decryptFieldSafe(user.address) ?? null,
+    cpf: user.cpfLastDigits ? maskCpf(user.cpfLastDigits) : null,
+    status: user.status,
+    emailVerified: user.emailVerified,
+    createdAt: user.createdAt,
+    lastLoginAt: user.lastLoginAt,
+    counts: {
+      prescriptions: user._count.prescriptions,
+      orders,
+      reviews: user._count.reviews
+    }
+  };
 }

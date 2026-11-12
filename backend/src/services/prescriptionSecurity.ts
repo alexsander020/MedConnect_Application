@@ -3,6 +3,7 @@ import { v2 as cloudinary } from 'cloudinary';
 import { env } from '../config/env';
 import { prisma } from '../lib/prisma';
 import { Role } from '@prisma/client';
+import { SUPABASE_FILE_PREFIX, createSupabaseSignedUrl, isSupabaseStorageConfigured } from './storage/supabaseStorage';
 
 export interface FileValidationResult {
   isValid: boolean;
@@ -150,6 +151,18 @@ export async function generateSignedPrescriptionUrl(
     env.CLOUDINARY_API_KEY &&
     env.CLOUDINARY_API_SECRET
   );
+
+  if (prescription.fileUrl.startsWith(SUPABASE_FILE_PREFIX)) {
+    if (!isSupabaseStorageConfigured()) {
+      throw {
+        status: 503,
+        code: 'STORAGE_UNAVAILABLE',
+        message: 'O armazenamento de receitas está indisponível no momento.'
+      };
+    }
+    const signedUrl = await createSupabaseSignedUrl(prescription.fileUrl, expiresInSeconds);
+    return { signedUrl, expiresInSeconds };
+  }
 
   if (hasCloudinary && prescription.fileUrl.startsWith('cloudinary://')) {
     const publicId = prescription.fileUrl.replace('cloudinary://', '');

@@ -1,9 +1,39 @@
-import { PrismaClient, Role, PrescriptionStatus, QuoteStatus, PharmacyVerificationStatus } from '@prisma/client';
+import {
+  PrismaClient,
+  Role,
+  PrescriptionStatus,
+  QuoteStatus,
+  PharmacyVerificationStatus,
+  SupportTicketCategory,
+  SupportTicketStatus
+} from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { encryptCpf, hashCpf, getCpfLastDigits } from '../src/lib/cpfCrypto';
 import { ehCPFValido } from '@medconnect/validation';
 
 const prisma = new PrismaClient();
+
+// Converte "HH:MM" em minutos desde 00:00 (formato de PharmacyBusinessHour)
+const toMinutes = (hhmm: string) => {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+};
+
+// Grade semanal: dayOfWeek 0 = domingo … 6 = sábado
+type Interval = [number, string, string];
+const WEEKDAYS = [1, 2, 3, 4, 5];
+
+async function replaceBusinessHours(pharmacyId: string, intervals: Interval[]) {
+  await prisma.pharmacyBusinessHour.deleteMany({ where: { pharmacyId } });
+  await prisma.pharmacyBusinessHour.createMany({
+    data: intervals.map(([dayOfWeek, opensAt, closesAt]) => ({
+      pharmacyId,
+      dayOfWeek,
+      opensAt: toMinutes(opensAt),
+      closesAt: toMinutes(closesAt)
+    }))
+  });
+}
 
 async function main() {
   if (process.env.NODE_ENV === 'production') {
@@ -76,11 +106,22 @@ async function main() {
   console.log(`👥 Pacientes registrados: ${paciente1.email}, ${paciente2.email}`);
 
   // 3. Criar Farmácias Verificadas e Pendentes
+  const perfilFarmacia1 = {
+    city: 'São Paulo',
+    state: 'SP',
+    timezone: 'America/Sao_Paulo',
+    description: 'Manipulação magistral há 15 anos no centro de São Paulo, com foco em dermatologia e nutrição.',
+    services: ['Cápsulas', 'Dermocosméticos', 'Florais', 'Fitoterápicos'],
+    termsAcceptedAt: new Date(),
+    termsVersion: 'v1.0.0'
+  };
+
   const farmacia1 = await prisma.pharmacy.upsert({
     where: { email: 'contato@farmaciavidaesaude.com.br' },
     update: {
       verified: true,
-      verificationStatus: PharmacyVerificationStatus.VERIFIED
+      verificationStatus: PharmacyVerificationStatus.VERIFIED,
+      ...perfilFarmacia1
     },
     create: {
       name: 'Farmácia de Manipulação Vida & Saúde',
@@ -97,15 +138,27 @@ async function main() {
       technicalResponsibleName: 'Dra. Fernanda Alencar',
       technicalResponsibleCrf: 'CRF-SP 45.678',
       technicalResponsibleUf: 'SP',
-      emailVerified: true
+      emailVerified: true,
+      ...perfilFarmacia1
     }
   });
+
+  const perfilFarmacia2 = {
+    city: 'São Paulo',
+    state: 'SP',
+    timezone: 'America/Sao_Paulo',
+    description: 'Laboratório de manipulação na Av. Paulista com entrega em toda a Grande São Paulo.',
+    services: ['Cápsulas', 'Veterinária', 'Pediatria', 'Oncologia'],
+    termsAcceptedAt: new Date(),
+    termsVersion: 'v1.0.0'
+  };
 
   const farmacia2 = await prisma.pharmacy.upsert({
     where: { email: 'atendimento@pharmabiomanipulacao.com.br' },
     update: {
       verified: true,
-      verificationStatus: PharmacyVerificationStatus.VERIFIED
+      verificationStatus: PharmacyVerificationStatus.VERIFIED,
+      ...perfilFarmacia2
     },
     create: {
       name: 'PharmaBio Manipulações Especiais',
@@ -122,7 +175,8 @@ async function main() {
       technicalResponsibleName: 'Dr. Roberto Meireles',
       technicalResponsibleCrf: 'CRF-SP 32.145',
       technicalResponsibleUf: 'SP',
-      emailVerified: true
+      emailVerified: true,
+      ...perfilFarmacia2
     }
   });
 
@@ -148,11 +202,33 @@ async function main() {
       technicalResponsibleCrf: 'CRF-SP 55.432',
       technicalResponsibleUf: 'SP',
       documentUrl: 'https://storage.medconnect.com/docs/alquimia-viva-licenca.pdf',
-      emailVerified: true
+      emailVerified: true,
+      city: 'São Paulo',
+      state: 'SP',
+      description: 'Farmácia de manipulação em processo de credenciamento.',
+      services: ['Cápsulas']
     }
   });
 
   console.log(`🏥 Farmácias registradas: ${farmacia1.name} (VERIFICADA), ${farmacia2.name} (VERIFICADA), ${farmaciaPendente.name} (PENDENTE)`);
+
+  // 3.1 Horários de atendimento (substitui a grade a cada execução do seed)
+  // Farmácia 1: seg–sex com pausa de almoço; sábado meio período; domingo fechado
+  await replaceBusinessHours(farmacia1.id, [
+    ...WEEKDAYS.flatMap((d): Interval[] => [
+      [d, '08:00', '12:00'],
+      [d, '13:00', '19:00']
+    ]),
+    [6, '09:00', '13:00']
+  ]);
+  // Farmácia 2: seg–sex horário corrido; sábado meio período; domingo fechado
+  await replaceBusinessHours(farmacia2.id, [
+    ...WEEKDAYS.map((d): Interval => [d, '09:00', '18:00']),
+    [6, '09:00', '13:00']
+  ]);
+  // Farmácia pendente: seg–sex horário corrido
+  await replaceBusinessHours(farmaciaPendente.id, WEEKDAYS.map((d): Interval => [d, '09:00', '18:00']));
+  console.log('🕘 Horários de atendimento registrados (com pausa de almoço e sábado meio período)');
 
   // 4. Criar Receitas de Exemplo
   let receita1 = await prisma.prescription.findFirst({
@@ -231,6 +307,24 @@ async function main() {
     });
     console.log(`💰 Cotação 2 registrada pela Farmácia 2 (R$ 110,00)`);
   }
+
+  // 6. Chamado de suporte de exemplo (protocolo fixo para manter o seed idempotente)
+  await prisma.supportTicket.upsert({
+    where: { protocol: 'MC-20261112-SEEDA' },
+    update: {},
+    create: {
+      protocol: 'MC-20261112-SEEDA',
+      requesterType: Role.PATIENT,
+      userId: paciente2.id,
+      name: paciente2.name,
+      email: paciente2.email,
+      category: SupportTicketCategory.PRESCRIPTION,
+      subject: 'Receita ainda sem cotação',
+      message: 'Enviei minha receita ontem e ainda não recebi cotações. Existe um prazo médio de resposta das farmácias?',
+      status: SupportTicketStatus.OPEN
+    }
+  });
+  console.log('🎧 Chamado de suporte de exemplo registrado (MC-20261112-SEEDA)');
 
   console.log('✅ Seed de dados sintéticos concluído com sucesso!');
 }

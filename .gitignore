@@ -43,3 +43,4 @@ backend/coverage/
 test-results/
 playwright-report/
 
+.vercel
